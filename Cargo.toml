@@ -1,0 +1,55 @@
+[package]
+name = "suiko"
+version = "0.1.0"
+default-run = "suiko"
+edition = "2024"
+rust-version = "1.97"
+description = "Deterministic diagnostics for natural and readable Japanese writing"
+license = "MIT"
+repository = "https://github.com/nwiizo/suiko"
+keywords = ["japanese", "lint", "writing", "cli", "markdown"]
+categories = ["command-line-utilities", "text-processing"]
+include = [
+    "/src/**",
+    "/tests/**",
+    "/eval/**",
+    "/skills/suiko/**",
+    "/Cargo.toml",
+    "/Cargo.lock",
+    "/README.md",
+    "/LICENSE",
+    "/THIRD_PARTY_NOTICES.md",
+]
+
+[features]
+default = []
+evaluation = ["dep:sha2"]
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+lindera = { version = "5.3", default-features = false, features = ["embed-ipadic"] }
+regex = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = { version = "0.11", optional = true }
+thiserror = "2"
+toml = "1.1"
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
+serde_json = "1"
+tempfile = "3"
+
+[[bin]]
+name = "suiko-eval"
+path = "src/bin/suiko-eval.rs"
+required-features = ["evaluation"]
+
+[[test]]
+name = "evaluation"
+path = "tests/evaluation.rs"
+required-features = ["evaluation"]
+
+[profile.release]
+strip = true

@@ -1,0 +1,59 @@
+# Third-party notices
+
+Some calibration fixtures and writing references are adapted from material
+distributed under the following license.
+
+```text
+MIT License
+
+Copyright (c) 2026 coji
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+Rust dependencies retain their respective licenses. See `Cargo.lock` for the
+exact dependency graph.
+
+## Aozora Bunko evaluation text
+
+The evaluation corpus includes a prepared copy of `堕落論` by 坂口安吾,
+based on Aozora Bunko card No. 42620:
+
+- work: `堕落論`
+- author: 坂口安吾
+- source text: `42620_ruby_21051.zip`, last updated 2012-05-19
+- source book: `坂口安吾全集14`, ちくま文庫、筑摩書房
+- input: 砂場清隆
+- proofreading: 高柳典子
+
+The work is out of copyright. Aozora Bunko's file handling standard permits
+copying, redistribution, format conversion, and removal or conversion of ruby
+and annotation markup for out-of-copyright works. Aozora Bunko asks users to
+retain provenance and to describe changes.
+
+For Suiko, the source was decoded from CP932 to UTF-8, line endings were
+normalized to LF, the notation guide and bibliographic footer were removed,
+and ruby readings, ruby range markers, and input annotations were removed.
+Source paragraphs were separated by blank lines so Suiko can analyze them as
+plain-text paragraphs. The wording and paragraph boundaries were retained.
+
+Source and terms:
+
+- https://www.aozora.gr.jp/cards/001095/card42620.html
+- https://www.aozora.gr.jp/guide/kijyunn.html

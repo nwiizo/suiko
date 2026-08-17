@@ -1,0 +1,28 @@
+version = 1
+
+[[document]]
+id = "calibration-ai-001"
+path = "../tests/fixtures/ai-smelly.md"
+label = "ai"
+genre = "essay"
+source = "bundled calibration fixture"
+license = "MIT; see THIRD_PARTY_NOTICES.md"
+sha256 = "682e7162d36b9e46c030cbf4c34491845845951976b9f9650dfc3d660ffd5dce"
+
+[[document]]
+id = "calibration-human-001"
+path = "../tests/fixtures/natural.md"
+label = "human"
+genre = "essay"
+source = "bundled calibration fixture"
+license = "MIT; see THIRD_PARTY_NOTICES.md"
+sha256 = "7ca4ea87c19d581755feee3051e48408f4ff71d899363f81b90c741c20f2b5a0"
+
+[[document]]
+id = "aozora-darakuron-001"
+path = "corpus/darakuron.txt"
+label = "human"
+genre = "essay"
+source = "Aozora Bunko card 42620, Darakuron by Ango Sakaguchi"
+license = "public-domain work under the Aozora Bunko file handling standard; see THIRD_PARTY_NOTICES.md"
+sha256 = "cb79fdea16c64ea1940432f01f051059d9f33e7073e68423e5df0a2518c58a36"

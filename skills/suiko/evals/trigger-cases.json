@@ -1,0 +1,187 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "explicit-suiko",
+      "split": "train",
+      "expected": "trigger",
+      "capability": "explicit invocation",
+      "prompt": "この原稿をsuikoで診断して、残すfindingには理由も付けてください。"
+    },
+    {
+      "id": "ai-likeness-diagnosis",
+      "split": "train",
+      "expected": "trigger",
+      "capability": "diagnosis",
+      "prompt": "この日本語の記事がAI生成っぽく見える箇所だけ診断してください。書き換えは不要です。"
+    },
+    {
+      "id": "naturalness-score",
+      "split": "train",
+      "expected": "trigger",
+      "capability": "score mode",
+      "prompt": "添付した日本語の提案書を自然さの観点で採点し、理由を説明してください。"
+    },
+    {
+      "id": "meeting-notes",
+      "split": "train",
+      "expected": "trigger",
+      "capability": "document writing",
+      "prompt": "このメモから、決定事項と担当者が読み取れる自然な日本語の議事録を作ってください。"
+    },
+    {
+      "id": "report-final-pass",
+      "split": "train",
+      "expected": "trigger",
+      "capability": "full review",
+      "prompt": "顧客向け調査レポートの最終稿です。論旨と読みやすさを確認して仕上げてください。"
+    },
+    {
+      "id": "business-email",
+      "split": "train",
+      "expected": "trigger",
+      "capability": "document writing",
+      "prompt": "この依頼メールを、硬すぎず失礼のない自然な日本語に直してください。"
+    },
+    {
+      "id": "slide-outline",
+      "split": "train",
+      "expected": "trigger",
+      "capability": "outline",
+      "prompt": "技術発表の日本語スライド構成を、見出しだけで論旨が通るように整理してください。"
+    },
+    {
+      "id": "style-profile",
+      "split": "train",
+      "expected": "trigger",
+      "capability": "style learning",
+      "prompt": "過去の日本語記事4本から文体の傾向を学び、style-profile.mdを作って次の記事へ反映してください。"
+    },
+    {
+      "id": "conclusion-first-directive",
+      "split": "train",
+      "expected": "trigger",
+      "capability": "writing directive",
+      "prompt": "この社内提案を結論から書いて、見出しを端的にしてください。"
+    },
+    {
+      "id": "explain-terms-directive",
+      "split": "train",
+      "expected": "trigger",
+      "capability": "writing directive",
+      "prompt": "この日本語ガイドの専門用語を初見の読者にもわかるように説明して、読みやすくしてください。"
+    },
+    {
+      "id": "english-edit",
+      "split": "train",
+      "expected": "not_trigger",
+      "capability": "language boundary",
+      "prompt": "Please make this English release note sound natural and concise."
+    },
+    {
+      "id": "image-ai-detection",
+      "split": "train",
+      "expected": "not_trigger",
+      "capability": "modality boundary",
+      "prompt": "この画像がAI生成かどうか、ノイズや指の形から判定してください。"
+    },
+    {
+      "id": "markdown-format-only",
+      "split": "train",
+      "expected": "not_trigger",
+      "capability": "format boundary",
+      "prompt": "文章は変えず、Markdownの見出しレベルと箇条書きのインデントだけ直してください。"
+    },
+    {
+      "id": "terminology-only",
+      "split": "train",
+      "expected": "not_trigger",
+      "capability": "terminology boundary",
+      "prompt": "製品名を正式名称へ統一し、表記揺れだけ機械的に置換してください。"
+    },
+    {
+      "id": "author-voice-review",
+      "split": "train",
+      "expected": "not_trigger",
+      "capability": "review boundary",
+      "prompt": "この小説が作者固有の声を保てているか、文学批評として論じてください。"
+    },
+    {
+      "id": "argument-review",
+      "split": "train",
+      "expected": "not_trigger",
+      "capability": "review boundary",
+      "prompt": "この書籍原稿の主張に論理的な飛躍がないか、論証だけを査読してください。"
+    },
+    {
+      "id": "file-operation",
+      "split": "train",
+      "expected": "not_trigger",
+      "capability": "operation boundary",
+      "prompt": "docs配下のMarkdownを更新日時順に並べ、ファイル名を連番へ変更してください。"
+    },
+    {
+      "id": "spelling-only",
+      "split": "train",
+      "expected": "not_trigger",
+      "capability": "spelling boundary",
+      "prompt": "この日本語文書の誤字脱字だけを直し、文体や構成には触れないでください。"
+    },
+    {
+      "id": "holdout-note-natural",
+      "split": "test",
+      "expected": "trigger",
+      "capability": "document writing",
+      "prompt": "箇条書きの作業メモを、同僚が一読で状況を把握できる自然な日本語の共有文にしてください。"
+    },
+    {
+      "id": "holdout-diagnose-only",
+      "split": "test",
+      "expected": "trigger",
+      "capability": "diagnosis",
+      "prompt": "直さなくてよいので、この日本語ブログが不自然に均一な箇所を指摘してください。"
+    },
+    {
+      "id": "holdout-style-learning",
+      "split": "test",
+      "expected": "trigger",
+      "capability": "style learning",
+      "prompt": "私が以前書いたコラムを読んで文体プロファイルを作り、新しい日本語原稿の調子を合わせてください。"
+    },
+    {
+      "id": "holdout-heading-directive",
+      "split": "test",
+      "expected": "trigger",
+      "capability": "writing directive",
+      "prompt": "報告書の各見出しを内容の要約ではなく、読み手へのメッセージになるよう書き換えてください。"
+    },
+    {
+      "id": "holdout-translate",
+      "split": "test",
+      "expected": "not_trigger",
+      "capability": "translation boundary",
+      "prompt": "この英語の仕様書を日本語へ正確に翻訳してください。推敲は不要です。"
+    },
+    {
+      "id": "holdout-json-format",
+      "split": "test",
+      "expected": "not_trigger",
+      "capability": "format boundary",
+      "prompt": "日本語の文言は一切変更せず、このMarkdown表をJSON配列へ変換してください。"
+    },
+    {
+      "id": "holdout-book-summary",
+      "split": "test",
+      "expected": "not_trigger",
+      "capability": "content boundary",
+      "prompt": "この日本語の本を章ごとに要約し、主要人物の関係を説明してください。"
+    },
+    {
+      "id": "holdout-code-comments",
+      "split": "test",
+      "expected": "not_trigger",
+      "capability": "code boundary",
+      "prompt": "Rustコードから古い日本語コメントを削除し、関数名は変更しないでください。"
+    }
+  ]
+}

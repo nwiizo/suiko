@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust 1.97
+        run: rustup toolchain install 1.97 --profile minimal --component clippy,rustfmt
+      - name: Check formatting
+        run: cargo +1.97 fmt --check
+      - name: Run Clippy
+        run: cargo +1.97 clippy --locked --all-targets --all-features -- -D warnings
+      - name: Run tests
+        run: cargo +1.97 test --locked --all-features --all-targets
+      - name: Verify crate package
+        run: cargo +1.97 package --locked
