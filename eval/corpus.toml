@@ -31,6 +31,117 @@ license = "public-domain work under the Aozora Bunko file handling standard; see
 sha256 = "cb79fdea16c64ea1940432f01f051059d9f33e7073e68423e5df0a2518c58a36"
 
 [[document]]
+id = "aozora-terada-jiji-zakkan-001"
+path = "corpus/aozora/terada-jiji-zakkan.txt"
+label = "human"
+genre = "essay"
+source = "Aozora Bunko card 2458, 時事雑感 by 寺田寅彦; cleaned plain text via coji/natural-japanese@0f1cc1c (MIT)"
+license = "public-domain work under the Aozora Bunko file handling standard; see THIRD_PARTY_NOTICES.md"
+sha256 = "dfa26b6e90c0d1113a6e2a2bca17d6decda8d73c51962d1b935d0c6329c39c64"
+
+[[document]]
+id = "aozora-terada-jishin-zakkan-001"
+path = "corpus/aozora/terada-jishin-zakkan.txt"
+label = "human"
+genre = "essay"
+source = "Aozora Bunko card 43077, 地震雑感 by 寺田寅彦; cleaned plain text via coji/natural-japanese@0f1cc1c (MIT)"
+license = "public-domain work under the Aozora Bunko file handling standard; see THIRD_PARTY_NOTICES.md"
+sha256 = "89cd95a8279a0646cb1eda3e6aa80bfdad3ad3f6628ae3212f14babfa7806a60"
+
+[[document]]
+id = "aozora-terada-denen-zakkan-001"
+path = "corpus/aozora/terada-denen-zakkan.txt"
+label = "human"
+genre = "essay"
+source = "Aozora Bunko card 2441, 田園雑感 by 寺田寅彦; cleaned plain text via coji/natural-japanese@0f1cc1c (MIT)"
+license = "public-domain work under the Aozora Bunko file handling standard; see THIRD_PARTY_NOTICES.md"
+sha256 = "0e269bcf677b09a6ad8cde941c55ac2d7a65bffbbacfb5738542b76074c7c4a6"
+
+[[document]]
+id = "aozora-terada-zuihitsu-nan-001"
+path = "corpus/aozora/terada-zuihitsu-nan.txt"
+label = "human"
+genre = "essay"
+source = "Aozora Bunko card 4361, 随筆難 by 寺田寅彦; cleaned plain text via coji/natural-japanese@0f1cc1c (MIT)"
+license = "public-domain work under the Aozora Bunko file handling standard; see THIRD_PARTY_NOTICES.md"
+sha256 = "7e1de0975dbdff07d5a49b22c797e0413a85a840279164316d5a3b16a3fa24dd"
+
+[[document]]
+id = "aozora-terada-radio-zakkan-001"
+path = "corpus/aozora/terada-radio-zakkan.txt"
+label = "human"
+genre = "essay"
+source = "Aozora Bunko card 42231, ラジオ雑感 by 寺田寅彦; cleaned plain text via coji/natural-japanese@0f1cc1c (MIT)"
+license = "public-domain work under the Aozora Bunko file handling standard; see THIRD_PARTY_NOTICES.md"
+sha256 = "65c52b236993fe5cf10b811cb17f18916b43d3cfbd1793ab69212564af9caa33"
+
+[[document]]
+id = "aozora-terada-eiga-zakkan1-001"
+path = "corpus/aozora/terada-eiga-zakkan1.txt"
+label = "human"
+genre = "essay"
+source = "Aozora Bunko card 2467, 映画雑感（Ⅰ） by 寺田寅彦; cleaned plain text via coji/natural-japanese@0f1cc1c (MIT)"
+license = "public-domain work under the Aozora Bunko file handling standard; see THIRD_PARTY_NOTICES.md"
+sha256 = "61c8e1356aaf932d17afb9225b9d42a94f33f18a02a6f58eb7bfe3ad5dd22e21"
+
+[[document]]
+id = "aozora-nakajima-kyoka-shi-no-bunsho-001"
+path = "corpus/aozora/nakajima-kyoka-shi-no-bunsho.txt"
+label = "human"
+genre = "essay"
+source = "Aozora Bunko card 24441, 鏡花氏の文章 by 中島敦; cleaned plain text via coji/natural-japanese@0f1cc1c (MIT)"
+license = "public-domain work under the Aozora Bunko file handling standard; see THIRD_PARTY_NOTICES.md"
+sha256 = "dd2a34611193ddf79fdd814f4b2804876a08878c71f2ae563fea797a2aa47344"
+split = "holdout"
+
+[[document]]
+id = "aozora-nakajima-rogiki-001"
+path = "corpus/aozora/nakajima-rogiki.txt"
+label = "human"
+genre = "essay"
+source = "Aozora Bunko card 42301, 狼疾記 by 中島敦; cleaned plain text via coji/natural-japanese@0f1cc1c (MIT)"
+license = "public-domain work under the Aozora Bunko file handling standard; see THIRD_PARTY_NOTICES.md"
+sha256 = "e1554c741e87f07e64c6aefc95787f902444d8c308131d1db3bee0faba2e0496"
+split = "holdout"
+
+[[document]]
+id = "aozora-sakaguchi-seishun-ron-001"
+path = "corpus/aozora/sakaguchi-seishun-ron.txt"
+label = "human"
+genre = "essay"
+source = "Aozora Bunko card 42624, 青春論 by 坂口安吾; cleaned plain text via coji/natural-japanese@0f1cc1c (MIT)"
+license = "public-domain work under the Aozora Bunko file handling standard; see THIRD_PARTY_NOTICES.md"
+sha256 = "f717fad2105e6d90d588e50a816362bc26f965f7659b288df96c47dac4756888"
+
+[[document]]
+id = "aozora-sakaguchi-kyogo-ron-001"
+path = "corpus/aozora/sakaguchi-kyogo-ron.txt"
+label = "human"
+genre = "essay"
+source = "Aozora Bunko card 42841, 敬語論 by 坂口安吾; cleaned plain text via coji/natural-japanese@0f1cc1c (MIT)"
+license = "public-domain work under the Aozora Bunko file handling standard; see THIRD_PARTY_NOTICES.md"
+sha256 = "a31ed9890751272a8f0f069c1979f0699639553a2b35937c7166165cd5210376"
+
+[[document]]
+id = "aozora-sakaguchi-kyou-no-kanso-001"
+path = "corpus/aozora/sakaguchi-kyou-no-kanso.txt"
+label = "human"
+genre = "essay"
+source = "Aozora Bunko card 45737, 今日の感想 by 坂口安吾; cleaned plain text via coji/natural-japanese@0f1cc1c (MIT)"
+license = "public-domain work under the Aozora Bunko file handling standard; see THIRD_PARTY_NOTICES.md"
+sha256 = "e1c885b4cd9461c69701ac07e877668a139e12a4144826576636692fb2f5e768"
+
+[[document]]
+id = "aozora-kishida-haha-no-hanashi-001"
+path = "corpus/aozora/kishida-haha-no-hanashi.txt"
+label = "human"
+genre = "essay"
+source = "Aozora Bunko card 46819, 母の話 by 岸田國士; cleaned plain text via coji/natural-japanese@0f1cc1c (MIT)"
+license = "public-domain work under the Aozora Bunko file handling standard; see THIRD_PARTY_NOTICES.md"
+sha256 = "1c9e8188f006442a6c578a38bd0d0025cced4ebd82e19cb006a44b2f0ab73893"
+split = "holdout"
+
+[[document]]
 id = "claude-ai-tech-001"
 path = "corpus/ai-tech-001.md"
 label = "ai"

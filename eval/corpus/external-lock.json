@@ -1,0 +1,572 @@
+{
+ "entries": {
+  "biz-gov-rieti-cptpp-china-2021": {
+   "chars": 6300,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:00Z",
+   "sha256": "8f05467fa28aad33c19b926642af8a413ad167833fd565edd6d2d2b81abf4254",
+   "url": "https://www.rieti.go.jp/jp/columns/a01_0662.html"
+  },
+  "biz-gov-rieti-pandemic-overseas-production-2020": {
+   "chars": 3988,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:08Z",
+   "sha256": "ec803b56dd6d6839f0ea25e0c2eceb04baf5208ee2abe13630727e42712b5abd",
+   "url": "https://www.rieti.go.jp/jp/columns/a01_0663.html"
+  },
+  "biz-gov-soumu-dx-economic-impact-2021": {
+   "chars": 159804,
+   "extract_method": "pdf",
+   "fetched_at": "2026-08-18T14:40:55Z",
+   "sha256": "875dae7c1279e265b2a0284cc119f8a400b8dba80c91aaddfd67a0839e90bb69",
+   "url": "https://www.soumu.go.jp/johotsusintokei/linkdata/r03_02_houkoku.pdf"
+  },
+  "biz-proposal-dj141-template": {
+   "chars": 4697,
+   "extract_method": "note",
+   "fetched_at": "2026-08-18T14:40:35Z",
+   "sha256": "ae7bd718ec0fefa2925b1986d1c4ade0c1670bb43b27f530754d15a9adb1e742",
+   "url": "https://note.com/dj141/n/nea644010328f"
+  },
+  "biz-proposal-hideoteramura-consulting": {
+   "chars": 2770,
+   "extract_method": "note",
+   "fetched_at": "2026-08-18T14:40:34Z",
+   "sha256": "f5d37a30820fcffabcd84abe0a418bf79ce6e7ef64cf84305eb48f52d276ad60",
+   "url": "https://note.com/hideoteramura/n/n3cf9b853faf6"
+  },
+  "biz-report-cybozu-live-outage": {
+   "chars": 7811,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:40:36Z",
+   "sha256": "baafcc96b15810032490c99f4a3380e8427428613f51f7f9e990b5b4858d0a8e",
+   "url": "https://blog.cybozu.io/entry/2017/12/28/080000"
+  },
+  "biz-report-kayac-postmortem": {
+   "chars": 3812,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:40:29Z",
+   "sha256": "f320c3d36cc71ea5cd08ffa98b2e685f30775cda5e08a1fc0836825c68ff7f9a",
+   "url": "https://techblog.kayac.com/sre-postmortem"
+  },
+  "biz-report-m3tech-postmortem": {
+   "chars": 4235,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:40:31Z",
+   "sha256": "f96d0ba27829edc5f79af10317f25b18ad832fdec16a80972e42eadc68781347",
+   "url": "https://www.m3tech.blog/entry/advent-calendar-2020-11"
+  },
+  "biz-report-mercari-incident": {
+   "chars": 3332,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:40:32Z",
+   "sha256": "e626aecdffa37f675014fa56804dcbd8ee98b98af3f0a9917eb6a3a3fba3810a",
+   "url": "https://engineering.mercari.com/blog/entry/2018-04-10-090453/"
+  },
+  "biz-whitepaper-cao-fy2020-labor": {
+   "chars": 9427,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:18Z",
+   "sha256": "9f352300687a2f5f96c85f5665668fd2b4de16b192d7e48b222e9e99be136db9",
+   "url": "https://www5.cao.go.jp/j-j/wp/wp-je20/h03-01.html"
+  },
+  "biz-whitepaper-cao-fy2020-macro": {
+   "chars": 24543,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:17Z",
+   "sha256": "2dee27aa189226616be646e4cc197d265340a7d3ef037aec99fe87c52b2543ae",
+   "url": "https://www5.cao.go.jp/j-j/wp/wp-je20/h01-01.html"
+  },
+  "biz-whitepaper-cao-fy2021-corporate": {
+   "chars": 21143,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:14Z",
+   "sha256": "6817b2675148bca772339ed864cde3192eb49f82d6a6040740107425a4cf9506",
+   "url": "https://www5.cao.go.jp/j-j/wp/wp-je21/h02-01.html"
+  },
+  "biz-whitepaper-cao-fy2021-corporate2": {
+   "chars": 19222,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:15Z",
+   "sha256": "616df6cf99bb2bda315b36fa7d0a0d3ae63f9645228a9f97a7579a3001b3b4c2",
+   "url": "https://www5.cao.go.jp/j-j/wp/wp-je21/h02-02.html"
+  },
+  "biz-whitepaper-cao-fy2021-covid-macro": {
+   "chars": 15979,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:13Z",
+   "sha256": "1883d9a1cbf59605d4810e31a4c6fbe8a511422cec3fbe7e58c51ef3ee8bf0ed",
+   "url": "https://www5.cao.go.jp/j-j/wp/wp-je21/h01-01.html"
+  },
+  "biz-whitepaper-cao-fy2021-employment": {
+   "chars": 9652,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:16Z",
+   "sha256": "9c658afc892de6f3f04a440b6565ecd1dd94b7a61580b6564a4485362ea73960",
+   "url": "https://www5.cao.go.jp/j-j/wp/wp-je21/h01-02.html"
+  },
+  "biz-whitepaper-ict-r1-mobile-history-2019": {
+   "chars": 11979,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:10Z",
+   "sha256": "b5d422670a5c610593b3b79a32d77719a414f23dfb59332cdd4c24cace578807",
+   "url": "https://www.soumu.go.jp/johotsusintokei/whitepaper/ja/r01/html/nd111110.html"
+  },
+  "biz-whitepaper-ict-r1-productivity-debate-2019": {
+   "chars": 3023,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:09Z",
+   "sha256": "1f55331509eef0da2f5adb695f7562aac5fbf8c6118550977671c199f32c9785",
+   "url": "https://www.soumu.go.jp/johotsusintokei/whitepaper/ja/r01/html/nd111310.html"
+  },
+  "biz-whitepaper-ict-r2-data-regulation-2020": {
+   "chars": 3505,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:04Z",
+   "sha256": "76f75f02099b384fc4a695ffb760d318e2c1d45ff3968e22ae761569b97928cf",
+   "url": "https://www.soumu.go.jp/johotsusintokei/whitepaper/ja/r02/html/nd131440.html"
+  },
+  "biz-whitepaper-ict-r2-platform-2020": {
+   "chars": 4682,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:03Z",
+   "sha256": "3df2136d491294ca5413575bbb3a31c10f4472e2947879d78934575618c5d17d",
+   "url": "https://www.soumu.go.jp/johotsusintokei/whitepaper/ja/r02/html/nd123130.html"
+  },
+  "biz-whitepaper-ict-r3-digital-usage": {
+   "chars": 7859,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:01Z",
+   "sha256": "173a5d3bceb89ff0fed4d95b9f8d1eddb06c2a34ce8420a05f6b8042c5527a66",
+   "url": "https://www.soumu.go.jp/johotsusintokei/whitepaper/ja/r03/html/nd111110.html"
+  },
+  "biz-whitepaper-ict-r3-disaster-info-2021": {
+   "chars": 10350,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:05Z",
+   "sha256": "69ff0d43fc42b966177ded822ab2e27a1d602a3490fe1ff720a1645c051254d4",
+   "url": "https://www.soumu.go.jp/johotsusintokei/whitepaper/ja/r03/html/nd135210.html"
+  },
+  "biz-whitepaper-ict-r3-egov-history": {
+   "chars": 5132,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:02Z",
+   "sha256": "00cc85d891cae08d3e305fa239840a14308d33aa76a86b92b4c906bd8234d6a9",
+   "url": "https://www.soumu.go.jp/johotsusintokei/whitepaper/ja/r03/html/nd113110.html"
+  },
+  "biz-whitepaper-ict-r3-individual-measures-2021": {
+   "chars": 10081,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:06Z",
+   "sha256": "fe860a67d4378b9a4687533c6b1b0d4042d79c9e69f7a30c9e3531300c7210c8",
+   "url": "https://www.soumu.go.jp/johotsusintokei/whitepaper/ja/r03/html/nd113120.html"
+  },
+  "biz-whitepaper-ict-r4-domestic-ict-trend-2022": {
+   "chars": 3675,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:12Z",
+   "sha256": "e6af97e233fd4d963e5b8043ceb2e0e75880c389b76eeb4589acc4ab9a28e962",
+   "url": "https://www.soumu.go.jp/johotsusintokei/whitepaper/ja/r04/html/nd114200.html"
+  },
+  "biz-whitepaper-ict-r4-general-remarks-2022": {
+   "chars": 3489,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:11Z",
+   "sha256": "a4b4599428b835b4929dc3a2acf1623ee85ad82fc6587fd1334408fd1a455eae",
+   "url": "https://www.soumu.go.jp/johotsusintokei/whitepaper/ja/r04/html/nd238110.html"
+  },
+  "biz-whitepaper-sme-r3-crisis-response": {
+   "chars": 24345,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:40:58Z",
+   "sha256": "93b54678d372c5cae2fd6e54350dd57914ed768c52c87887dff51b40b6146d5b",
+   "url": "https://www.chusho.meti.go.jp/pamflet/hakusyo/2021/chusho/b2_1_3.html"
+  },
+  "biz-whitepaper-sme-r3-digital-trend": {
+   "chars": 5601,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:40:59Z",
+   "sha256": "014318a2ec889dfe5fa52ebac40eb8ca408d27ce287fd13c980e0f925b1aa6a2",
+   "url": "https://www.chusho.meti.go.jp/pamflet/hakusyo/2021/chusho/b2_2_1.html"
+  },
+  "biz-whitepaper-sme-r3-status": {
+   "chars": 8364,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:40:56Z",
+   "sha256": "c0dca8e1a77f07478f2f11018149b25b1e77fd912418f01c43e9b6cf7d71e7cb",
+   "url": "https://www.chusho.meti.go.jp/pamflet/hakusyo/2021/chusho/b1_1_2.html"
+  },
+  "cookpad-tech-moro-form-object": {
+   "chars": 6932,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:37Z",
+   "sha256": "c6a47aee5bc96d2649cad0a18ab6d4a0cedd634b34ca5871a39e2706a0f821df",
+   "url": "https://techlife.cookpad.com/entry/2018/05/30/084420"
+  },
+  "cookpad-tech-moro-time-external-input": {
+   "chars": 5740,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:35Z",
+   "sha256": "32daebf19b3122a54e1f8919e3560c704bd9ae9ec0fdab781cd67e9ba9a7f822",
+   "url": "https://techlife.cookpad.com/entry/2016/05/30/183947"
+  },
+  "cookpad-tech-osada-cookpadlive-aws": {
+   "chars": 7704,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:51Z",
+   "sha256": "d12a3a199ca478971a559edc16a55f4ed321289cf46e17496a2dba67ae7ffdfe",
+   "url": "https://techlife.cookpad.com/entry/2021/08/24/175828"
+  },
+  "cookpad-tech-slightair-mobile-dev-pain": {
+   "chars": 5962,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:50Z",
+   "sha256": "234e245f19f0a90eac0e1d9dd5bd796a13f3fdc750969017214e8cf7604597bf",
+   "url": "https://techlife.cookpad.com/entry/2020/12/16/170000"
+  },
+  "cookpad-tech-winebarrel-nginx-proxy-test": {
+   "chars": 12040,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:36Z",
+   "sha256": "40e12404fa16ab614f1a26aface0043e86143e68998634ff11b71e9394bfa490",
+   "url": "https://techlife.cookpad.com/entry/2018/03/02/000000"
+  },
+  "cookpad-tech-ymmttks-oicy-taste": {
+   "chars": 7682,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:38Z",
+   "sha256": "96d55e419ab5c932cbde5275b95bbf2a72130e9c6403a9445c9caa5feac18377",
+   "url": "https://techlife.cookpad.com/entry/oicy_taste_di"
+  },
+  "hatena-tech-cohalz-cache-improvement": {
+   "chars": 10215,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:46Z",
+   "sha256": "5ea1ef0c702e02943678779cec5b9118726b103e59d05e339970eb1ac057b14a",
+   "url": "https://developer.hatenastaff.com/entry/2020/09/18/093000"
+  },
+  "hatena-tech-tarao-elasticsearch-migration": {
+   "chars": 9937,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:44Z",
+   "sha256": "ab6953cbf565dd7c960ba11795713c787edb21d27708f223f92dddad66c4809b",
+   "url": "https://developer.hatenastaff.com/entry/2020/08/21/elasticsearch-migration"
+  },
+  "mercari-tech-foghost-payment-transaction": {
+   "chars": 8635,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:40Z",
+   "sha256": "0222ee32ed4f5dcb84edd1099ae77a59088c479930823d4621189361371d0442",
+   "url": "https://engineering.mercari.com/blog/entry/2019-06-07-155849/"
+  },
+  "mercari-tech-sabottenda-spanner": {
+   "chars": 8848,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:39Z",
+   "sha256": "b2b8288e196cf7906e4f162e66c7b34eb317704d2d18ce851d8920da48034fac",
+   "url": "https://engineering.mercari.com/blog/entry/2019-04-18-090000/"
+  },
+  "note-essay-ciotan-8a0bfe52": {
+   "chars": 7666,
+   "extract_method": "note",
+   "fetched_at": "2026-08-18T14:40:10Z",
+   "sha256": "293ba648ca104c7695c509df5508cffcc0268615651f29656959f0112c542f43",
+   "url": "https://note.com/ciotan/n/nae828a0bfe52"
+  },
+  "note-essay-inuningen-44117e5fb": {
+   "chars": 2761,
+   "extract_method": "note",
+   "fetched_at": "2026-08-18T14:40:21Z",
+   "sha256": "eda5744cc3cbb51e578279905ba03c59383c0df9b6bf8d00ccb74cc6614fd89d",
+   "url": "https://note.com/inuningen/n/nca944117e5fb"
+  },
+  "note-essay-kishidanami-a67433": {
+   "chars": 8528,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:40:22Z",
+   "sha256": "2de4112d2b9bfb56e8f1e7d6e81ec03ca2bd08bdf733db5792286ebf247b7ac4",
+   "url": "https://note.kishidanami.com/n/n5088ada67433"
+  },
+  "note-essay-milkprincess17-2f9c9a1": {
+   "chars": 2221,
+   "extract_method": "note",
+   "fetched_at": "2026-08-18T14:40:24Z",
+   "sha256": "c419a565294401d8c67da7edad91491625f44d3604221d8c81ffc7d5ada56bca",
+   "url": "https://note.com/milkprincess17/n/n17cd42f9c9a1"
+  },
+  "note-essay-milkprincess17-98bd1602": {
+   "chars": 1724,
+   "extract_method": "note",
+   "fetched_at": "2026-08-18T14:40:25Z",
+   "sha256": "9a01ec0348a689d8ecc6641dc078d82e34c3a16871185bf88ae392288cb70c4b",
+   "url": "https://note.com/milkprincess17/n/nd7a198bd1602"
+  },
+  "note-essay-shadow0918-d1897f3d": {
+   "chars": 2347,
+   "extract_method": "note",
+   "fetched_at": "2026-08-18T14:40:19Z",
+   "sha256": "f2ec2329cadd654f63de3b9572cd1fd9137d327b9bc223fbcb5593f994d7104b",
+   "url": "https://note.com/shadow0918/n/n53cfd1897f3d"
+  },
+  "note-essay-yutachikauchi-e1d7d88046": {
+   "chars": 3569,
+   "extract_method": "note",
+   "fetched_at": "2026-08-18T14:40:28Z",
+   "sha256": "76e47f6496631b183ebf4669f83d4221fe77ac9389447234d7e5e42228d5e56e",
+   "url": "https://note.com/yutachikauchi/n/ncbe1d7d88046"
+  },
+  "note-essay-yutachikauchi-f60aaeb3": {
+   "chars": 3682,
+   "extract_method": "note",
+   "fetched_at": "2026-08-18T14:40:27Z",
+   "sha256": "14d9b7d3b342177c762a3399ab8faf4549a5dfc3d3fd42f03ecef431ffb8cb63",
+   "url": "https://note.com/yutachikauchi/n/n4e8df60aaeb3"
+  },
+  "qiita-tech-akid3020-refactoring-basics": {
+   "chars": 3028,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:31Z",
+   "sha256": "3f29581f81d17158e8bec91f8e1bb76131165fece624f5f500eacdc3d9fe7efa",
+   "url": "https://qiita.com/akid3020/items/7fe355933da1fbeeb766"
+  },
+  "qiita-tech-kapibarasensei-dockerfile": {
+   "chars": 18208,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:25Z",
+   "sha256": "74f11e5655fe144e4b57d0132487bec1c03663a3be5cefc31c5c7eb87c438f46",
+   "url": "https://qiita.com/kapibarasensei/items/f81a93481cefd1d57474"
+  },
+  "qiita-tech-marie_khr-test-antipatterns": {
+   "chars": 2413,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:27Z",
+   "sha256": "12ccf3f9160b697b4e822ea4628d185a92c7407a77d231cb977345b93f52c031",
+   "url": "https://qiita.com/marie_khr/items/8906c11f8c09a4944564"
+  },
+  "qiita-tech-n_slender-refactoring": {
+   "chars": 6714,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:28Z",
+   "sha256": "9ad74e3d3927464981606f98f09726d5e79c16647e09f285e1a683332c267d94",
+   "url": "https://qiita.com/n_slender/items/b1fa13a03e465c6ff766"
+  },
+  "recruit-tech-ishigame-vue-replace": {
+   "chars": 7984,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:47Z",
+   "sha256": "e26594d4ad39a3b0075f36bdacc3aa0d99d69d8f7ccaded1fe56ddfd71fda34a",
+   "url": "https://techblog.recruit.co.jp/article-1139/"
+  },
+  "zenn-tech-airy-86665cab": {
+   "chars": 2154,
+   "extract_method": "zenn",
+   "fetched_at": "2026-08-18T14:40:17Z",
+   "sha256": "abcfc388129c35d5d160f012d2679624b21bedd7de912743ec278bf848f6e961",
+   "url": "https://zenn.dev/airy/articles/c5fd7586665cab"
+  },
+  "zenn-tech-azukiazusa-dialog-accessibility": {
+   "chars": 2454,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:40:43Z",
+   "sha256": "636399b78b0ea76a3eef26f472d3da9de71837a27f51b083d6c74d5f32161b32",
+   "url": "https://azukiazusa.dev/blog/dialog-accessibility"
+  },
+  "zenn-tech-azukiazusa-fetch-upload-streaming": {
+   "chars": 9053,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:40:42Z",
+   "sha256": "2e8ade47889d6959989d3431cec693bd969d2fb65b44d2b0c3f87602814409fc",
+   "url": "https://azukiazusa.dev/blog/fetch-upload-streaming"
+  },
+  "zenn-tech-azukiazusa-focus-trap-modal": {
+   "chars": 6469,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:40:40Z",
+   "sha256": "096cac4043ca585aae8bfe2aa17c6af864c3c8094ad033dcf58379c82dfe73f6",
+   "url": "https://azukiazusa.dev/blog/fucus-trap-accessible-modal"
+  },
+  "zenn-tech-azukiazusa-pnpm-npm": {
+   "chars": 5387,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:40:38Z",
+   "sha256": "1aeaf5c889da8b17fff069f306fc1eb1334319332ff81b5a65984e728d1cd5ac",
+   "url": "https://azukiazusa.dev/blog/pnpm-npm"
+  },
+  "zenn-tech-azukiazusa-tailwind-ui-option": {
+   "chars": 2575,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:40:41Z",
+   "sha256": "9ed3f6dd8f6ed38b368040c214adb6c9cf0de963e8c6bcb396e731d1aa493c57",
+   "url": "https://azukiazusa.dev/blog/tailwind-css-ui-library-option"
+  },
+  "zenn-tech-azukiazusa-vue-a11y-testing": {
+   "chars": 7795,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:40:39Z",
+   "sha256": "f34c9e910e2ea7732ebda7a4e6fb078fd7026e1390d2dca987ebe679140247af",
+   "url": "https://azukiazusa.dev/blog/vue-a11y-testing"
+  },
+  "zenn-tech-big_tanukiudon-227b61d9": {
+   "chars": 4413,
+   "extract_method": "zenn",
+   "fetched_at": "2026-08-18T14:40:13Z",
+   "sha256": "a57b802f2d71b4edce47efa0ac1631921ecb1ae7c2b6806dccdcfb82dcb5e916",
+   "url": "https://zenn.dev/big_tanukiudon/articles/fc478b227b61d9"
+  },
+  "zenn-tech-faycute-aws-architecture": {
+   "chars": 4610,
+   "extract_method": "zenn",
+   "fetched_at": "2026-08-18T14:41:19Z",
+   "sha256": "822157369ab158fa87f89a79c7a2f925ed4edf39f269d8d260f6ea8247b96572",
+   "url": "https://zenn.dev/faycute/articles/37a352a63de437"
+  },
+  "zenn-tech-foxtail88-go-project-structure": {
+   "chars": 6737,
+   "extract_method": "zenn",
+   "fetched_at": "2026-08-18T14:41:21Z",
+   "sha256": "bcce9e5460b37b08d00f2800a117d8916d45ce8cf9885f1af02db89477e2a2b6",
+   "url": "https://zenn.dev/foxtail88/articles/824c5e8e0c6d82"
+  },
+  "zenn-tech-gege-kubernetes": {
+   "chars": 4889,
+   "extract_method": "zenn",
+   "fetched_at": "2026-08-18T14:41:34Z",
+   "sha256": "71b2328adaaf6c5d29395e7b88f6d11dabbc2a548c27d4016a38576b784fc5a6",
+   "url": "https://zenn.dev/gege/articles/80b55c345cc1cb"
+  },
+  "zenn-tech-hideoamezawa-a4c0a5d2": {
+   "chars": 10561,
+   "extract_method": "zenn",
+   "fetched_at": "2026-08-18T14:40:16Z",
+   "sha256": "9c6be0277a4ca616b97df20d91eb7b597b7bf4b68370bbc49224de71f8ab37be",
+   "url": "https://zenn.dev/hideoamezawa/articles/312a46a4c0a5d2"
+  },
+  "zenn-tech-iwamasa-react-chart": {
+   "chars": 2559,
+   "extract_method": "zenn",
+   "fetched_at": "2026-08-18T14:41:29Z",
+   "sha256": "c21f16c4294bf8bd23000144ec03871181959ed2139b88c21fd554375ceeb981",
+   "url": "https://zenn.dev/iwamasa/articles/7f57ce20b750bf"
+  },
+  "zenn-tech-jiin-css-design": {
+   "chars": 3064,
+   "extract_method": "zenn",
+   "fetched_at": "2026-08-18T14:41:24Z",
+   "sha256": "08b3b108a26b93218d02432dea9b868b754031e1b78173667b18bfd85df55e9f",
+   "url": "https://zenn.dev/jiin/articles/18b547efa161d2"
+  },
+  "zenn-tech-kaityo256-save-the-earth": {
+   "chars": 4482,
+   "extract_method": "zenn",
+   "fetched_at": "2026-08-18T14:40:52Z",
+   "sha256": "7e9c090966797d0ba19445af7ca8e34457260e4a5f1db6b316c2fe6f249eec48",
+   "url": "https://zenn.dev/kaityo256/articles/save_the_earth"
+  },
+  "zenn-tech-kibe-be733eb8": {
+   "chars": 3526,
+   "extract_method": "zenn",
+   "fetched_at": "2026-08-18T14:40:14Z",
+   "sha256": "391f30eb8833427676062c5118e4e8e4a0ea4e87e858099286bf513c950ec356",
+   "url": "https://zenn.dev/kibe/articles/37f038be733eb8"
+  },
+  "zenn-tech-kou_pg_0131-go-fullstack": {
+   "chars": 3979,
+   "extract_method": "zenn",
+   "fetched_at": "2026-08-18T14:41:32Z",
+   "sha256": "1c9c9aa66ae689f559b9a1a18fb8afb2024066dca38fb1a55fcf84cfb0cf9c4f",
+   "url": "https://zenn.dev/kou_pg_0131/articles/gogogo-introduction"
+  },
+  "zenn-tech-kugyu10-8e8ba334": {
+   "chars": 39210,
+   "extract_method": "zenn",
+   "fetched_at": "2026-08-18T14:40:12Z",
+   "sha256": "e984e02c0579bcb13a7bbf93ceccc12b908e2fc7438bf0117682b0f67054ac8a",
+   "url": "https://zenn.dev/kugyu10/articles/ab393a8e8ba334"
+  },
+  "zenn-tech-mizchi-rails-future": {
+   "chars": 8981,
+   "extract_method": "zenn",
+   "fetched_at": "2026-08-18T14:40:48Z",
+   "sha256": "3d85acc2d462fbccd75a0faf45990c47f66330b96a00a1e6c6f7c677cd6b0172",
+   "url": "https://zenn.dev/mizchi/articles/d33a4174cca886"
+  },
+  "zenn-tech-mizchi-yuuryou-kiji": {
+   "chars": 2923,
+   "extract_method": "zenn",
+   "fetched_at": "2026-08-18T14:40:44Z",
+   "sha256": "486626b9e8389db32e704258a8cdeb03ade8f325e506999de3393e50497cee69",
+   "url": "https://zenn.dev/mizchi/articles/04be5d8ba6637afc559f"
+  },
+  "zenn-tech-ryuu-reflection": {
+   "chars": 5535,
+   "extract_method": "zenn",
+   "fetched_at": "2026-08-18T14:40:46Z",
+   "sha256": "ae8d241c6261db1a0fc7c7649ee0fd0bc28dd287d62184d6fea8bd859268dc7d",
+   "url": "https://zenn.dev/ryuu/articles/my-reflection"
+  },
+  "zenn-tech-ryuu-studystyle": {
+   "chars": 4208,
+   "extract_method": "zenn",
+   "fetched_at": "2026-08-18T14:40:49Z",
+   "sha256": "c442a000f8c248042032505a5030d490cd19c79f9960c9a0003880fa5769bf47",
+   "url": "https://zenn.dev/ryuu/articles/myprogramming-studystyle"
+  },
+  "zenn-tech-sanjushi003-4ec98d42": {
+   "chars": 6727,
+   "extract_method": "zenn",
+   "fetched_at": "2026-08-18T14:40:15Z",
+   "sha256": "89e7f46f2ae12a46911f2a3a1410c4e9286b63fbe5b8f9e2c5f0e99d3b73ce54",
+   "url": "https://zenn.dev/sanjushi003/articles/2097354ec98d42"
+  },
+  "zenn-tech-shimpeiws-react-state-history": {
+   "chars": 5256,
+   "extract_method": "zenn",
+   "fetched_at": "2026-08-18T14:41:30Z",
+   "sha256": "f0b4bc7934538e44dd052aa5289b2543bf64de4faeb24fa16ddd255871a36020",
+   "url": "https://zenn.dev/shimpeiws/articles/afcc43990d13c0"
+  },
+  "zenn-tech-suzuki_hoge-ddd-poem": {
+   "chars": 6057,
+   "extract_method": "zenn",
+   "fetched_at": "2026-08-18T14:40:50Z",
+   "sha256": "f2ba79a0dc4e244f2b224c61eae274d14da94e29e03109eb5f923c6252e122b7",
+   "url": "https://zenn.dev/suzuki_hoge/articles/2021-02-ddd-poem-9f509fa2cc9e6b12540f"
+  },
+  "zenn-tech-uhyo-technical-articles": {
+   "chars": 8369,
+   "extract_method": "zenn",
+   "fetched_at": "2026-08-18T14:40:51Z",
+   "sha256": "75e25a5d61d067b6a264fa12372d4c7be5d2fbe0c22104cffcb51193f948b511",
+   "url": "https://zenn.dev/uhyo/articles/technical-articles"
+  },
+  "zenn-tech-uma002-golang-tools": {
+   "chars": 4005,
+   "extract_method": "zenn",
+   "fetched_at": "2026-08-18T14:41:22Z",
+   "sha256": "7fc07a9b88c9e7457f32b32db3365abca0e494650f740b181972d6258a6f41d6",
+   "url": "https://zenn.dev/uma002/articles/18b8eb7854745b"
+  },
+  "zenn-tech-yodaka-1year-monthly": {
+   "chars": 3077,
+   "extract_method": "zenn",
+   "fetched_at": "2026-08-18T14:40:47Z",
+   "sha256": "9cc412f9083c72f106db28d5e398e97482bc48326201d5c8b9c86ac9bd6a3e92",
+   "url": "https://zenn.dev/yodaka/articles/36df01724e52bb"
+  },
+  "zenn-tech-yuneco-vue-2022": {
+   "chars": 5870,
+   "extract_method": "zenn",
+   "fetched_at": "2026-08-18T14:41:23Z",
+   "sha256": "de8bea2447000cd697a1874eb20bd98e5f1ed1bc0b734e7c5c0d5e6ba4cc5579",
+   "url": "https://zenn.dev/yuneco/articles/vue-2021-to-2022"
+  },
+  "zozo-tech-vasilyjp-sql-autoscale": {
+   "chars": 8626,
+   "extract_method": "generic",
+   "fetched_at": "2026-08-18T14:41:42Z",
+   "sha256": "32877173e06387bb0ccc4192cf7d5fd670ca1f4ae4c7ef490347edd924a7d3cd",
+   "url": "https://techblog.zozo.com/entry/sqldatabase_autoscale"
+  }
+ },
+ "version": 1
+}

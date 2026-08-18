@@ -9,7 +9,9 @@ not assigned to:
   default). `sweep` only ever sees these.
 - **holdout**: `split = "holdout"`, stratified so genre, document type, and
   author do not overlap with dev. Evaluated once after thresholds are fixed;
-  never used to re-tune. (Currently empty; the contract is enforced in code.)
+  never used to re-tune. (Populated 2026-08-18: 3 Aozora essays by authors
+  absent from dev; external web sources carry their own split in
+  `sources.toml`.)
 - **syntactic boundary fixtures**: `eval/labeled/` contrast pairs that pin
   detector behavior, not population rates.
 - **real-usage stress**: external repositories (e.g., the 2026-08-18 technical
@@ -46,6 +48,34 @@ thresholds; they are not probabilities that a document was written by AI.
 Morphological analysis uses sudachi.rs with the SudachiDict version pinned in
 `build.rs`. Changing the dictionary or tokenizer version can change these
 measurements; rerun `report`, `labeled`, and the sweeps after any change.
+
+## Corpus acquisition (`sources.toml`)
+
+`sources.toml` is the acquisition manifest for human documents: 93 entries
+(81 web + 12 Aozora) seeded from `corpus/sources.json` of coji/natural-japanese
+(MIT) at `0f1cc1c`, with per-entry URL, author, genre, license, and a
+`split` that never lets one unit (web domain / Aozora author) span dev and
+holdout. The 12 `slide` entries upstream were excluded: Suiko has no slide
+genre, and slide PDFs keep almost no prose after masking.
+
+- **Aozora (public domain)**: committed under `corpus/aozora/` with
+  provenance headers, and registered as `[[document]]` entries in
+  `corpus.toml`.
+- **Web (copyrighted)**: never committed. `uv run scripts/fetch-corpus.py`
+  downloads each URL to `eval/corpus/external/` (gitignored) and records the
+  SHA-256, char count, and extraction method of every fetched file in
+  `external-lock.json` (committed), so measurements can state exactly which
+  fetch they were computed on. The 2026-08-18 fetch succeeded for 81/81
+  entries. One note.com entry (`note-essay-ciotan-8a0bfe52`) is a paid
+  article; only its free portion is fetched.
+- **AI documents**: `scripts/generate-ai-corpus.sh <id> <genre> <prompt-file>
+  [model]` generates an uncurated first-pass document via the claude CLI,
+  stores the prompt under `eval/prompts/`, and prints the `[[document]]`
+  snippet with the hash. Manual de-AI editing stays forbidden.
+
+How external (non-committed) web documents join `suiko-eval` runs is decided
+with the `calibrate` subcommand design (TODO.md); until then they are
+measured ad hoc against `external-lock.json` hashes.
 
 ## Aozora Bunko preparation
 
@@ -95,12 +125,14 @@ purpose, population, selection, era, genre, license, and known biases:
 | `darakuron.txt` (Aozora Bunko) | long human essay for calibration | picked from the 2015-06 text ranking; new-orthography essay | 1946 | essay | public domain, Aozora handling standard | single author, mid-20th-century prose; no modern web/tech style |
 | Claude-generated docs (`ai-*-001.md`) | AI stress slices ≥4,000 chars | single model (claude-fable-5), single prompt each, uncurated first pass | 2026-08-18 | tech / essay / business | MIT | one model, one date, no paraphrase or human-edit variants |
 | `labeled/` samples | per-category behavior specs | authored to isolate one detector each | 2026-08-18 | mixed | MIT | specification fixtures, not population samples |
+| `corpus/aozora/` (12 essays) | human essay volume for calibration | natural-japanese's Aozora selection (modern-colloquial classics) | 1920s–1940s | essay | public domain, Aozora handling standard | 4 authors only (寺田寅彦 6/12); pre-war vocabulary and punctuation norms differ from current writing — slice by era before adjusting vocabulary/style thresholds |
+| `sources.toml` web entries (81, fetched not committed) | 2020s human articles for calibration | natural-japanese's curated selection; 17 domains, quality-tagged | 2018–2025 | tech / business / essay | per-source (mostly all-rights-reserved; local evaluation only) | platform skew (zenn.dev 23/81), government PDFs dominate business, one paid article truncated to its free part |
 
-Known gaps: no 2020s human technical articles, business documents, or blogs
-from multiple authors; no holdout split populated yet. A historical 2026-07
-measurement over 103 human + 81 AI documents predates this manifest, cannot be
-reproduced (no manifest, hashes, or settings survive), and is kept in the
-skill references only as annotated history, not as evidence.
+Known gaps: dev/holdout for web sources is assigned but holdout evaluation has
+not run yet; no multi-model AI documents. A historical 2026-07 measurement
+over 103 human + 81 AI documents predates this manifest, cannot be reproduced
+(no manifest, hashes, or settings survive), and is kept in the skill
+references only as annotated history, not as evidence.
 
 ## Labeled samples
 

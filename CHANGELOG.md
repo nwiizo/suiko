@@ -8,6 +8,7 @@ Suikoの公開リリースを記録する。日付はJSTで、各項目は実測
 - 文レベルの文頭接続詞率を`stats.conjunction`の観測値として追加した。本コーパスでは人間/AIを分離しなかったためfindingにはしない（eval/calibration.md）
 - 読解負荷レーン（`--reading-load`）に`no_comma_sentence`を追加した。60字以上の日本語散文に読点が1つもない文を指さす（岩淵悦太郎編『悪文』・本多勝一『日本語の作文技術』の句読法に基づく狭い下位事例。読点密度の検出はNO-GOのまま）。ラベル付き14サンプル（detection 5/5、fpr 0/9）と実コーパスで真陽性2/2を確認した
 - Agent SkillにCLI不在時の自己導入手順（`cargo install suiko`）を追加し、READMEへ`gh skill install`での導入方法を記載した
+- コーパス取得基盤を追加した。`eval/sources.toml`（人間93ソースのmanifest、coji/natural-japanese@0f1cc1cのsources.jsonをMIT出典明記で初期値化、unit単位のdev/holdout割当）、`scripts/fetch-corpus.py`（本文非コミットで取得し`external-lock.json`へSHA-256を記録。2026-08-18に81/81件成功）、`scripts/generate-ai-corpus.sh`（未修正AI文書の生成と出典記録）。青空文庫の随筆12件（寺田寅彦・中島敦・坂口安吾・岸田國士）を評価コーパスへ追加し、holdout splitを初めて充足した
 
 ## [0.2.0] - 2026-08-18
 

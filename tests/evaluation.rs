@@ -14,17 +14,17 @@ fn report_summarizes_human_and_ai_documents_by_category() {
         .args(["report", "eval/corpus.toml"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("documents: human=2 ai=4"))
+        .stdout(predicate::str::contains("documents: human=14 ai=4"))
         .stdout(predicate::str::contains("fpr=0.000"))
-        .stdout(predicate::str::contains("genre=essay human=2 ai=2"))
+        .stdout(predicate::str::contains("genre=essay human=14 ai=2"))
         .stdout(predicate::str::contains(
-            "nominal_ending\thuman=0/2 fpr=0.000 ci95=0.000-0.658 low_n findings=0\tai=1/4 detection=0.250 ci95=0.046-0.699 low_n findings=1",
+            "nominal_ending\thuman=0/14 fpr=0.000 ci95=0.000-0.215 findings=0\tai=1/4 detection=0.250 ci95=0.046-0.699 low_n findings=1",
         ))
         .stdout(predicate::str::contains(
-            "forbidden_phrase\thuman=0/2 fpr=0.000 ci95=0.000-0.658 low_n findings=0\tai=3/4 detection=0.750 ci95=0.301-0.954 low_n findings=19",
+            "forbidden_phrase\thuman=6/14 fpr=0.429 ci95=0.214-0.674 findings=14\tai=3/4 detection=0.750 ci95=0.301-0.954 low_n findings=19",
         ))
         .stdout(predicate::str::contains(
-            "lane=reading_load category=sentence_too_long\thuman=1/2 prevalence=0.500",
+            "lane=reading_load category=sentence_too_long\thuman=13/14 prevalence=0.929",
         ));
 }
 
@@ -64,7 +64,7 @@ fn sweep_reports_reading_load_rules_as_prevalence() {
         .success()
         .stdout(predicate::str::contains("rule: sentence_too_long"))
         .stdout(predicate::str::contains(
-            "value=110 human=1/2 prevalence=0.500",
+            "value=110 human=10/11 prevalence=0.909",
         ));
 }
 
@@ -97,7 +97,7 @@ fn length_analysis_reports_document_buckets_separately() {
         .stdout(predicate::str::contains("bucket=1000-3999"))
         .stdout(predicate::str::contains("bucket=>=4000"))
         .stdout(predicate::str::contains(
-            "bucket=>=4000 category=repeated_sentence_lead human=1/1 fpr=1.000",
+            "bucket=>=4000 category=repeated_sentence_lead human=9/11 fpr=0.818",
         ))
         .stdout(predicate::str::contains(
             "bucket=>=4000 lane=reading_load category=sentence_too_long",

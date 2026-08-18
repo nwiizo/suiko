@@ -89,3 +89,47 @@ Source and terms:
 
 - https://www.aozora.gr.jp/cards/001095/card42620.html
 - https://www.aozora.gr.jp/guide/kijyunn.html
+
+
+## natural-japanese (corpus manifest and fetch tooling)
+
+`eval/sources.toml` seeds its entries from `corpus/sources.json` of
+[coji/natural-japanese](https://github.com/coji/natural-japanese) at commit
+`0f1cc1c5a4e2aa7590598c88a15c213a60d9545a`, and `scripts/fetch-corpus.py` is
+an adaptation of `corpus/fetch.py` from the same commit (changes: TOML input,
+SHA-256 lock recording, output paths). natural-japanese is MIT-licensed:
+
+> Copyright (c) 2025 coji
+>
+> Permission is hereby granted, free of charge, to any person obtaining a copy
+> of this software and associated documentation files (the "Software"), to
+> deal in the Software without restriction, subject to the conditions of the
+> MIT License. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
+
+The full license text is in the upstream repository's `LICENSE` file.
+
+## Aozora Bunko evaluation texts (via natural-japanese)
+
+`eval/corpus/aozora/` contains twelve out-of-copyright essays, copied from
+`corpus/human/aozora/` of coji/natural-japanese at the commit above, which
+prepared them from Aozora Bunko XHTML by removing ruby and input annotations.
+Each file keeps its provenance header (author, work, card URL, license).
+Aozora Bunko's file handling standard permits copying, redistribution, format
+conversion, and removal of ruby/annotation markup for out-of-copyright works.
+
+Works and cards:
+
+- `terada-jiji-zakkan.txt`: 時事雑感 by 寺田寅彦 — https://www.aozora.gr.jp/cards/000042/card2458.html
+- `terada-jishin-zakkan.txt`: 地震雑感 by 寺田寅彦 — https://www.aozora.gr.jp/cards/000042/card43077.html
+- `terada-denen-zakkan.txt`: 田園雑感 by 寺田寅彦 — https://www.aozora.gr.jp/cards/000042/card2441.html
+- `terada-zuihitsu-nan.txt`: 随筆難 by 寺田寅彦 — https://www.aozora.gr.jp/cards/000042/card4361.html
+- `terada-radio-zakkan.txt`: ラジオ雑感 by 寺田寅彦 — https://www.aozora.gr.jp/cards/000042/card42231.html
+- `terada-eiga-zakkan1.txt`: 映画雑感（Ⅰ） by 寺田寅彦 — https://www.aozora.gr.jp/cards/000042/card2467.html
+- `nakajima-kyoka-shi-no-bunsho.txt`: 鏡花氏の文章 by 中島敦 — https://www.aozora.gr.jp/cards/000119/card24441.html
+- `nakajima-rogiki.txt`: 狼疾記 by 中島敦 — https://www.aozora.gr.jp/cards/000119/card42301.html
+- `sakaguchi-seishun-ron.txt`: 青春論 by 坂口安吾 — https://www.aozora.gr.jp/cards/001095/card42624.html
+- `sakaguchi-kyogo-ron.txt`: 敬語論 by 坂口安吾 — https://www.aozora.gr.jp/cards/001095/card42841.html
+- `sakaguchi-kyou-no-kanso.txt`: 今日の感想 by 坂口安吾 — https://www.aozora.gr.jp/cards/001095/card45737.html
+- `kishida-haha-no-hanashi.txt`: 母の話 by 岸田國士 — https://www.aozora.gr.jp/cards/000338/card46819.html
+
+Terms: https://www.aozora.gr.jp/guide/kijyunn.html

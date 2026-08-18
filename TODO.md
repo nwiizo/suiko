@@ -68,12 +68,11 @@ Suikoが維持する差別化は、埋め込み辞書を含む単一バイナリ
 
 ### 採用
 
-1. **コーパス取得基盤**: sources manifest（URL+SHA-256+genre+license、著作権のある本文は非コミット）、取得コマンド、AIコーパス生成runner。Natural Japaneseのsources.json 105件を出典明記のうえ初期値に使う。`slide` genreを新設するかbusinessへ写像するかを取得前に決める
-2. **`suiko-eval calibrate`**: 人間FP率の許容上限（Wilson上限で判定）を制約にした閾値探索。dev splitのみを使い、annotation-guideの事前条件（最低標本数）を自動で確認する
-3. **`suiko-eval vocab`**: 語句別の人間/AI頻度、対数頻度比、信頼区間の一覧。`FORBIDDEN_PHRASES`と`HYPE_EXPRESSIONS`の追加・削除をこの実測で決める（excess vocabulary法の適用）
-4. **停滞課題の解消**: 上記の基盤で`low_burstiness`適用範囲、TTR/`low_specificity`、反復系severity、翻訳調表層パターンを再校正し、holdoutへ実データを入れる
+1. **`suiko-eval calibrate`**: 人間FP率の許容上限（Wilson上限で判定）を制約にした閾値探索。dev splitのみを使い、annotation-guideの事前条件（最低標本数）を自動で確認する。設計時に、非コミットの外部取得文書（`eval/corpus/external/`、`external-lock.json`のSHA-256参照）を評価へどう組み込むか（別manifestか、本文欠落時の明示skipか）を決める
+2. **`suiko-eval vocab`**: 語句別の人間/AI頻度、対数頻度比、信頼区間の一覧。`FORBIDDEN_PHRASES`と`HYPE_EXPRESSIONS`の追加・削除をこの実測で決める（excess vocabulary法の適用）。青空文庫12件は1920〜40年代の語彙規範なので、時代スライスなしに語彙判断へ使わない
+3. **停滞課題の解消**: 上記の基盤で`low_burstiness`適用範囲、TTR/`low_specificity`、反復系severity、翻訳調表層パターンを再校正し、holdoutの一度きり評価を実施する
 
-（採用5「名詞+を+行う」冗長検出と採用6「文頭接続詞率の観測値」は2026-08-18に実装・検証済み。前者はラベル付き14件と実コーパス15件で事前条件を満たし既定入り、後者は本コーパスで人間/AIを分離せずfinding化を見送り観測値に留めた。eval/calibration.md）
+（採用済み: コーパス取得基盤は2026-08-18に完了。`eval/sources.toml`（93件、slide 12件は除外を記録）、`scripts/fetch-corpus.py`（81/81件取得成功、SHA-256を`external-lock.json`へ記録）、`scripts/generate-ai-corpus.sh`、青空文庫12件のコミットとcorpus.toml登録（dev 9・holdout 3）。追加直後の実測で、TTRのhuman fpr 0.714、翻訳調0.429〜0.500など時代混入による上振れを確認した。既存閾値はこの表だけでは変更せず、再校正はregister/時代でスライスして判断する。「名詞+を+行う」冗長検出と「文頭接続詞率の観測値」も実装・検証済み。eval/calibration.md）
 
 ### 悪文（日本語言語学の古典的な読みにくさ）の検出範囲
 
@@ -84,7 +83,7 @@ Suikoが維持する差別化は、埋め込み辞書を含む単一バイナリ
 - 構文解析が必要で対象外（目視・カタログ担当）: ねじれ文（B2）、係り受けの曖昧さ（B5、`nested_attributive`廃止の経緯）、修飾語の語順（B3）、読点の位置・過多（B4のNO-GO維持）
 - 一般校正の境界の外: 敬語の誤り（keigo.md）、慣用句の誤用、重言などの辞書型冗長表現
 
-残る候補は、コーパス取得基盤（採用1）が入った後に、受動態の乱用（C3）とサ変名詞化（C2の未実装側）を人間FP率の制約下で再測定することだけとする。
+残る候補は、`suiko-eval calibrate`（採用1）が入った後に、受動態の乱用（C3）とサ変名詞化（C2の未実装側）を人間FP率の制約下で再測定することだけとする。
 
 ### 不採用
 
@@ -284,7 +283,7 @@ textlintはJavaScriptルールとprocessor、RedPenは複数マークアップ�
 
 ## 実装順序
 
-依存関係を無視して機能を並行追加しない。直近は「v0.3.0: 経験則の閾値と語彙を実測校正へ置き換える」の採用1〜4を順に進める。その後を次の順とし、各段階でfixture、実コーパス、公開JSONの互換性を確認する。
+依存関係を無視して機能を並行追加しない。直近は「v0.3.0: 経験則の閾値と語彙を実測校正へ置き換える」の採用1〜3を順に進める。その後を次の順とし、各段階でfixture、実コーパス、公開JSONの互換性を確認する。
 
 1. 人手評価手順、holdout、信頼区間を固定し、点推定だけで閾値を選ばないようにする
 2. 103/81文書の旧測定を再現可能にし、外部コーパスとAI stress setの役割を分ける
