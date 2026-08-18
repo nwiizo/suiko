@@ -1,0 +1,91 @@
+name: Release binaries
+
+# タグ(vX.Y.Z)のpushで、そのタグのGitHub Releaseへビルド済みバイナリを添付する。
+# 既存タグへ後からバイナリを足す場合はworkflow_dispatchでタグ名を指定する。
+# 形態素辞書はbuild.rsがSHA-256固定で取得して埋め込むため、成果物は
+# 実行時ダウンロードなしの単一バイナリになる。
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build and upload assets for (e.g. v0.2.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            runner: macos-14
+          - target: x86_64-apple-darwin
+            runner: macos-13
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+          - target: x86_64-pc-windows-msvc
+            runner: windows-latest
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+      - name: Install Rust 1.97
+        run: rustup toolchain install 1.97 --profile minimal && rustup +1.97 target add ${{ matrix.target }}
+      - name: Cache SudachiDict
+        uses: actions/cache@v4
+        with:
+          path: resources/system.dic
+          key: sudachidict-20260723-core-53fa281d11eef376
+      - name: Build
+        run: cargo +1.97 build --release --locked --target ${{ matrix.target }}
+      - name: Package (unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          NAME="suiko-${RELEASE_TAG}-${TARGET}"
+          mkdir "${NAME}"
+          cp "target/${TARGET}/release/suiko" "${NAME}/"
+          cp README.md LICENSE THIRD_PARTY_NOTICES.md CHANGELOG.md "${NAME}/"
+          tar czf "${NAME}.tar.gz" "${NAME}"
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "${NAME}.tar.gz" > "${NAME}.tar.gz.sha256"
+          else
+            shasum -a 256 "${NAME}.tar.gz" > "${NAME}.tar.gz.sha256"
+          fi
+      - name: Package (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          $name = "suiko-$env:RELEASE_TAG-$env:TARGET"
+          New-Item -ItemType Directory -Path $name | Out-Null
+          Copy-Item "target/$env:TARGET/release/suiko.exe" $name/
+          Copy-Item README.md,LICENSE,THIRD_PARTY_NOTICES.md,CHANGELOG.md $name/
+          Compress-Archive -Path $name -DestinationPath "$name.zip"
+          (Get-FileHash "$name.zip" -Algorithm SHA256).Hash.ToLower() + "  $name.zip" | Set-Content "$name.zip.sha256"
+      - name: Upload to release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shopt -s nullglob
+          files=(suiko-*.tar.gz suiko-*.tar.gz.sha256 suiko-*.zip suiko-*.zip.sha256)
+          gh release upload "${RELEASE_TAG}" "${files[@]}" --clobber

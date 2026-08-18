@@ -48,6 +48,20 @@ cargo install --path .
 
 リポジトリから直接試す場合は、以降の `suiko` を `cargo run --release --` に置き換えられます。
 
+### ビルド済みバイナリ
+
+Rustを入れずに使う場合は、[GitHub Releases](https://github.com/nwiizo/suiko/releases) の各リリースに添付されたビルド済みバイナリを使えます。対応ターゲットは macOS（Apple Silicon / Intel）、Linux（x86_64 / aarch64）、Windows（x86_64）で、各アーカイブに `SHA-256` ファイルが付きます。
+
+```sh
+# 例: macOS (Apple Silicon)
+curl -LO https://github.com/nwiizo/suiko/releases/latest/download/suiko-v0.2.0-aarch64-apple-darwin.tar.gz
+shasum -a 256 -c suiko-v0.2.0-aarch64-apple-darwin.tar.gz.sha256   # 事前に.sha256も取得した場合
+tar xzf suiko-v0.2.0-aarch64-apple-darwin.tar.gz
+./suiko-v0.2.0-aarch64-apple-darwin/suiko --version
+```
+
+macOSでは、ダウンロードしたバイナリに検疫属性（quarantine）が付くため初回実行がGatekeeperに止められます。`xattr -d com.apple.quarantine <suikoのパス>` で解除するか、確認ダイアログを避けたい場合は `cargo install suiko` で自分のマシンでビルドしてください（署名の出所が自分になるため、以降の確認が出ません）。
+
 ## 使い方
 
 ```sh
