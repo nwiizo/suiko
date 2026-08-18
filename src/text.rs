@@ -5,6 +5,9 @@ pub struct Sentence {
     pub line: usize,
     pub text: String,
     pub raw_text: String,
+    /// 行内での文本文の開始byte offset。マスクはbyte長を保存するため、
+    /// masked行で計算した値はraw行の同じ位置を指す。
+    pub line_byte_start: usize,
 }
 
 pub fn numbered_lines(text: &str) -> Vec<(usize, &str)> {
@@ -95,15 +98,50 @@ pub fn mask_html_comments(text: &str) -> String {
     output
 }
 
+/// mask_markdownが行単位で抑制した本文外の行数。
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MaskStats {
+    pub reference_lines: usize,
+    pub code_annotation_lines: usize,
+}
+
+/// `[1] 著者名…`のような参考文献リスト行、`[^1]: …`の脚注定義行。
+/// 行頭にある場合だけ本文から外す。文中の`研究[1]は…`のような参照は残す。
+pub fn is_reference_line(line: &str) -> bool {
+    let trimmed = line.trim_start();
+    let Some(rest) = trimmed.strip_prefix('[') else {
+        return false;
+    };
+    let Some(close) = rest.find(']') else {
+        return false;
+    };
+    let label = &rest[..close];
+    let after = &rest[close + 1..];
+    let numeric = !label.is_empty() && label.bytes().all(|byte| byte.is_ascii_digit());
+    let footnote = label.starts_with('^') && label.len() > 1;
+    (numeric && after.starts_with([' ', '\t', ':'])) || (footnote && after.starts_with(':'))
+}
+
+/// `#A 説明`のようなManning式コード注釈行。見出しは`#`の直後が空白なので
+/// 衝突しない。
+pub fn is_code_annotation_line(line: &str) -> bool {
+    let bytes = line.trim_start().as_bytes();
+    bytes.len() >= 3 && bytes[0] == b'#' && bytes[1].is_ascii_uppercase() && bytes[2] == b' '
+}
+
 pub fn mask_markdown_structure(text: &str) -> String {
+    mask_markdown(text, false).0
+}
+
+pub fn mask_markdown_structure_with_stats(text: &str) -> (String, MaskStats) {
     mask_markdown(text, false)
 }
 
 pub fn mask_markdown_structure_preserving_headings(text: &str) -> String {
-    mask_markdown(text, true)
+    mask_markdown(text, true).0
 }
 
-fn mask_markdown(text: &str, preserve_headings: bool) -> String {
+fn mask_markdown(text: &str, preserve_headings: bool) -> (String, MaskStats) {
     let text = mask_html_comments(text);
     let inline_code = Regex::new(r"``[^\n]*?``|`[^`\n]+`").expect("valid inline-code regex");
     let inline_html =
@@ -112,6 +150,7 @@ fn mask_markdown(text: &str, preserve_headings: bool) -> String {
     let embed_citation =
         Regex::new(r"^\[https?://[^]\n]+:embed:cite\]$").expect("valid embed-citation regex");
     let mut masked = Vec::new();
+    let mut stats = MaskStats::default();
     let mut fence: Option<(char, usize)> = None;
     let mut front_matter = false;
 
@@ -170,6 +209,16 @@ fn mask_markdown(text: &str, preserve_headings: bool) -> String {
             masked.push(String::new());
             continue;
         }
+        if is_reference_line(line) {
+            stats.reference_lines += 1;
+            masked.push(String::new());
+            continue;
+        }
+        if is_code_annotation_line(line) {
+            stats.code_annotation_lines += 1;
+            masked.push(String::new());
+            continue;
+        }
 
         let no_code = inline_code.replace_all(line, |captures: &regex::Captures<'_>| {
             " ".repeat(captures[0].len())
@@ -187,7 +236,7 @@ fn mask_markdown(text: &str, preserve_headings: bool) -> String {
         });
         masked.push(no_urls.into_owned());
     }
-    masked.join("\n")
+    (masked.join("\n"), stats)
 }
 
 pub fn sentences(text: &str) -> Vec<Sentence> {
@@ -203,8 +252,10 @@ pub fn sentences_with_raw(text: &str, raw_text: &str) -> Vec<Sentence> {
         for (byte, ch) in line.char_indices() {
             if matches!(ch, '。' | '！' | '？' | '!' | '?') {
                 let end = byte;
-                let sentence = line[start..end].trim();
+                let segment = &line[start..end];
+                let sentence = segment.trim();
                 if !sentence.is_empty() {
+                    let leading = segment.len() - segment.trim_start().len();
                     output.push(Sentence {
                         line: line_no,
                         text: sentence.to_owned(),
@@ -213,17 +264,21 @@ pub fn sentences_with_raw(text: &str, raw_text: &str) -> Vec<Sentence> {
                             .unwrap_or(sentence)
                             .trim()
                             .to_owned(),
+                        line_byte_start: start + leading,
                     });
                 }
                 start = byte + ch.len_utf8();
             }
         }
-        let tail = line[start..].trim();
+        let segment = &line[start..];
+        let tail = segment.trim();
         if !tail.is_empty() {
+            let leading = segment.len() - segment.trim_start().len();
             output.push(Sentence {
                 line: line_no,
                 text: tail.to_owned(),
                 raw_text: raw_line.get(start..).unwrap_or(tail).trim().to_owned(),
+                line_byte_start: start + leading,
             });
         }
     }

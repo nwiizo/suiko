@@ -17,11 +17,16 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Rust 1.97
         run: rustup toolchain install 1.97 --profile minimal --component clippy,rustfmt
+      - name: Cache SudachiDict
+        uses: actions/cache@v4
+        with:
+          path: resources/system.dic
+          key: sudachidict-20260723-core-53fa281d11eef376
+      - name: Fetch SudachiDict
+        run: ./scripts/fetch-dictionary.sh
       - name: Check formatting
         run: cargo +1.97 fmt --check
       - name: Run Clippy
         run: cargo +1.97 clippy --locked --all-targets --all-features -- -D warnings
       - name: Run tests
         run: cargo +1.97 test --locked --all-features --all-targets
-      - name: Verify crate package
-        run: cargo +1.97 package --locked

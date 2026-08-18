@@ -1,6 +1,6 @@
 <!--
 Calibration fixture adapted under the terms in THIRD_PARTY_NOTICES.md.
-Expected: 25 default findings and 33 with --experimental.
+Expected finding counts are pinned in tests/compatibility.rs.
 -->
 
 # AIっぽい文章のサンプル

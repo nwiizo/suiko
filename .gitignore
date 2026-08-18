@@ -1,2 +1,5 @@
 /target/
 !Cargo.lock
+/resources/
+/crates/suiko-sudachi/target/
+/crates/suiko-sudachi/Cargo.lock

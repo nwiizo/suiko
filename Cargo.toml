@@ -1,25 +1,30 @@
 [package]
 name = "suiko"
-version = "0.1.0"
+version = "0.2.0"
 default-run = "suiko"
 edition = "2024"
 rust-version = "1.97"
 description = "Deterministic diagnostics for natural and readable Japanese writing"
 license = "MIT"
 repository = "https://github.com/nwiizo/suiko"
+homepage = "https://crates.io/crates/suiko"
 keywords = ["japanese", "lint", "writing", "cli", "markdown"]
 categories = ["command-line-utilities", "text-processing"]
+# 辞書(約207MB)とテスト・評価資産はcrateへ同梱しない。辞書はbuild.rsが
+# SHA-256固定で取得または既存ファイルを検証して埋め込む。
 include = [
     "/src/**",
-    "/tests/**",
-    "/eval/**",
-    "/skills/suiko/**",
+    "/build.rs",
     "/Cargo.toml",
-    "/Cargo.lock",
     "/README.md",
     "/LICENSE",
     "/THIRD_PARTY_NOTICES.md",
 ]
+
+# 再配布crateはworkspaceから除外し、独立した依存としてビルドする。
+# これで上流コードへ自前のfmt/clippy基準が適用されない。
+[workspace]
+exclude = ["crates/suiko-sudachi"]
 
 [features]
 default = []
@@ -27,13 +32,20 @@ evaluation = ["dep:sha2"]
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
-lindera = { version = "5.3", default-features = false, features = ["embed-ipadic"] }
 regex = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = { version = "0.11", optional = true }
+# WorksApplications/sudachi.rs v0.6.11の非公式再配布(crates/suiko-sudachi)。
+# 上流が公式にcrates.ioへ公開したら sudachi = "..." へ戻す。
+sudachi = { package = "suiko-sudachi", version = "0.6.11", path = "crates/suiko-sudachi" }
 thiserror = "2"
 toml = "1.1"
+
+[build-dependencies]
+sha2 = "0.11"
+ureq = "2"
+zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 assert_cmd = "2"

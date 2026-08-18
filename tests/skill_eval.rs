@@ -1,6 +1,48 @@
 use std::collections::BTreeSet;
+use std::path::Path;
 
 use serde::Deserialize;
+
+// SKILL.mdが参照する相対パスのファイルがすべてバンドルに存在することを
+// オフラインで検証する。実登録の検証は scripts/verify-skill-install.sh。
+#[test]
+fn skill_bundle_references_resolve() {
+    let root = Path::new("skills/suiko");
+    for required in [
+        "SKILL.md",
+        "agents/openai.yaml",
+        "references/manual-checklist.md",
+        "assets/style-profile-template.md",
+    ] {
+        assert!(root.join(required).is_file(), "missing {required}");
+    }
+
+    let skill = std::fs::read_to_string(root.join("SKILL.md")).expect("read SKILL.md");
+    let link = regex_lite(&skill);
+    for target in link {
+        assert!(
+            root.join(&target).is_file(),
+            "SKILL.md references missing file: {target}"
+        );
+    }
+}
+
+// 依存を増やさないための最小のMarkdownリンク抽出。](path) 形式のうち
+// 外部URLとアンカーを除いた相対パスを返す。
+fn regex_lite(text: &str) -> Vec<String> {
+    let mut targets = Vec::new();
+    let mut rest = text;
+    while let Some(start) = rest.find("](") {
+        rest = &rest[start + 2..];
+        let Some(end) = rest.find(')') else { break };
+        let target = &rest[..end];
+        if !target.starts_with("http") && !target.starts_with('#') && !target.is_empty() {
+            targets.push(target.to_owned());
+        }
+        rest = &rest[end + 1..];
+    }
+    targets
+}
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

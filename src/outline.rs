@@ -284,7 +284,7 @@ fn summarize(
             .iter()
             .rev()
             .find(|token| !matches!(token.pos(0), "記号" | "補助記号" | "空白"))
-            .is_some_and(|token| token.pos(0) == "名詞")
+            .is_some_and(|token| matches!(token.pos(0), "名詞" | "代名詞"))
         {
             nominal_count += 1;
         }
@@ -293,7 +293,7 @@ fn summarize(
             .filter(|token| {
                 matches!(
                     token.pos(0),
-                    "名詞" | "動詞" | "形容詞" | "副詞" | "接頭詞" | "接頭辞"
+                    "名詞" | "代名詞" | "形状詞" | "動詞" | "形容詞" | "副詞" | "接頭辞"
                 )
             })
             .map(|token| token.pos(0).to_owned())

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use regex::Regex;
 use serde::Serialize;
@@ -21,6 +21,41 @@ pub struct Term {
 #[derive(Clone, Debug, Serialize)]
 pub struct TermsReport {
     pub terms: Vec<Term>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct AuditFileEntry {
+    pub file: String,
+    pub first_line: usize,
+    pub count: usize,
+    pub has_gloss_hint: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct AuditTerm {
+    pub term: String,
+    pub normalized: String,
+    pub total_count: usize,
+    pub files: Vec<AuditFileEntry>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct AuditSpelling {
+    pub term: String,
+    pub total_count: usize,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct AuditVariantGroup {
+    pub normalized: String,
+    pub spellings: Vec<AuditSpelling>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct TermsAuditReport {
+    pub files: Vec<String>,
+    pub terms: Vec<AuditTerm>,
+    pub variants: Vec<AuditVariantGroup>,
 }
 
 #[derive(Clone, Debug)]
@@ -100,6 +135,73 @@ fn context_and_gloss(term: &str, line_no: usize, text: &str) -> (String, bool) {
     (context.trim().to_owned(), hint)
 }
 
+/// 用語文字列をSudachiDictの正規化表記へ写し、表記揺れのクラスタキーにする。
+fn normalized_key(term: &str, morphology: &Morphology) -> Result<String, Error> {
+    Ok(morphology
+        .tokenize(term)?
+        .iter()
+        .map(|token| token.normalized().to_owned())
+        .collect::<String>())
+}
+
+/// 複数ファイルの用語候補を集計し、同じ概念の表記揺れを一覧化する。
+/// ファイルは書き換えず、確認材料だけを返す。
+pub fn audit(
+    inputs: &[(String, String)],
+    morphology: &Morphology,
+) -> Result<TermsAuditReport, Error> {
+    let mut terms = BTreeMap::<String, AuditTerm>::new();
+    for (file, text) in inputs {
+        let report = analyze(text, morphology)?;
+        for term in report.terms {
+            let entry = terms.entry(term.term.clone()).or_insert(AuditTerm {
+                normalized: normalized_key(&term.term, morphology)?,
+                term: term.term,
+                total_count: 0,
+                files: Vec::new(),
+            });
+            entry.total_count += term.count;
+            entry.files.push(AuditFileEntry {
+                file: file.clone(),
+                first_line: term.first_line,
+                count: term.count,
+                has_gloss_hint: term.has_gloss_hint,
+            });
+        }
+    }
+
+    let mut groups = BTreeMap::<String, Vec<AuditSpelling>>::new();
+    for term in terms.values() {
+        groups
+            .entry(term.normalized.clone())
+            .or_default()
+            .push(AuditSpelling {
+                term: term.term.clone(),
+                total_count: term.total_count,
+            });
+    }
+    let mut variants = groups
+        .into_iter()
+        .filter(|(_, spellings)| spellings.len() >= 2)
+        .map(|(normalized, mut spellings)| {
+            spellings.sort_by(|a, b| b.total_count.cmp(&a.total_count).then(a.term.cmp(&b.term)));
+            AuditVariantGroup {
+                normalized,
+                spellings,
+            }
+        })
+        .collect::<Vec<_>>();
+    variants.sort_by(|a, b| a.normalized.cmp(&b.normalized));
+
+    let mut terms = terms.into_values().collect::<Vec<_>>();
+    terms.sort_by(|a, b| b.total_count.cmp(&a.total_count).then(a.term.cmp(&b.term)));
+    Ok(TermsAuditReport {
+        files: inputs.iter().map(|(file, _)| file.clone()).collect(),
+        terms,
+        variants,
+    })
+}
+
 pub fn analyze(raw_text: &str, morphology: &Morphology) -> Result<TermsReport, Error> {
     let comments_masked = mask_html_comments(raw_text);
     let body_masked = mask_markdown_structure_preserving_headings(&comments_masked);
@@ -149,6 +251,23 @@ pub fn analyze(raw_text: &str, morphology: &Morphology) -> Result<TermsReport, E
                 && tokens[end - 1].byte_end == tokens[end].byte_start
             {
                 end += 1;
+            }
+            // 「用語クラス別」のような漢字複合語の内部にあるカタカナ断片は、
+            // それ自体が用語ではないため候補にしない。中黒（・）は列挙の
+            // 区切りなので複合語の継続として扱わない。
+            if katakana(&tokens[index].surface) {
+                let joined_before = index > 0
+                    && tokens[index - 1].byte_end == tokens[index].byte_start
+                    && !tokens[index].surface.starts_with('・')
+                    && matches!(tokens[index - 1].pos(0), "名詞" | "代名詞" | "接頭辞");
+                let joined_after = end < tokens.len()
+                    && tokens[end - 1].byte_end == tokens[end].byte_start
+                    && !tokens[end - 1].surface.ends_with('・')
+                    && matches!(tokens[end].pos(0), "名詞" | "代名詞" | "接尾辞");
+                if joined_before || joined_after {
+                    index = end;
+                    continue;
+                }
             }
             let byte_start = tokens[index].byte_start;
             let byte_end = tokens[end - 1].byte_end;

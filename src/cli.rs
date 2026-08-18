@@ -28,7 +28,7 @@ enum Command {
     /// 見出し、段落の先頭文、箇条書きから文書構造を抽出する
     Outline(FileArgs),
     /// 専門用語候補と初出時の説明手掛かりを抽出する
-    Terms(FileArgs),
+    Terms(TermsArgs),
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, ValueEnum)]
@@ -60,6 +60,19 @@ struct FileArgs {
 }
 
 #[derive(Debug, Args)]
+struct TermsArgs {
+    /// 対象の Markdown/テキストファイル。複数指定可。- で標準入力
+    #[arg(required = true)]
+    files: Vec<String>,
+    /// 機械可読な JSON で出力する
+    #[arg(long)]
+    json: bool,
+    /// 複数ファイルの用語を集計し、表記揺れを一覧化する（ファイルは書き換えない）
+    #[arg(long)]
+    audit: bool,
+}
+
+#[derive(Debug, Args)]
 struct LintArgs {
     /// lint 対象の Markdown/テキストファイル。複数指定可。- で標準入力
     #[arg(required = true)]
@@ -82,12 +95,22 @@ struct LintArgs {
     /// 指定 severity 以上の finding があれば終了コード2を返す
     #[arg(long, value_enum)]
     fail_on: Option<FailOn>,
+    /// 出力形式を指定する（github: GitHub Actionsのworkflowコマンド注釈、
+    /// sarif: エディタやコードスキャンが読めるSARIF 2.1.0）
+    #[arg(long, value_enum, conflicts_with = "json")]
+    format: Option<OutputFormat>,
     /// 指定した設定ファイルを使用する（自動検出より優先）
     #[arg(long, value_name = "PATH", conflicts_with = "no_config")]
     config: Option<PathBuf>,
     /// カレントディレクトリの .suiko.toml を読み込まない
     #[arg(long, conflicts_with = "config")]
     no_config: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum OutputFormat {
+    Github,
+    Sarif,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, ValueEnum)]
@@ -214,31 +237,35 @@ fn category_counts(findings: &[Finding]) -> BTreeMap<String, usize> {
     counts
 }
 
+/// 設定による除外を適用し、残ったfindingの総数とカテゴリ別内訳を返す。
+fn retain_allowed(
+    findings: &mut Vec<Finding>,
+    config: &Config,
+) -> (usize, BTreeMap<String, usize>) {
+    findings.retain(|finding| !config.suppresses(finding));
+    (findings.len(), category_counts(findings))
+}
+
 fn apply_config(report: &mut lint::LintReport, config: Option<&Config>) {
-    let Some(config) = config else {
-        return;
-    };
-    report
-        .findings
-        .retain(|finding| !config.suppresses(finding));
-    report.stats.total_findings = report.findings.len();
-    report.stats.by_category = category_counts(&report.findings);
+    if let Some(config) = config {
+        let (total, by_category) = retain_allowed(&mut report.findings, config);
+        report.stats.total_findings = total;
+        report.stats.by_category = by_category;
+    }
 }
 
 fn apply_reading_load_config(report: &mut lint::ReadingLoadReport, config: Option<&Config>) {
-    let Some(config) = config else {
-        return;
-    };
-    report
-        .findings
-        .retain(|finding| !config.suppresses(finding));
-    report.stats.total = report.findings.len();
-    report.stats.by_category = category_counts(&report.findings);
+    if let Some(config) = config {
+        let (total, by_category) = retain_allowed(&mut report.findings, config);
+        report.stats.total = total;
+        report.stats.by_category = by_category;
+    }
 }
 
 #[derive(Serialize)]
 struct LintOutput<'a> {
     file: &'a str,
+    suiko_version: &'static str,
     stats: &'a LintStats,
     findings: &'a [Finding],
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -268,6 +295,110 @@ struct TermsOutput<'a> {
     report: &'a terms::TermsReport,
 }
 
+#[derive(Serialize)]
+struct TermsAuditOutput<'a> {
+    suiko_version: &'static str,
+    #[serde(flatten)]
+    report: &'a terms::TermsAuditReport,
+}
+
+fn print_terms_audit_human(report: &terms::TermsAuditReport) {
+    println!("=== terms audit: {}ファイル ===", report.files.len());
+    println!(
+        "用語 {}件、表記揺れ {}組。集計は確認材料であり、置換や書き換えは行いません。\n",
+        report.terms.len(),
+        report.variants.len()
+    );
+    for group in &report.variants {
+        let spellings = group
+            .spellings
+            .iter()
+            .map(|spelling| format!("{}({}回)", spelling.term, spelling.total_count))
+            .collect::<Vec<_>>()
+            .join(" / ");
+        println!("[表記揺れ] {spellings}  → 正規化表記: {}", group.normalized);
+    }
+    if !report.variants.is_empty() {
+        println!();
+    }
+    for term in &report.terms {
+        println!(
+            "{} (合計{}回, {}ファイル{})",
+            term.term,
+            term.total_count,
+            term.files.len(),
+            if term.files.iter().any(|entry| entry.has_gloss_hint) {
+                ", 説明手掛かりあり"
+            } else {
+                ""
+            }
+        );
+        for entry in &term.files {
+            println!(
+                "    {} L{} ({}回)",
+                entry.file, entry.first_line, entry.count
+            );
+        }
+    }
+}
+
+/// --baseline のJSONを、単一record(object)または複数record(array)として展開する。
+fn baseline_records(data: &serde_json::Value) -> Result<Vec<&serde_json::Value>, String> {
+    match data {
+        serde_json::Value::Object(_) => Ok(vec![data]),
+        serde_json::Value::Array(items) => {
+            if items.iter().all(serde_json::Value::is_object) {
+                Ok(items.iter().collect())
+            } else {
+                Err("--baseline の配列にオブジェクト以外の要素があります。baseline比較を無視して通常のlintを実行します。".to_owned())
+            }
+        }
+        _ => Err(
+            "--baseline の内容が JSON オブジェクトでも配列でもありません。baseline比較を無視して通常のlintを実行します。"
+                .to_owned(),
+        ),
+    }
+}
+
+/// baseline recordと今回の実行条件が一致しないときは明示的に失敗させる。
+fn ensure_baseline_compatible(
+    record: &serde_json::Value,
+    file: &str,
+    genre: Option<&str>,
+    experimental: bool,
+) -> Result<(), Error> {
+    if let Some(version) = record
+        .get("suiko_version")
+        .and_then(serde_json::Value::as_str)
+        && version != env!("CARGO_PKG_VERSION")
+    {
+        return Err(Error::InvalidArguments(format!(
+            "--baseline のSuikoバージョンが現在と一致しません: {file} (baseline={version}, current={})。同じバージョンで作り直してください",
+            env!("CARGO_PKG_VERSION")
+        )));
+    }
+    let baseline_genre = record
+        .pointer("/stats/genre")
+        .and_then(serde_json::Value::as_str);
+    if baseline_genre != genre {
+        return Err(Error::InvalidArguments(format!(
+            "--baseline のgenreが現在と一致しません: {file} (baseline={}, current={})",
+            baseline_genre.unwrap_or("なし"),
+            genre.unwrap_or("なし")
+        )));
+    }
+    let baseline_experimental = record
+        .pointer("/stats/experimental")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    if baseline_experimental != experimental {
+        return Err(Error::InvalidArguments(format!(
+            "--baseline のexperimental設定が現在と一致しません: {file} (baseline={baseline_experimental}, current={experimental})"
+        )));
+    }
+    Ok(())
+}
+
 fn read_input(file: &str) -> Result<String, Error> {
     if file == "-" {
         let mut input = String::new();
@@ -280,6 +411,124 @@ fn read_input(file: &str) -> Result<String, Error> {
         Ok(input)
     } else {
         read_source(Path::new(file))
+    }
+}
+
+/// workflowコマンドのメッセージ用エスケープ。
+fn github_escape_data(value: &str) -> String {
+    value
+        .replace('%', "%25")
+        .replace('\r', "%0D")
+        .replace('\n', "%0A")
+}
+
+/// workflowコマンドのプロパティ値用エスケープ。
+fn github_escape_property(value: &str) -> String {
+    github_escape_data(value)
+        .replace(',', "%2C")
+        .replace(':', "%3A")
+}
+
+fn github_annotation(file: &str, finding: &Finding, severity_override: Option<&str>) -> String {
+    let command = match severity_override.unwrap_or(finding.severity.as_str()) {
+        "critical" => "error",
+        "warn" => "warning",
+        _ => "notice",
+    };
+    let mut properties = format!("file={}", github_escape_property(file));
+    if let Some(span) = &finding.span {
+        properties.push_str(&format!(
+            ",line={},endLine={},col={},endColumn={}",
+            span.start_line, span.end_line, span.start_column, span.end_column
+        ));
+    } else {
+        properties.push_str(&format!(",line={}", finding.line));
+    }
+    properties.push_str(&format!(
+        ",title={}",
+        github_escape_property(&format!("suiko {}", finding.category))
+    ));
+    format!(
+        "::{command} {properties}::{}",
+        github_escape_data(&finding.detail)
+    )
+}
+
+/// SARIF 2.1.0の最小構成。columnKind=unicodeCodePointsを宣言することで、
+/// spanのUnicode scalar数え・1始まりの列をそのまま使える。
+fn sarif_result(file: &str, finding: &Finding, level_override: Option<&str>) -> serde_json::Value {
+    let level = match level_override.unwrap_or(finding.severity.as_str()) {
+        "critical" => "error",
+        "warn" => "warning",
+        _ => "note",
+    };
+    let region = if let Some(span) = &finding.span {
+        serde_json::json!({
+            "startLine": span.start_line,
+            "startColumn": span.start_column,
+            "endLine": span.end_line,
+            "endColumn": span.end_column,
+        })
+    } else {
+        serde_json::json!({"startLine": finding.line})
+    };
+    serde_json::json!({
+        "ruleId": finding.category,
+        "level": level,
+        "message": {"text": finding.detail},
+        "locations": [{
+            "physicalLocation": {
+                "artifactLocation": {"uri": file},
+                "region": region,
+            }
+        }],
+    })
+}
+
+fn sarif_output(runs: &[LintRun]) -> serde_json::Value {
+    let mut results = Vec::new();
+    let mut rule_ids = std::collections::BTreeSet::new();
+    for run in runs {
+        for finding in &run.report.findings {
+            rule_ids.insert(finding.category.clone());
+            results.push(sarif_result(&run.file, finding, None));
+        }
+        if let Some(reading_load) = &run.reading_load {
+            for finding in &reading_load.findings {
+                rule_ids.insert(finding.category.clone());
+                // 読解負荷レーンは自然度と分離した指さしなので、常にnoteで出す
+                results.push(sarif_result(&run.file, finding, Some("info")));
+            }
+        }
+    }
+    serde_json::json!({
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [{
+            "tool": {"driver": {
+                "name": "suiko",
+                "version": env!("CARGO_PKG_VERSION"),
+                "informationUri": "https://github.com/nwiizo/suiko",
+                "rules": rule_ids
+                    .iter()
+                    .map(|id| serde_json::json!({"id": id}))
+                    .collect::<Vec<_>>(),
+            }},
+            "columnKind": "unicodeCodePoints",
+            "results": results,
+        }],
+    })
+}
+
+fn print_lint_github(run: &LintRun) {
+    for finding in &run.report.findings {
+        println!("{}", github_annotation(&run.file, finding, None));
+    }
+    if let Some(reading_load) = &run.reading_load {
+        for finding in &reading_load.findings {
+            // 読解負荷レーンは自然度と分離した指さしなので、常にnoticeで出す
+            println!("{}", github_annotation(&run.file, finding, Some("info")));
+        }
     }
 }
 
@@ -301,6 +550,9 @@ fn print_lint_human(run: &LintRun) {
             "ベースライン比較: 解消: {}件 / 新規: {}件 / 継続: {}件",
             baseline.summary.resolved, baseline.summary.new, baseline.summary.persisting
         );
+        if baseline.file_status == "added" {
+            println!("(baselineに対応recordがないファイルのため、全findingを新規として扱う)");
+        }
     }
     println!();
     if report.findings.is_empty() {
@@ -322,6 +574,17 @@ fn print_lint_human(run: &LintRun) {
             println!("    該当箇所: {}", finding.excerpt);
             if !finding.detail.is_empty() {
                 println!("    詳細    : {}", finding.detail);
+            }
+            if let Some(suggestion) = &finding.suggestion {
+                let replacement = if suggestion.replacement.is_empty() {
+                    "(削除)".to_owned()
+                } else {
+                    format!("「{}」", suggestion.replacement)
+                };
+                println!(
+                    "    修正候補: L{} C{} -「{}」 +{replacement}（preimage一致時のみ適用可。Suikoは書き換えない）",
+                    suggestion.span.start_line, suggestion.span.start_column, suggestion.preimage
+                );
             }
             println!();
         }
@@ -401,11 +664,6 @@ fn execute(cli: Cli) -> Result<ExitCode, Error> {
     match cli.command {
         Command::Lint(args) => {
             validate_inputs(&args.files)?;
-            if args.baseline.is_some() && args.files.len() != 1 {
-                return Err(Error::InvalidArguments(
-                    "--baseline は1ファイルの lint でのみ使用できます".to_owned(),
-                ));
-            }
             let config = load_config(args.config.as_deref(), args.no_config)?;
             let morphology = Morphology::new()?;
             let genre = args
@@ -423,21 +681,62 @@ fn execute(cli: Cli) -> Result<ExitCode, Error> {
             } else {
                 None
             };
+            let baseline_map = if let Some((_, data)) = &baseline_data {
+                match baseline_records(data) {
+                    Ok(records) => Some(
+                        records
+                            .into_iter()
+                            .map(|record| {
+                                (
+                                    record
+                                        .get("file")
+                                        .and_then(serde_json::Value::as_str)
+                                        .unwrap_or_default()
+                                        .to_owned(),
+                                    record,
+                                )
+                            })
+                            .collect::<BTreeMap<_, _>>(),
+                    ),
+                    Err(warning) => {
+                        eprintln!("警告: {warning}");
+                        None
+                    }
+                }
+            } else {
+                None
+            };
             let mut runs = Vec::new();
             for file in &args.files {
                 let text = read_input(file)?;
                 let mut report = lint::analyze(&text, &morphology, genre, args.experimental)?;
                 apply_config(&mut report, config.as_ref());
-                let baseline = if let Some((baseline_file, data)) = &baseline_data {
-                    match lint::apply_baseline(&mut report.findings, data, baseline_file.clone()) {
-                        Ok(report) => Some(report),
-                        Err(warning) => {
-                            eprintln!("警告: {warning}");
-                            None
+                let baseline = match (&baseline_data, &baseline_map) {
+                    (Some((baseline_file, _)), Some(records)) => {
+                        if let Some(record) = records.get(file.as_str()) {
+                            ensure_baseline_compatible(record, file, genre, args.experimental)?;
+                            match lint::apply_baseline(
+                                &mut report.findings,
+                                record,
+                                baseline_file.clone(),
+                            ) {
+                                Ok(report) => Some(report),
+                                Err(warning) => {
+                                    eprintln!("警告: {warning}");
+                                    None
+                                }
+                            }
+                        } else {
+                            eprintln!(
+                                "警告: --baseline に {file} のrecordがないため、全findingを新規として扱います。"
+                            );
+                            Some(lint::baseline_added(
+                                &mut report.findings,
+                                baseline_file.clone(),
+                            ))
                         }
                     }
-                } else {
-                    None
+                    _ => None,
                 };
                 let reading_load = if args.reading_load {
                     let mut report = lint::analyze_reading_load(&text, &morphology, genre)?;
@@ -453,11 +752,25 @@ fn execute(cli: Cli) -> Result<ExitCode, Error> {
                     reading_load,
                 });
             }
+            if let Some(records) = &baseline_map {
+                let removed = records
+                    .keys()
+                    .filter(|file| !args.files.iter().any(|input| input == *file))
+                    .cloned()
+                    .collect::<Vec<_>>();
+                if !removed.is_empty() {
+                    eprintln!(
+                        "警告: --baseline にあって今回の対象にないファイル: {}",
+                        removed.join(", ")
+                    );
+                }
+            }
             if args.json {
                 let output = runs
                     .iter()
                     .map(|run| LintOutput {
                         file: &run.file,
+                        suiko_version: env!("CARGO_PKG_VERSION"),
                         stats: &run.report.stats,
                         findings: &run.report.findings,
                         baseline: run.baseline.as_ref(),
@@ -469,6 +782,12 @@ fn execute(cli: Cli) -> Result<ExitCode, Error> {
                 } else {
                     println!("{}", serde_json::to_string_pretty(&output)?);
                 }
+            } else if args.format == Some(OutputFormat::Github) {
+                for run in &runs {
+                    print_lint_github(run);
+                }
+            } else if args.format == Some(OutputFormat::Sarif) {
+                println!("{}", serde_json::to_string_pretty(&sarif_output(&runs))?);
             } else {
                 for run in &runs {
                     print_lint_human(run);
@@ -515,6 +834,25 @@ fn execute(cli: Cli) -> Result<ExitCode, Error> {
         Command::Terms(args) => {
             validate_inputs(&args.files)?;
             let morphology = Morphology::new()?;
+            if args.audit {
+                let mut inputs = Vec::new();
+                for file in &args.files {
+                    inputs.push((file.clone(), read_input(file)?));
+                }
+                let report = terms::audit(&inputs, &morphology)?;
+                if args.json {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&TermsAuditOutput {
+                            suiko_version: env!("CARGO_PKG_VERSION"),
+                            report: &report,
+                        })?
+                    );
+                } else {
+                    print_terms_audit_human(&report);
+                }
+                return Ok(ExitCode::SUCCESS);
+            }
             let mut reports = Vec::new();
             for file in &args.files {
                 let text = read_input(file)?;

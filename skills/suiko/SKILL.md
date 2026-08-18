@@ -14,7 +14,7 @@ license: MIT
 - `full`: 対外文書、経営向け文書、約1万字を超える文書。`lint`、`outline`、`terms` と目視レビューをすべて使う。
 - `score`: 書き換えず自然度と理由だけを返す。最初に [diagnose.md](references/diagnose.md) を読む。
 
-CLI が見つからない場合は、このSkillのリポジトリで `cargo run --release --` を `suiko` の代わりに使う。それもできなければ [manual-checklist.md](references/manual-checklist.md) を使う。
+CLI が見つからない場合は、導入手順（`git clone https://github.com/nwiizo/suiko && cd suiko && ./scripts/fetch-dictionary.sh && cargo install --path .`）を提示するか、すぐに診断が必要なら [manual-checklist.md](references/manual-checklist.md) で手動診断する。リポジトリが手元にある場合に限り、`cargo run --release --` を `suiko` の代わりに使える。
 
 ## 1. 読者と骨格を決める
 

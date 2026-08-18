@@ -39,6 +39,8 @@ enum Command {
         #[arg(long)]
         experimental: bool,
     },
+    /// 正解ラベル付きサンプルからカテゴリ別の検出率と誤検知率を出す
+    Labeled { manifest: PathBuf },
 }
 
 fn execute(cli: Cli) -> Result<String, evaluation::EvaluationError> {
@@ -57,6 +59,7 @@ fn execute(cli: Cli) -> Result<String, evaluation::EvaluationError> {
             manifest,
             experimental,
         } => evaluation::length_analysis(&manifest, experimental),
+        Command::Labeled { manifest } => evaluation::labeled(&manifest),
     }
 }
 

@@ -47,6 +47,301 @@ fn lint_json_reports_findings_with_source_lines() {
     assert!(categories.contains(&"translationese"));
 }
 
+// span契約: 列はUnicode scalar数え・1始まり(全角も1)、byteは各行内の
+// UTF-8 offset・0始まり、いずれも半開区間。文書全体指標のfindingはspanを持たない。
+#[test]
+fn findings_carry_line_column_and_byte_spans() {
+    // 同一表現の複数出現と全角文字: 2つのfindingが別の位置を一意に指す
+    let (_dir, path) = draft("Ｘ重要なのは速度で、重要なのは品質です。\n");
+    let output = cargo_bin_cmd!("suiko")
+        .args(["lint", path.to_str().expect("UTF-8 path"), "--json"])
+        .output()
+        .expect("run suiko lint");
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    let spans = json["findings"]
+        .as_array()
+        .expect("findings array")
+        .iter()
+        .filter(|finding| finding["category"] == "forbidden_phrase")
+        .map(|finding| finding["span"].clone())
+        .collect::<Vec<_>>();
+    assert_eq!(spans.len(), 2);
+    assert_eq!(spans[0]["start_column"], 2);
+    assert_eq!(spans[0]["end_column"], 7);
+    assert_eq!(spans[0]["start_byte"], 3);
+    assert_eq!(spans[0]["end_byte"], 18);
+    assert_eq!(spans[1]["start_column"], 11);
+    assert_eq!(spans[1]["start_byte"], 30);
+
+    // 複数行にまたがるfinding
+    let (_dir2, path2) = draft("それは組織の再構築である。\nなぜなら場所に縛られないからだ。\n");
+    let output = cargo_bin_cmd!("suiko")
+        .args([
+            "lint",
+            path2.to_str().expect("UTF-8 path"),
+            "--experimental",
+            "--json",
+        ])
+        .output()
+        .expect("run suiko lint");
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    let cleft = json["findings"]
+        .as_array()
+        .expect("findings array")
+        .iter()
+        .find(|finding| finding["category"] == "english_syntax_cleft_because")
+        .cloned()
+        .expect("cleft finding");
+    assert_eq!(cleft["span"]["start_line"], 1);
+    assert_eq!(cleft["span"]["end_line"], 2);
+    assert_eq!(cleft["span"]["end_byte"], 45);
+
+    // 結合文字(か+U+3099)はUnicode scalarとして数える
+    let (_dir3, path3) = draft("か\u{3099}きく 重要なのは品質です。\n");
+    let output = cargo_bin_cmd!("suiko")
+        .args(["lint", path3.to_str().expect("UTF-8 path"), "--json"])
+        .output()
+        .expect("run suiko lint");
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    let span = json["findings"]
+        .as_array()
+        .expect("findings array")
+        .iter()
+        .find(|finding| finding["category"] == "forbidden_phrase")
+        .map(|finding| finding["span"].clone())
+        .expect("span");
+    assert_eq!(span["start_column"], 6);
+    assert_eq!(span["start_byte"], 13);
+
+    // 文書全体指標のfindingはspanを持たない
+    let (_dir4, path4) =
+        draft("短い。とても短い文。同じ長さ。似た長さの文。また同じ。等しい長さ。\n");
+    let output = cargo_bin_cmd!("suiko")
+        .args(["lint", path4.to_str().expect("UTF-8 path"), "--json"])
+        .output()
+        .expect("run suiko lint");
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    for finding in json["findings"].as_array().expect("findings array") {
+        if finding["category"] == "low_sentence_variance" {
+            assert!(finding.get("span").is_none());
+        }
+    }
+}
+
+// 参考文献リスト行([1]…、[^1]: …)とManning式コード注釈行(#A …)は本文から
+// マスクし、読解負荷や文統計に数えない。文中の参照(研究[1]は…)は本文に残す。
+#[test]
+fn reference_and_code_annotation_lines_are_masked_from_prose() {
+    let long_tail = "とても長い説明をここへ続けて九十字の目安を確実に超えるようにし、読解負荷の対象になるかどうかを確かめられるだけの十分な長さを確保したうえで、さらに念のため補足の語句も付け加えておきます";
+    let (_dir, path) = draft(&format!(
+        "[1] McKinsey & Company. {long_tail}。\n\n#A 図8.2の状態管理システムを初期化する注釈で{long_tail}。\n\n研究[1]によると、{long_tail}。\n"
+    ));
+
+    let output = cargo_bin_cmd!("suiko")
+        .args([
+            "lint",
+            path.to_str().expect("UTF-8 path"),
+            "--reading-load",
+            "--json",
+        ])
+        .output()
+        .expect("run suiko lint");
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    assert_eq!(json["stats"]["masking"]["reference_lines"], 1);
+    assert_eq!(json["stats"]["masking"]["code_annotation_lines"], 1);
+    // 本文として残るのは文中参照の1文だけで、それはsentence_too_longに数える
+    assert_eq!(json["reading_load"]["stats"]["sentences"], 1);
+    assert_eq!(
+        json["reading_load"]["stats"]["by_category"]["sentence_too_long"],
+        1
+    );
+}
+
+// antithesis_repetitionのseverity: 一致3回でも長文では比率が0.02未満になり
+// infoに留まる。短い文書では同じ3回がcriticalになる(別テストで固定済み)。
+#[test]
+fn antithesis_severity_stays_info_in_long_documents() {
+    let mut body = String::new();
+    for index in 0..160 {
+        body.push_str(&format!("これは水増し用の文番号{index}である。"));
+        if index % 60 == 0 {
+            body.push_str("速さではなく、正確さを優先する。");
+        }
+        if index % 50 == 0 {
+            body.push('\n');
+        }
+    }
+    let (_dir, path) = draft(&body);
+
+    let output = cargo_bin_cmd!("suiko")
+        .args(["lint", path.to_str().expect("UTF-8 path"), "--json"])
+        .output()
+        .expect("run suiko lint");
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    let antithesis = json["findings"]
+        .as_array()
+        .expect("findings array")
+        .iter()
+        .find(|finding| finding["category"] == "antithesis_repetition")
+        .cloned()
+        .expect("antithesis finding");
+    assert_eq!(antithesis["severity"], "info");
+}
+
+// FAQのQ./A.のような短いマーカー+区切りの反復は、定型フィールドとして
+// 散文の無意識な文頭反復と区別する。
+#[test]
+fn faq_marker_leads_are_flagged_as_structured_labels() {
+    let faq = (1..=7)
+        .map(|index| {
+            format!(
+                "Q. 質問{index}はどこで確認できますか。\n\nA. 回答{index}はマニュアルに記載されています。\n"
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let (_dir, path) = draft(&faq);
+
+    let output = cargo_bin_cmd!("suiko")
+        .args([
+            "lint",
+            path.to_str().expect("UTF-8 path"),
+            "--genre",
+            "tech",
+            "--json",
+        ])
+        .output()
+        .expect("run suiko lint");
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    let leads = json["findings"]
+        .as_array()
+        .expect("findings array")
+        .iter()
+        .filter(|finding| finding["category"] == "repeated_sentence_lead")
+        .cloned()
+        .collect::<Vec<_>>();
+    assert_eq!(leads.len(), 2);
+    for finding in &leads {
+        assert!(
+            finding["detail"]
+                .as_str()
+                .expect("detail text")
+                .contains("定型フィールド")
+        );
+    }
+}
+
+// 局所AIパターン: 短い文書でも装飾箇条書き、述語+コロン、誇張表現を検出する。
+// 名詞ラベル(「使用方法:」)と装飾なし箇条書きは対象外。
+#[test]
+fn local_ai_patterns_fire_on_short_documents() {
+    let (_dir, path) = draft(
+        "革命的な技術で業界を変えます。\n実行します:\n- **重要**: これは重要な項目です\n- ✅ 完了した項目です\n",
+    );
+    let output = cargo_bin_cmd!("suiko")
+        .args([
+            "lint",
+            path.to_str().expect("UTF-8 path"),
+            "--experimental",
+            "--genre",
+            "tech",
+            "--json",
+        ])
+        .output()
+        .expect("run suiko lint");
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    assert_eq!(json["stats"]["by_category"]["hype_expression"], 1);
+    assert_eq!(json["stats"]["by_category"]["predicate_colon_lead"], 1);
+    assert_eq!(json["stats"]["by_category"]["bullet_bold_label"], 1);
+    assert_eq!(json["stats"]["by_category"]["bullet_emoji"], 1);
+
+    let (_dir2, path2) = draft("使用方法:\n- 設定を開く\n- 保存する\n");
+    let output = cargo_bin_cmd!("suiko")
+        .args([
+            "lint",
+            path2.to_str().expect("UTF-8 path"),
+            "--experimental",
+            "--genre",
+            "tech",
+            "--json",
+        ])
+        .output()
+        .expect("run suiko lint");
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    assert_eq!(json["stats"]["total_findings"], 0);
+}
+
+#[test]
+fn antithesis_matches_aggregate_into_a_single_document_finding() {
+    let (_dir, path) = draft("Aではなく、BだけでなくCもあります。\nDではなく、Eです。\n");
+
+    let output = cargo_bin_cmd!("suiko")
+        .args(["lint", path.to_str().expect("UTF-8 path"), "--json"])
+        .output()
+        .expect("run suiko lint");
+
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    let antithesis = json["findings"]
+        .as_array()
+        .expect("findings array")
+        .iter()
+        .filter(|finding| finding["category"] == "antithesis_repetition")
+        .cloned()
+        .collect::<Vec<_>>();
+    assert_eq!(antithesis.len(), 1);
+    assert_eq!(antithesis[0]["severity"], "critical");
+    assert_eq!(antithesis[0]["related_lines"], serde_json::json!([1, 2]));
+    let detail = antithesis[0]["detail"].as_str().expect("detail text");
+    assert!(detail.contains("3回"));
+    assert!(detail.contains("総文数2"));
+    assert!(detail.contains("150.0%"));
+    assert!(detail.contains("100%を超える"));
+}
+
+#[test]
+fn repeated_leads_aggregate_per_key_and_flag_label_fields() {
+    let glossary = (1..=6)
+        .map(|index| format!("定義：項目{index}の説明です。\n\n主張：項目{index}の要点です。\n"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let (_dir, path) = draft(&format!("{glossary}\nまとめると、以上です。\n"));
+
+    let output = cargo_bin_cmd!("suiko")
+        .args(["lint", path.to_str().expect("UTF-8 path"), "--json"])
+        .output()
+        .expect("run suiko lint");
+
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    let leads = json["findings"]
+        .as_array()
+        .expect("findings array")
+        .iter()
+        .filter(|finding| finding["category"] == "repeated_sentence_lead")
+        .cloned()
+        .collect::<Vec<_>>();
+    // 12行の反復でも、反復キー(定義：/主張：)ごとに1件へ集約する
+    assert_eq!(leads.len(), 2);
+    for finding in &leads {
+        let detail = finding["detail"].as_str().expect("detail text");
+        assert!(detail.contains("6回反復"));
+        assert!(detail.contains("定型フィールド"));
+        assert_eq!(finding["related_lines"].as_array().expect("lines").len(), 6);
+    }
+    // 集約しても他カテゴリのfindingは見失わない
+    assert_eq!(json["stats"]["by_category"]["forbidden_phrase"], 1);
+}
+
 #[test]
 fn outline_json_extracts_headings_leads_and_bullets() {
     let (_dir, path) = draft("# 結論\n\n最初の文です。続きです。\n\n- 一つ\n- 二つ\n");
@@ -67,9 +362,9 @@ fn outline_json_extracts_headings_leads_and_bullets() {
 }
 
 #[test]
-fn outline_heading_stats_are_stable_with_lindera_ipadic() {
+fn outline_heading_stats_are_stable_with_sudachi() {
     let output = cargo_bin_cmd!("suiko")
-        .args(["outline", "tests/fixtures/outline-lindera.md", "--json"])
+        .args(["outline", "tests/fixtures/outline-sudachi.md", "--json"])
         .output()
         .expect("run suiko outline");
 
@@ -322,6 +617,204 @@ fn fail_on_turns_selected_findings_into_a_ci_exit_code() {
         .stderr(predicate::str::is_empty());
 }
 
+// 用語クラス別の抽出契約: カタカナ複合語、ASCII略語、製品名、日本語固有名詞を
+// 拾い、一般名詞(毎日、世界、物事、本質)と漢字複合語内のカタカナ断片を拾わない。
+// 既知の限界: 空白区切りの製品名(GitHub Actions等)は語ごとに分かれる。
+#[test]
+fn terms_extract_expected_classes_and_skip_generic_nouns() {
+    let output = cargo_bin_cmd!("suiko")
+        .args(["terms", "tests/fixtures/terms-classes.md", "--json"])
+        .output()
+        .expect("run suiko terms");
+
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    let terms = json["terms"]
+        .as_array()
+        .expect("terms array")
+        .iter()
+        .map(|term| term["term"].as_str().expect("term text").to_owned())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        terms,
+        vec![
+            "オブザーバビリティプラットフォーム",
+            "メトリクス",
+            "トレース",
+            "SLO",
+            "ダッシュボード",
+            "Kubernetes",
+            "クラスタ",
+            "GitHub",
+            "Actions",
+            "API",
+            "Gateway",
+            "RateLimitPolicy",
+            "東京",
+            "田中太郎",
+        ]
+    );
+}
+
+// GitHub Actions注釈: severityをerror/warning/noticeへ写し、spanの行・列を
+// workflowコマンドのプロパティで渡す。改行と%はエスケープする。
+#[test]
+fn github_format_emits_workflow_command_annotations() {
+    let (_dir, path) = draft("重要なのは、この点です。一文がとても長いということはありません。\n");
+
+    let output = cargo_bin_cmd!("suiko")
+        .args([
+            "lint",
+            path.to_str().expect("UTF-8 path"),
+            "--format",
+            "github",
+        ])
+        .output()
+        .expect("run suiko lint");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let annotation = stdout
+        .lines()
+        .find(|line| line.contains("title=suiko forbidden_phrase"))
+        .expect("forbidden_phrase annotation");
+    assert!(annotation.starts_with("::notice file="));
+    assert!(annotation.contains("line=1"));
+    assert!(annotation.contains("col=1"));
+    assert!(annotation.contains("endColumn=6"));
+    assert!(annotation.contains("::禁止語/LLM常套句ヒット"));
+}
+
+// SARIF 2.1.0: エディタ・コードスキャン向け。columnKind=unicodeCodePointsを
+// 宣言し、spanの列をそのまま渡す。severityはerror/warning/noteへ写す。
+#[test]
+fn sarif_format_emits_valid_minimal_sarif() {
+    let (_dir, path) = draft("重要なのは、この点です。\n");
+
+    let output = cargo_bin_cmd!("suiko")
+        .args([
+            "lint",
+            path.to_str().expect("UTF-8 path"),
+            "--format",
+            "sarif",
+        ])
+        .output()
+        .expect("run suiko lint");
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid SARIF JSON");
+    assert_eq!(json["version"], "2.1.0");
+    assert_eq!(json["runs"][0]["columnKind"], "unicodeCodePoints");
+    assert_eq!(json["runs"][0]["tool"]["driver"]["name"], "suiko");
+    let result = &json["runs"][0]["results"][0];
+    assert_eq!(result["ruleId"], "forbidden_phrase");
+    assert_eq!(result["level"], "note");
+    let region = &result["locations"][0]["physicalLocation"]["region"];
+    assert_eq!(region["startLine"], 1);
+    assert_eq!(region["startColumn"], 1);
+    assert_eq!(region["endColumn"], 6);
+    let rules = json["runs"][0]["tool"]["driver"]["rules"]
+        .as_array()
+        .expect("rules array");
+    assert!(rules.iter().any(|rule| rule["id"] == "forbidden_phrase"));
+}
+
+// suggestion契約: 機械的に安全なallowlist(「する+こと+が+できる」の縮約)だけが
+// 対象で、preimageがspan位置の原文と一致する場合のみ付与される。適用側は
+// preimage不一致の変更を適用してはならない。Suiko自身はファイルを書き換えない。
+// 「は」型(ことはできない)と使役型は、2026-08-18の実コーパスラベルに基づき
+// 検出自体の対象外(自然な用例)。
+#[test]
+fn safe_suggestions_carry_matching_preimages_and_never_modify_files() {
+    let contents = "この設定を変更することができます。ただし削除することはできません。回答を最新の情報に基づかせることができます。\n";
+    let (_dir, path) = draft(contents);
+
+    let output = cargo_bin_cmd!("suiko")
+        .args(["lint", path.to_str().expect("UTF-8 path"), "--json"])
+        .output()
+        .expect("run suiko lint");
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    let morph_findings = json["findings"]
+        .as_array()
+        .expect("findings array")
+        .iter()
+        .filter(|finding| finding["category"] == "translationese_morph")
+        .cloned()
+        .collect::<Vec<_>>();
+    // 「は」型と使役型は発火せず、「が」型の1件だけが確認候補になる
+    assert_eq!(morph_findings.len(), 1);
+
+    // 「することができます」は削除候補を持ち、preimageがファイルの実バイトと一致する
+    let suggestion = &morph_findings[0]["suggestion"];
+    assert_eq!(suggestion["preimage"], "することが");
+    assert_eq!(suggestion["replacement"], "");
+    let line = contents
+        .lines()
+        .nth(suggestion["span"]["start_line"].as_u64().expect("line") as usize - 1)
+        .expect("line text");
+    let start = suggestion["span"]["start_byte"].as_u64().expect("start") as usize;
+    let end = suggestion["span"]["end_byte"].as_u64().expect("end") as usize;
+    assert_eq!(&line[start..end], "することが");
+
+    // 読み取り専用: 入力ファイルは変更されない
+    let unchanged = std::fs::read_to_string(&path).expect("read draft");
+    assert_eq!(unchanged, contents);
+}
+
+// terms --audit の契約: 複数ファイルの用語を集計し、SudachiDictの正規化表記で
+// 表記揺れをクラスタする。ファイルは書き換えない。
+#[test]
+fn terms_audit_aggregates_files_and_clusters_spelling_variants() {
+    let dir = tempdir().expect("create temporary directory");
+    let a = dir.path().join("a.md");
+    let b = dir.path().join("b.md");
+    fs::write(
+        &a,
+        "サーバーの設定を確認した。サーバーは再起動が必要だった。\n",
+    )
+    .expect("write a");
+    fs::write(
+        &b,
+        "サーバの増設を検討している。Kubernetesとは、コンテナ基盤のことである。\n",
+    )
+    .expect("write b");
+
+    let output = cargo_bin_cmd!("suiko")
+        .args([
+            "terms",
+            "--audit",
+            a.to_str().expect("UTF-8 path"),
+            b.to_str().expect("UTF-8 path"),
+            "--json",
+        ])
+        .output()
+        .expect("run suiko terms --audit");
+
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    assert_eq!(json["suiko_version"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(json["files"].as_array().expect("files").len(), 2);
+
+    let variants = json["variants"].as_array().expect("variants array");
+    assert_eq!(variants.len(), 1);
+    assert_eq!(variants[0]["normalized"], "サーバー");
+    assert_eq!(variants[0]["spellings"][0]["term"], "サーバー");
+    assert_eq!(variants[0]["spellings"][0]["total_count"], 2);
+    assert_eq!(variants[0]["spellings"][1]["term"], "サーバ");
+    assert_eq!(variants[0]["spellings"][1]["total_count"], 1);
+
+    let terms = json["terms"].as_array().expect("terms array");
+    let kubernetes = terms
+        .iter()
+        .find(|term| term["term"] == "Kubernetes")
+        .expect("Kubernetes term");
+    assert_eq!(kubernetes["files"][0]["has_gloss_hint"], true);
+
+    // 監査は読み取り専用: 入力ファイルは変更されない
+    let unchanged = fs::read_to_string(&b).expect("read b");
+    assert!(unchanged.contains("サーバの増設"));
+}
+
 #[test]
 fn baseline_marks_persisting_findings_without_changing_the_base_shape() {
     let (dir, path) = draft("と言えるでしょう。\n");
@@ -349,6 +842,155 @@ fn baseline_marks_persisting_findings_without_changing_the_base_shape() {
     assert_eq!(json["baseline"]["summary"]["persisting"], 1);
     assert_eq!(json["baseline"]["summary"]["new"], 0);
     assert_eq!(json["findings"][0]["status"], "persisting");
+}
+
+#[test]
+fn baseline_compares_multiple_files_and_flags_added_and_removed_ones() {
+    let dir = tempdir().expect("create temporary directory");
+    let a = dir.path().join("a.md");
+    let b = dir.path().join("b.md");
+    let c = dir.path().join("c.md");
+    fs::write(&a, "と言えるでしょう。\n").expect("write a");
+    fs::write(&b, "まとめると、要点です。\n").expect("write b");
+    let baseline = dir.path().join("baseline.json");
+    let first = cargo_bin_cmd!("suiko")
+        .args([
+            "lint",
+            a.to_str().expect("UTF-8 path"),
+            b.to_str().expect("UTF-8 path"),
+            "--json",
+        ])
+        .output()
+        .expect("create baseline");
+    assert!(first.status.success());
+    fs::write(&baseline, first.stdout).expect("write baseline");
+
+    fs::write(&a, "何も指摘されない文です。\n").expect("resolve a");
+    fs::write(&c, "いかがでしたか。\n").expect("write c");
+    let output = cargo_bin_cmd!("suiko")
+        .args([
+            "lint",
+            a.to_str().expect("UTF-8 path"),
+            b.to_str().expect("UTF-8 path"),
+            c.to_str().expect("UTF-8 path"),
+            "--json",
+            "--baseline",
+            baseline.to_str().expect("UTF-8 path"),
+        ])
+        .output()
+        .expect("compare baseline");
+
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    let records = json.as_array().expect("array of records");
+    assert_eq!(records.len(), 3);
+    assert_eq!(records[0]["baseline"]["file_status"], "matched");
+    assert_eq!(records[0]["baseline"]["summary"]["resolved"], 1);
+    assert_eq!(records[1]["baseline"]["file_status"], "matched");
+    assert_eq!(records[1]["baseline"]["summary"]["persisting"], 1);
+    assert_eq!(records[2]["baseline"]["file_status"], "added");
+    assert_eq!(records[2]["findings"][0]["status"], "new");
+    assert_eq!(records[0]["suiko_version"], env!("CARGO_PKG_VERSION"));
+
+    let removed = cargo_bin_cmd!("suiko")
+        .args([
+            "lint",
+            b.to_str().expect("UTF-8 path"),
+            "--json",
+            "--baseline",
+            baseline.to_str().expect("UTF-8 path"),
+        ])
+        .output()
+        .expect("compare with removed file");
+    assert!(removed.status.success());
+    let stderr = String::from_utf8_lossy(&removed.stderr);
+    assert!(stderr.contains("今回の対象にないファイル"));
+    assert!(stderr.contains("a.md"));
+}
+
+#[test]
+fn baseline_keeps_document_level_findings_persisting_when_wording_changes() {
+    let (dir, path) = draft("Aではなく、BだけでなくCもあります。\nDではなく、Eです。\n");
+    let baseline = dir.path().join("baseline.json");
+    let first = cargo_bin_cmd!("suiko")
+        .args(["lint", path.to_str().expect("UTF-8 path"), "--json"])
+        .output()
+        .expect("create baseline");
+    assert!(first.status.success());
+    fs::write(&baseline, first.stdout).expect("write baseline");
+
+    fs::write(
+        &path,
+        "犬ではなく、猫だけでなく鳥もいます。\n夏ではなく、冬です。\n",
+    )
+    .expect("rewrite draft");
+    let output = cargo_bin_cmd!("suiko")
+        .args([
+            "lint",
+            path.to_str().expect("UTF-8 path"),
+            "--json",
+            "--baseline",
+            baseline.to_str().expect("UTF-8 path"),
+        ])
+        .output()
+        .expect("compare baseline");
+
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    assert_eq!(json["baseline"]["summary"]["resolved"], 0);
+    assert_eq!(json["baseline"]["summary"]["new"], 0);
+    assert_eq!(json["baseline"]["summary"]["persisting"], 1);
+    assert_eq!(json["findings"][0]["category"], "antithesis_repetition");
+    assert_eq!(json["findings"][0]["status"], "persisting");
+}
+
+#[test]
+fn baseline_rejects_mismatched_genre_and_version() {
+    let (dir, path) = draft("と言えるでしょう。\n");
+    let baseline = dir.path().join("baseline.json");
+    let first = cargo_bin_cmd!("suiko")
+        .args([
+            "lint",
+            path.to_str().expect("UTF-8 path"),
+            "--genre",
+            "tech",
+            "--json",
+        ])
+        .output()
+        .expect("create baseline");
+    assert!(first.status.success());
+    fs::write(&baseline, &first.stdout).expect("write baseline");
+
+    cargo_bin_cmd!("suiko")
+        .args([
+            "lint",
+            path.to_str().expect("UTF-8 path"),
+            "--json",
+            "--baseline",
+            baseline.to_str().expect("UTF-8 path"),
+        ])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("genreが現在と一致しません"));
+
+    let forged = format!(
+        r#"{{"file": {}, "suiko_version": "0.0.0", "stats": {{"genre": null, "experimental": false}}, "findings": []}}"#,
+        serde_json::to_string(path.to_str().expect("UTF-8 path")).expect("encode path"),
+    );
+    fs::write(&baseline, forged).expect("write forged baseline");
+    cargo_bin_cmd!("suiko")
+        .args([
+            "lint",
+            path.to_str().expect("UTF-8 path"),
+            "--json",
+            "--baseline",
+            baseline.to_str().expect("UTF-8 path"),
+        ])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains(
+            "Suikoバージョンが現在と一致しません",
+        ));
 }
 
 #[test]
