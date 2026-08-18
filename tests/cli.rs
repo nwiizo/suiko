@@ -1037,7 +1037,7 @@ fn baseline_rejects_mismatched_genre_and_version() {
 fn reading_load_is_reported_in_a_separate_json_lane() {
     let long_sentence = format!(
         "{}。\n",
-        "この文には分割すべき情報が含まれています".repeat(8)
+        "この文には、分割すべき情報が含まれています".repeat(8)
     );
     let (_dir, path) = draft(&long_sentence);
 
@@ -1058,6 +1058,36 @@ fn reading_load_is_reported_in_a_separate_json_lane() {
         json["reading_load"]["findings"][0]["category"],
         "sentence_too_long"
     );
+}
+
+// no_comma_sentence契約: 読点ゼロの60字以上の日本語散文だけが対象で、読点
+// （、・，・,）を1つでも含む文、60字未満、Latin優勢の引用行・URL行は発火しない。
+#[test]
+fn no_comma_sentence_fires_only_on_long_japanese_prose_without_touten() {
+    let contents = "システムはリクエストを受信すると内部キューへ登録して即座に仮応答を返す非同期処理方式を採用しているため利用者の体感応答時間は常に一定です。読点を、1つ含む同じ長さの文はこの検出の対象にならず読解負荷レーンにも現れない仕組みになっています。\nhttps://medium.com/airbnb-engineering/listing-embeddings-for-similar-listing-recommendations-and-real-time-personalization\n";
+    let (_dir, path) = draft(contents);
+
+    let output = cargo_bin_cmd!("suiko")
+        .args([
+            "lint",
+            path.to_str().expect("UTF-8 path"),
+            "--json",
+            "--reading-load",
+        ])
+        .output()
+        .expect("run reading-load lane");
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    let findings = json["reading_load"]["findings"]
+        .as_array()
+        .expect("findings array")
+        .iter()
+        .filter(|finding| finding["category"] == "no_comma_sentence")
+        .cloned()
+        .collect::<Vec<_>>();
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0]["severity"], "info");
+    assert_eq!(findings[0]["line"], 1);
 }
 
 #[test]
@@ -1092,7 +1122,7 @@ reason = "連載固有の見出し"
 fn config_can_disable_a_reading_load_rule() {
     let long_sentence = format!(
         "{}。\n",
-        "この文には分割すべき情報が含まれています".repeat(8)
+        "この文には、分割すべき情報が含まれています".repeat(8)
     );
     let (dir, path) = draft(&long_sentence);
     fs::write(

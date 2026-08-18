@@ -75,7 +75,7 @@ at 3/4 documents.
 
 ## Labeled samples (suiko-eval labeled)
 
-43 samples across 14 categories give detection 1.000 for every fire sample and
+57 samples across 15 categories give detection 1.000 for every fire sample and
 fpr 0.000 for every silent sample, with one intentional exception:
 `low-ttr-silent-002` (`堕落論`) fires at the current TTR threshold 0.45. The
 manifest keeps this mismatch on purpose as the record of a known limit.
@@ -98,6 +98,40 @@ changes voice. Suggestions are limited to three conjugations (`を行う→す�
   suggested rewrite preserves meaning and voice — meets the pre-registered
   suggestion-allowlist condition (≥10 real occurrences, unanimous
   preservation).
+
+### no_comma_sentence (reading load lane) — adopted
+
+Classic 悪文 pattern from the punctuation chapters of 岩淵悦太郎 (ed.),
+*悪文* and 本多勝一, *日本語の作文技術*: a long sentence with no 読点 at all
+gives the reader no syntactic boundary. The rule fires on sentences of 60+
+reading chars that are Japanese-dominant (≥50% Japanese script) and contain
+none of 、 ， or a half-width comma. The Japanese-dominance guard exists
+because the first measurement fired on URL/citation/artifact lines (3 of 5
+raw hits); with the guard, real-corpus hits are 2/2 true positives.
+
+- Labeled samples: detection 5/5 (Wilson 95% CI 0.566–1.000), fpr 0/9
+  (CI 0.000–0.299) — meets the pre-registered condition at n=9.
+- Real corpus: 堕落論 0 fires at the 60-char threshold (2 sentences sit at
+  50–59 and read as intentional 1946 literary prose — the threshold was
+  chosen to keep them silent); the 11 translated chapters give 2 hits, both
+  genuine zero-comma definition sentences that read better with a 読点.
+- Yield on edited text is low by design; the rule targets drafts, where
+  zero-comma run-ons are common.
+
+### 悪文 candidates measured and rejected (2026-08-18)
+
+- `ga_chain` (「〜が、〜が、」 chain, 岩淵 B6): re-measured at 0/4,899 book
+  sentences and 0/239 AI-fixture sentences; only 1 hit in 堕落論 (a quotative
+  が). This reconfirms the earlier deletion (1 hit in 9,889 AI sentences).
+  A detector that never fires does no job — stays deleted, 目視.
+- 連用中止の連鎖 (3+ renyō-chūshi clauses): 34 raw hits in the book, but
+  sampled hits read as natural parallel enumeration ("推論し、書き、閲覧し").
+  Low precision — rejected.
+- こそあど密集 (3+ demonstratives per sentence): 1 hit across all corpora —
+  no yield, and true ambiguity needs coreference. Stays 目視 (catalog B7).
+- ねじれ文・係り受けの曖昧さ・修飾語の語順 (岩淵/本多の中核章): need
+  dependency parsing; the deleted `nested_attributive` showed the
+  zero-discrimination failure mode. Stay 目視 (catalog B2/B3/B5).
 
 ### sentence_lead_conjunction (measurement only) — kept as observable, negative result
 

@@ -55,6 +55,7 @@ const RULE_CATEGORIES: &[&str] = &[
     "low_sentence_variance",
     "low_specificity",
     "no_chain",
+    "no_comma_sentence",
     "nominal_ending",
     "numbered_phase_structure",
     "paragraph_lead_conjunction",
@@ -73,6 +74,7 @@ const READING_LOAD_CATEGORIES: &[&str] = &[
     "double_negative",
     "kanji_run",
     "no_chain",
+    "no_comma_sentence",
     "sentence_too_long",
 ];
 

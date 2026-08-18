@@ -259,6 +259,104 @@ expect = "silent"
 note = "数値・固有名詞・例示マーカーを持つ具体的な段落"
 
 [[sample]]
+id = "no-comma-sentence-fire-001"
+path = "labeled/no_comma_sentence/fire-001.md"
+category = "no_comma_sentence"
+expect = "fire"
+note = "です・ます調の説明文65字超で読点ゼロ"
+
+[[sample]]
+id = "no-comma-sentence-fire-002"
+path = "labeled/no_comma_sentence/fire-002.md"
+category = "no_comma_sentence"
+expect = "fire"
+note = "技術文の非同期処理説明が読点なしで続く"
+
+[[sample]]
+id = "no-comma-sentence-fire-003"
+path = "labeled/no_comma_sentence/fire-003.md"
+category = "no_comma_sentence"
+expect = "fire"
+note = "移行計画の依存説明が読点なしで続く"
+
+[[sample]]
+id = "no-comma-sentence-fire-004"
+path = "labeled/no_comma_sentence/fire-004.md"
+category = "no_comma_sentence"
+expect = "fire"
+note = "手法紹介の長文が読点なしで続く"
+
+[[sample]]
+id = "no-comma-sentence-fire-005"
+path = "labeled/no_comma_sentence/fire-005.md"
+category = "no_comma_sentence"
+expect = "fire"
+note = "だ・である調の監査範囲列挙が読点なしで続く"
+
+[[sample]]
+id = "no-comma-sentence-silent-001"
+path = "labeled/no_comma_sentence/silent-001.md"
+category = "no_comma_sentence"
+expect = "silent"
+note = "fire-001と同文に読点1つを入れた対照"
+
+[[sample]]
+id = "no-comma-sentence-silent-002"
+path = "labeled/no_comma_sentence/silent-002.md"
+category = "no_comma_sentence"
+expect = "silent"
+note = "60字未満の読点なし文は対象外"
+
+[[sample]]
+id = "no-comma-sentence-silent-003"
+path = "labeled/no_comma_sentence/silent-003.md"
+category = "no_comma_sentence"
+expect = "silent"
+note = "短文の連続は対象外"
+
+[[sample]]
+id = "no-comma-sentence-silent-004"
+path = "labeled/no_comma_sentence/silent-004.md"
+category = "no_comma_sentence"
+expect = "silent"
+note = "Latin優勢の引用行は日本語散文でないため対象外"
+
+[[sample]]
+id = "no-comma-sentence-silent-005"
+path = "labeled/no_comma_sentence/silent-005.md"
+category = "no_comma_sentence"
+expect = "silent"
+note = "裸のURL行は対象外"
+
+[[sample]]
+id = "no-comma-sentence-silent-006"
+path = "labeled/no_comma_sentence/silent-006.md"
+category = "no_comma_sentence"
+expect = "silent"
+note = "全角コンマ（，）も読点として扱う"
+
+[[sample]]
+id = "no-comma-sentence-silent-007"
+path = "labeled/no_comma_sentence/silent-007.md"
+category = "no_comma_sentence"
+expect = "silent"
+note = "半角カンマも区切りとして扱う"
+
+[[sample]]
+id = "no-comma-sentence-silent-008"
+path = "labeled/no_comma_sentence/silent-008.md"
+category = "no_comma_sentence"
+expect = "silent"
+note = "参考文献行（[1]）はマスクされる"
+
+[[sample]]
+id = "no-comma-sentence-silent-009"
+path = "labeled/no_comma_sentence/silent-009.md"
+category = "no_comma_sentence"
+expect = "silent"
+note = "コードフェンス内の長行はマスクされる"
+
+[[sample]]
 id = "nominal-ending-fire-001"
 path = "labeled/nominal_ending/fire-001.md"
 category = "nominal_ending"

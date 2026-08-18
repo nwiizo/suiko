@@ -45,6 +45,31 @@ pub fn analyze_reading_load_with_thresholds(
     for sentence in &tokenized {
         let length = reading_length(&sentence.text);
         let excerpt = sentence.raw_text.chars().take(40).collect::<String>();
+        // 読点ゼロの長文(カタログ B4の下位事例)。読点密度の検出はNO-GO済みだが、
+        // 60字以上で読点が1つもない文は統語的な切れ目が示されず、実測でも
+        // 人間文書の誤検知ゼロだった(eval/calibration.md)。日本語の読点診断なので、
+        // URL・引用文献・コード断片のようなLatin優勢の行は対象にしない。
+        let japanese_chars = sentence
+            .text
+            .chars()
+            .filter(|c| matches!(c, 'ぁ'..='ん' | 'ァ'..='ヶ' | 'ー' | '一'..='鿿' | '々'))
+            .count();
+        if length >= 60
+            && japanese_chars * 2 >= length
+            && !sentence.text.contains(['、', '，', ','])
+        {
+            let mut finding = Finding::new(
+                sentence.line,
+                "no_comma_sentence",
+                excerpt.clone(),
+                "info",
+                format!(
+                    "一文{length}字に読点がない（目安60字）。カタログ B4。統語的な切れ目に読点を打つか、文を分ける"
+                ),
+            );
+            finding.span = sentence.span(&raw_lines, 0, sentence.text.len());
+            findings.push(finding);
+        }
         if length > sentence_max {
             let mut finding = Finding::new(
                 sentence.line,
