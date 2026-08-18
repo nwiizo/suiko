@@ -14,7 +14,12 @@ license: MIT
 - `full`: 対外文書、経営向け文書、約1万字を超える文書。`lint`、`outline`、`terms` と目視レビューをすべて使う。
 - `score`: 書き換えず自然度と理由だけを返す。最初に [diagnose.md](references/diagnose.md) を読む。
 
-CLI が見つからない場合は、導入手順（`git clone https://github.com/nwiizo/suiko && cd suiko && ./scripts/fetch-dictionary.sh && cargo install --path .`）を提示するか、すぐに診断が必要なら [manual-checklist.md](references/manual-checklist.md) で手動診断する。リポジトリが手元にある場合に限り、`cargo run --release --` を `suiko` の代わりに使える。
+CLI が見つからない場合（`suiko --version` が失敗する場合）は、次の順で自分で導入する。
+
+1. `cargo` があれば `cargo install suiko` を実行する（crates.io から取得。初回ビルドは形態素辞書の取得と埋め込みを含むため数分かかり、ネットワークが必要）。完了後に `suiko --version` で確認する。
+2. `cargo` がない、またはインストールに失敗した場合は、導入手順（rustup で Rust 1.97 以降を入れてから `cargo install suiko`）をユーザーへ提示し、その回の診断は [manual-checklist.md](references/manual-checklist.md) で手動診断する。
+
+リポジトリが手元にある場合に限り、`cargo run --release --` を `suiko` の代わりに使える。
 
 ## 1. 読者と骨格を決める
 

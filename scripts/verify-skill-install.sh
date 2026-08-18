@@ -26,4 +26,24 @@ for file in SKILL.md agents/openai.yaml references/manual-checklist.md \
         status=1
     fi
 done
+
+# gh skill install（preview）でも同じskillを解決できるか検証する。
+# ghは既定で最新のリリースタグを導入するため、タグ側の内容が対象になる。
+if command -v gh >/dev/null 2>&1; then
+    OWNER_REPO="${REPO_URL#https://github.com/}"
+    echo "==> gh skill install: ${OWNER_REPO}"
+    if gh skill install "${OWNER_REPO}" suiko --dir "${WORKDIR}/gh-skill"; then
+        if [ -f "${WORKDIR}/gh-skill/suiko/SKILL.md" ]; then
+            echo "OK gh-skill/suiko/SKILL.md"
+        else
+            echo "MISSING gh-skill/suiko/SKILL.md" >&2
+            status=1
+        fi
+    else
+        echo "FAILED gh skill install" >&2
+        status=1
+    fi
+else
+    echo "==> gh が見つからないため gh skill install の検証をスキップ"
+fi
 exit "${status}"

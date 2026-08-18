@@ -170,7 +170,13 @@ CLIとAgent Skillは別々に導入します。上記のビルド手順はCLIだ
 npx skills add https://github.com/nwiizo/suiko --skill suiko
 ```
 
-導入後は`suiko --version`でCLIを確認し、Skill対応エージェントでは`$suiko`を指定します。CLIがない環境では、Skillは導入案内を返すか、同梱の手動チェックリストで診断します。
+GitHub CLI（`gh skill`、preview）でも導入できます。既定では最新のリリースタグが導入され、スコープは`project`（現在のリポジトリ内）です。ユーザー全体で使う場合は`--scope user`を付けます。
+
+```sh
+gh skill install nwiizo/suiko suiko --agent claude-code
+```
+
+導入後は`suiko --version`でCLIを確認し、Skill対応エージェントでは`$suiko`を指定します。Skillを先に導入した環境でCLIがない場合、Skillは`cargo install suiko`でCLIの導入を試み、`cargo`がない環境では導入手順の案内と同梱の手動チェックリストによる診断へ切り替えます。
 
 ## 対象範囲
 
