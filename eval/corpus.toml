@@ -131,6 +131,104 @@ expect = "silent"
 note = "意図的な対比2一致は閾値3未満"
 
 [[sample]]
+id = "redundant-light-verb-fire-001"
+path = "labeled/redundant_light_verb/fire-001.md"
+category = "redundant_light_verb"
+expect = "fire"
+note = "サ変名詞+を+行います(隣接)"
+
+[[sample]]
+id = "redundant-light-verb-fire-002"
+path = "labeled/redundant_light_verb/fire-002.md"
+category = "redundant_light_verb"
+expect = "fire"
+note = "サ変名詞+を+行った"
+
+[[sample]]
+id = "redundant-light-verb-fire-003"
+path = "labeled/redundant_light_verb/fire-003.md"
+category = "redundant_light_verb"
+expect = "fire"
+note = "サ変名詞+を+行い(連用)"
+
+[[sample]]
+id = "redundant-light-verb-fire-004"
+path = "labeled/redundant_light_verb/fire-004.md"
+category = "redundant_light_verb"
+expect = "fire"
+note = "行なう表記でも辞書形で一致する"
+
+[[sample]]
+id = "redundant-light-verb-fire-005"
+path = "labeled/redundant_light_verb/fire-005.md"
+category = "redundant_light_verb"
+expect = "fire"
+note = "サ変名詞+を+行う(終止)"
+
+[[sample]]
+id = "redundant-light-verb-silent-001"
+path = "labeled/redundant_light_verb/silent-001.md"
+category = "redundant_light_verb"
+expect = "silent"
+note = "祭りは非サ変名詞"
+
+[[sample]]
+id = "redundant-light-verb-silent-002"
+path = "labeled/redundant_light_verb/silent-002.md"
+category = "redundant_light_verb"
+expect = "silent"
+note = "受身(が行われる)は言い換えの意味が変わる"
+
+[[sample]]
+id = "redundant-light-verb-silent-003"
+path = "labeled/redundant_light_verb/silent-003.md"
+category = "redundant_light_verb"
+expect = "silent"
+note = "副詞が挟まる非隣接は対象外"
+
+[[sample]]
+id = "redundant-light-verb-silent-004"
+path = "labeled/redundant_light_verb/silent-004.md"
+category = "redundant_light_verb"
+expect = "silent"
+note = "助詞「も」は対象外"
+
+[[sample]]
+id = "redundant-light-verb-silent-005"
+path = "labeled/redundant_light_verb/silent-005.md"
+category = "redundant_light_verb"
+expect = "silent"
+note = "銀行の「行」は無関係"
+
+[[sample]]
+id = "redundant-light-verb-silent-006"
+path = "labeled/redundant_light_verb/silent-006.md"
+category = "redundant_light_verb"
+expect = "silent"
+note = "を+他動詞(控える)は対象外"
+
+[[sample]]
+id = "redundant-light-verb-silent-007"
+path = "labeled/redundant_light_verb/silent-007.md"
+category = "redundant_light_verb"
+expect = "silent"
+note = "を+計画する(動詞が行うでない)"
+
+[[sample]]
+id = "redundant-light-verb-silent-008"
+path = "labeled/redundant_light_verb/silent-008.md"
+category = "redundant_light_verb"
+expect = "silent"
+note = "移行を+進める"
+
+[[sample]]
+id = "redundant-light-verb-silent-009"
+path = "labeled/redundant_light_verb/silent-009.md"
+category = "redundant_light_verb"
+expect = "silent"
+note = "実行を+待つ"
+
+[[sample]]
 id = "repeated-sentence-lead-fire-001"
 path = "labeled/repeated_sentence_lead/fire-001.md"
 category = "repeated_sentence_lead"

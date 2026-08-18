@@ -59,6 +59,7 @@ const RULE_CATEGORIES: &[&str] = &[
     "numbered_phase_structure",
     "paragraph_lead_conjunction",
     "predicate_colon_lead",
+    "redundant_light_verb",
     "repeated_sentence_lead",
     "repeated_syntax_template",
     "sentence_too_long",
@@ -290,6 +291,7 @@ pub fn analyze_with_thresholds(
     findings.extend(patterns::english_syntax_findings(&masked, raw, &split));
     findings.extend(morph::translationese_morph_findings(&tokenized, &raw_lines));
     findings.extend(morph::inanimate_morph_findings(&tokenized, &raw_lines));
+    findings.extend(morph::redundant_light_verb_findings(&tokenized, &raw_lines));
     findings.extend(rhythm_findings);
     findings.extend(ngram_findings);
     findings.extend(lexical_findings);
@@ -406,6 +408,10 @@ pub fn analyze_with_thresholds(
             "reference_lines": mask_stats.reference_lines,
             "code_annotation_lines": mask_stats.code_annotation_lines,
         }),
+    );
+    measurements.insert(
+        "conjunction".to_owned(),
+        metrics::conjunction_observations(&tokenized),
     );
     measurements.insert(
         "readability".to_owned(),

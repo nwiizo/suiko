@@ -75,10 +75,39 @@ at 3/4 documents.
 
 ## Labeled samples (suiko-eval labeled)
 
-17 samples across 8 categories give detection 1.000 for every fire sample and
+43 samples across 14 categories give detection 1.000 for every fire sample and
 fpr 0.000 for every silent sample, with one intentional exception:
 `low-ttr-silent-002` (`堕落論`) fires at the current TTR threshold 0.45. The
 manifest keeps this mismatch on purpose as the record of a known limit.
+
+## v0.3.0 new detectors (verified 2026-08-18)
+
+### redundant_light_verb — adopted
+
+Pattern: sahen noun + `を` + `行う/行なう` with strict adjacency; passive
+(`行われる`) and causative (`行わせる`) forms are excluded because the rewrite
+changes voice. Suggestions are limited to three conjugations (`を行う→する`,
+`を行い→し`, `を行っ/行なっ→し`) and carry a byte-exact preimage.
+
+- Labeled samples: detection 5/5 (Wilson 95% CI 0.566–1.000), fpr 0/9
+  (CI 0.000–0.299) — meets the pre-registered adoption condition
+  (fpr upper bound ≤ 0.30) exactly at n=9.
+- Real corpus (building-reliable-ai-systems, 11 translated chapters,
+  ~300k chars): 15 hits, 15/15 true positives (`処理を行う`×5, `検索`×3,
+  `チューニング`×2, `マッチング`/`評価`/`テスト`/`分析`×1 each). Every
+  suggested rewrite preserves meaning and voice — meets the pre-registered
+  suggestion-allowlist condition (≥10 real occurrences, unanimous
+  preservation).
+
+### sentence_lead_conjunction (measurement only) — kept as observable, negative result
+
+The 広島大 thesis motivation (AI text overuses sentence-lead conjunctions) is
+NOT reproduced on this corpus. Measured ratios: human `堕落論` 0.0588 and
+`natural.md` 0.0 versus AI 0.036/0.055/0.0/0.172 — the human essay sits inside
+the AI range, and only the deliberately smelly fixture separates. The 11
+translated chapters measure 0.036–0.075. No threshold exists with useful
+separation, so this stays a `stats.conjunction` measurement (never a finding).
+Re-test when the corpus grows; remove in v0.4.0 if still unseparated.
 
 ## Threshold sweeps and decisions
 

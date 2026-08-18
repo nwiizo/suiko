@@ -224,6 +224,94 @@ fn suru_koto_ga_suggestion(
     })
 }
 
+/// サ変名詞+を+行う型の冗長（「検証を行う」→「検証する」）。
+/// 名詞とを、をと行うが隣接する場合だけ対象にし、受身（行われる）と
+/// 名詞がサ変可能でない場合（「祭りを行う」）は対象外。textlintの
+/// ai-tech-writing-guidelineが指摘する冗長クラスのうち、形態素で
+/// 決定的に判定できる部分だけを扱う。
+pub(super) fn redundant_light_verb_findings(
+    tokenized: &[TokenizedSentence],
+    raw_lines: &[&str],
+) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    for sentence in tokenized {
+        for (index, noun) in sentence.tokens.iter().enumerate() {
+            let Some(particle) = sentence.tokens.get(index + 1) else {
+                continue;
+            };
+            let Some(verb) = sentence.tokens.get(index + 2) else {
+                continue;
+            };
+            let verbal_noun = noun.pos(0) == "名詞"
+                && (noun.pos(2) == "サ変可能" || noun.pos(2) == "サ変形状詞可能");
+            if !verbal_noun
+                || particle.pos(0) != "助詞"
+                || particle.surface != "を"
+                || verb.pos(0) != "動詞"
+                || !matches!(verb.dictionary_form(), "行う" | "行なう")
+            {
+                continue;
+            }
+            // 受身・使役（行われる、行わせる）は言い換えの意味が変わるため対象外
+            let passive_or_causative = sentence.tokens.get(index + 3).is_some_and(|next| {
+                matches!(
+                    next.dictionary_form(),
+                    "れる" | "られる" | "せる" | "させる"
+                )
+            });
+            if passive_or_causative {
+                continue;
+            }
+            let mut finding = Finding::new(
+                sentence.line,
+                "redundant_light_verb",
+                sentence.excerpt(noun.byte_start, verb.byte_end),
+                "info",
+                format!(
+                    "サ変名詞+を+行う型の冗長候補: 「{}を{}」は「{}する」へ畳める。名詞の動作性を活かす方が簡潔（意図的な文体なら維持する）",
+                    noun.surface, verb.surface, noun.surface
+                ),
+            );
+            finding.span = sentence.span(raw_lines, noun.byte_start, verb.byte_end);
+            finding.suggestion = light_verb_suggestion(sentence, raw_lines, particle, verb);
+            findings.push(finding);
+        }
+    }
+    findings
+}
+
+/// 「を+行う」の活用形ごとに機械的に安全な置換だけを提案する。
+/// 行う→する、行い→し、行っ→し。それ以外の活用（行わ、行え等）は
+/// 提案しない。preimageがraw行と一致しない場合も提案しない。
+fn light_verb_suggestion(
+    sentence: &TokenizedSentence,
+    raw_lines: &[&str],
+    particle: &Morpheme,
+    verb: &Morpheme,
+) -> Option<Suggestion> {
+    let replacement = match verb.surface.as_str() {
+        "行う" | "行なう" => "する",
+        "行い" | "行ない" => "し",
+        "行っ" | "行なっ" => "し",
+        _ => return None,
+    };
+    let expected = format!("{}{}", particle.surface, verb.surface);
+    let line_start = sentence.line_byte_start + particle.byte_start;
+    let line_end = sentence.line_byte_start + verb.byte_end;
+    let matches_raw = raw_lines
+        .get(sentence.line - 1)
+        .and_then(|raw_line| raw_line.get(line_start..line_end))
+        .is_some_and(|slice| slice == expected);
+    if !matches_raw {
+        return None;
+    }
+    Some(Suggestion {
+        span: sentence.span(raw_lines, particle.byte_start, verb.byte_end)?,
+        preimage: expected,
+        replacement: replacement.to_owned(),
+    })
+}
+
 pub(super) fn inanimate_morph_findings(
     tokenized: &[TokenizedSentence],
     raw_lines: &[&str],

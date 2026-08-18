@@ -761,6 +761,46 @@ fn safe_suggestions_carry_matching_preimages_and_never_modify_files() {
     assert_eq!(unchanged, contents);
 }
 
+// redundant_light_verb契約: サ変名詞+を+行う(隣接)だけが対象で、受身・使役・
+// 非隣接・非サ変名詞は発火しない。suggestionは終止/連用/促音便の3活用のみで、
+// preimageがファイルの実バイトと一致する場合だけ付与される。
+#[test]
+fn redundant_light_verb_fires_on_adjacent_sahen_and_carries_a_safe_suggestion() {
+    let contents = "リリース前に検証を行い、結果を記録した。式典が行われる日程は未定だ。祭りを行う地区も多い。担当者に集計を行わせる案は見送った。\n";
+    let (_dir, path) = draft(contents);
+
+    let output = cargo_bin_cmd!("suiko")
+        .args(["lint", path.to_str().expect("UTF-8 path"), "--json"])
+        .output()
+        .expect("run suiko lint");
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    let findings = json["findings"]
+        .as_array()
+        .expect("findings array")
+        .iter()
+        .filter(|finding| finding["category"] == "redundant_light_verb")
+        .cloned()
+        .collect::<Vec<_>>();
+    // 受身(行われる)・非サ変(祭り)・使役(行わせる)は発火せず、隣接1件のみ
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0]["severity"], "info");
+
+    let suggestion = &findings[0]["suggestion"];
+    assert_eq!(suggestion["preimage"], "を行い");
+    assert_eq!(suggestion["replacement"], "し");
+    let line = contents
+        .lines()
+        .nth(suggestion["span"]["start_line"].as_u64().expect("line") as usize - 1)
+        .expect("line text");
+    let start = suggestion["span"]["start_byte"].as_u64().expect("start") as usize;
+    let end = suggestion["span"]["end_byte"].as_u64().expect("end") as usize;
+    assert_eq!(&line[start..end], "を行い");
+
+    let unchanged = std::fs::read_to_string(&path).expect("read draft");
+    assert_eq!(unchanged, contents);
+}
+
 // terms --audit の契約: 複数ファイルの用語を集計し、SudachiDictの正規化表記で
 // 表記揺れをクラスタする。ファイルは書き換えない。
 #[test]

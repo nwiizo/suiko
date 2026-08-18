@@ -45,6 +45,7 @@ Web検索が使えない環境（Claude.aiなど）では、この往復を自�
 |---|---|---|
 | `forbidden_phrase` | LLM常套句・結論の押し付け（一部の語は severity=info の弱いシグナル） | `forbidden-patterns.md` の該当カテゴリを読み、その表現が本当に必要か検討する。多くは削るか、より具体的な言い方に置き換えられる |
 | `translationese` / `translationese_morph` | 「〜することができる」等の英語直訳調 | `translationese.md` の対応パターンを見て、before/after の型に沿って書き直す |
+| `redundant_light_verb` | サ変名詞+「を行う」の遠回し（「検証を行う」→「検証する」）。受身・使役・非隣接は対象外 | suggestion の preimage が原文と一致する場合のみ縮約を適用する。動作名詞を並列した文など、「行う」が構造上必要な文は残してよい |
 | `antithesis_repetition` | 「〜ではなく」型の対比が3回以上（**2026-07 再校正**: 出現ごとの一律 critical をやめ、「検出数/総文数」比率で severity を3段階化） | severity=info は参考情報（人間の修辞技法との区別がつかない薄い頻度）、warn/critical は比率が高く実測で真陽性が多い帯。severity に関わらず全部直す必要はなく、最も重要な対比だけ残し、他は素直な肯定文・具体例に変える |
 | `low_sentence_variance` | 文長が均質でリズムが単調 | 一番言いたい文を思い切って短くする、または背景説明の文をあえて長く続ける。短文と長文を意図的に隣接させる |
 | `low_burstiness` | 文長のメリハリが乏しい（コーパス実測で AI 86% vs 人間8〜16%と強い弁別力あり） | 同上。他の検出器より信頼度が高いシグナルとして扱ってよい |

@@ -656,6 +656,30 @@ pub(super) fn analyze_paragraphs(masked: &str, raw: &str) -> ParagraphAnalysis {
     }
 }
 
+/// 文頭が接続詞で始まる文の割合。日本語のAI生成文は文ごとに接続詞を
+/// 置く傾向が報告されているため、まず観測値として出し、コーパスで
+/// 人間/AIの分離力を確認してからfinding化を判断する。
+pub(super) fn conjunction_observations(tokenized: &[TokenizedSentence]) -> Value {
+    if tokenized.is_empty() {
+        return json!({
+            "sentence_lead_conjunction_count": 0,
+            "sentence_lead_conjunction_ratio": Value::Null,
+        });
+    }
+    let count = tokenized
+        .iter()
+        .filter(|sentence| {
+            PARAGRAPH_CONJUNCTIONS
+                .iter()
+                .any(|conjunction| sentence.text.starts_with(conjunction))
+        })
+        .count();
+    json!({
+        "sentence_lead_conjunction_count": count,
+        "sentence_lead_conjunction_ratio": count as f64 / tokenized.len() as f64,
+    })
+}
+
 /// 読者別難易度スコアは校正データが揃うまで実装しない。判定に使える
 /// 観測値（文長、品詞比率、文字種比率の近似）だけをmeasurementsへ出す。
 /// 文字種は語種（漢語/和語/外来語）の辞書的判定ではなく表層の近似。
