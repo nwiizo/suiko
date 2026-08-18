@@ -18,6 +18,7 @@ use crate::morphology::Morphology;
 use crate::text::{mask_html_comments, mask_markdown_structure_with_stats, sentences_with_raw};
 
 pub use baseline::{BaselineReport, BaselineSummary, apply_baseline, baseline_added};
+#[cfg(feature = "evaluation")]
 pub(crate) use patterns::{forbidden_phrase_list, hype_expression_list};
 pub use reading_load::{analyze_reading_load, analyze_reading_load_with_thresholds};
 
