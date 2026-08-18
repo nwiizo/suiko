@@ -54,6 +54,34 @@ Suikoが維持する差別化は、埋め込み辞書を含む単一バイナリ
 
 商用サービスの非公開辞書件数や宣伝上の精度を、Suikoの目標値には使わない。比較実験を行う場合は、利用規約で許可された合成fixtureを使い、入力データ、プラン、実行日、設定を記録する。
 
+## v0.3.0: 経験則の閾値と語彙を実測校正へ置き換える
+
+2026-08-18に、Natural Japanese・類似ツール・関連研究を調査してv0.3.0の範囲を決めた。テーマは「実装済み機能の閾値・語彙・severityを、再現可能なコーパス実測で裏付けられたものへ置き換える」で、v0.2.0で残した「実コーパス待ち」の課題群を解消する。
+
+### 調査結果
+
+- Natural Japanese（coji/natural-japanese、MIT）は比較時点`0f1cc1c`が最新で、検出器の差分はない。ただし`corpus/`に**人間105ソースのsources.json**（URL・genre・license注記付き、本文非コミット）、AIコーパス生成runner、**人間FP率5%未満の制約下で検出率を最大化するcalibrate.py**があり、103/81文書測定の再現手順が実在する。genreに`slide`（12ソース）を持つ点だけSuikoと異なる
+- textlint-rule-preset-ai-writingの5ルールのうち4つ（リスト装飾、誇張、コロン継続、強調密度）はv0.2.0で対応済み。残る差分は`ai-tech-writing-guideline`の冗長表現指摘（「〜を行う」等）
+- Kobak et al. 2025（Science Advances）の**excess vocabulary法**: 人間コーパスとAIコーパスの語句頻度比から語彙マーカーを選ぶ。禁止語・誇張語彙を経験則でなくデータで出し入れする方法論として転用できる
+- 日本語のAI文特徴の報告（広島大2025卒論ほか）: 文頭接続詞の過剰（文ごとに接続詞）、文体の完全な一貫性
+- perplexity・embedding・分類器はNatural Japaneseのexperimentsでも検証済みで、モデル依存・実行時重量の点でSuikoの境界に反するため引き続き採用しない
+
+### 採用
+
+1. **コーパス取得基盤**: sources manifest（URL+SHA-256+genre+license、著作権のある本文は非コミット）、取得コマンド、AIコーパス生成runner。Natural Japaneseのsources.json 105件を出典明記のうえ初期値に使う。`slide` genreを新設するかbusinessへ写像するかを取得前に決める
+2. **`suiko-eval calibrate`**: 人間FP率の許容上限（Wilson上限で判定）を制約にした閾値探索。dev splitのみを使い、annotation-guideの事前条件（最低標本数）を自動で確認する
+3. **`suiko-eval vocab`**: 語句別の人間/AI頻度、対数頻度比、信頼区間の一覧。`FORBIDDEN_PHRASES`と`HYPE_EXPRESSIONS`の追加・削除をこの実測で決める（excess vocabulary法の適用）
+4. **停滞課題の解消**: 上記の基盤で`low_burstiness`適用範囲、TTR/`low_specificity`、反復系severity、翻訳調表層パターンを再校正し、holdoutへ実データを入れる
+5. **「名詞+を+行う」冗長の検出と安全なsuggestion**（「検証を行う」→「検証する」）。形態素で決定的に判定でき、annotation-guideの事前条件（出現10件以上、意味・声の保持全員一致）を満たしたら既定に入れる
+6. **文頭接続詞率（文レベル）の観測値**をmeasurementsへ追加し、コーパスで人間/AIの分離力を確認してからfinding化を判断する（現在は段落頭のみ検出）
+
+### 不採用
+
+- perplexity・embedding・分類器・著者判定スコア: 単一バイナリ・決定性・「出自≠品質」の境界に反する
+- です・ます完全一貫性の検出: 推敲された人間の文章にも当てはまり誤検知が多い。文体混在の指摘は一般校正（textlint等）の担当と衝突する
+- textlintの強調反復ルール相当の追加: `high_bold_density`と概ね重複。実需要が出るまで見送る
+- 用語辞書スキーマ: `terms --audit`の利用実績待ちを維持し、v0.3.0に入れない
+
 ## P1: sudachi.rs版の検出器を実コーパスで再校正する
 
 ### 観測結果
@@ -245,7 +273,7 @@ textlintはJavaScriptルールとprocessor、RedPenは複数マークアップ�
 
 ## 実装順序
 
-依存関係を無視して機能を並行追加しない。次の順に進め、各段階でfixture、実コーパス、公開JSONの互換性を確認する。機能側（baseline、span、suggestion、集約finding、局所パターン、terms監査、GitHub注釈、SARIF、Skill導入検証）は実装済みで、残りは評価データに依存する。
+依存関係を無視して機能を並行追加しない。直近は「v0.3.0: 経験則の閾値と語彙を実測校正へ置き換える」の採用1〜6を順に進める。その後を次の順とし、各段階でfixture、実コーパス、公開JSONの互換性を確認する。
 
 1. 人手評価手順、holdout、信頼区間を固定し、点推定だけで閾値を選ばないようにする
 2. 103/81文書の旧測定を再現可能にし、外部コーパスとAI stress setの役割を分ける
