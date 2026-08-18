@@ -63,8 +63,25 @@ const FORBIDDEN_PHRASES: &[&str] = &[
     "を探求する",
 ];
 
-const WEAK_FORBIDDEN_PHRASES: &[&str] =
-    &["重要なのは", "このように", "不可欠", "ポイントは", "さて、"];
+/// 語彙の実測(suiko-eval vocab)用の読み取り専用アクセサ。
+pub(crate) fn forbidden_phrase_list() -> &'static [&'static str] {
+    FORBIDDEN_PHRASES
+}
+
+pub(crate) fn hype_expression_list() -> &'static [&'static str] {
+    HYPE_EXPRESSIONS
+}
+
+// 「のではないでしょうか」は2026-08-19のvocab実測(現代人間dev 65文書中6文書)で
+// 人間の常用と確認し、弱いシグナルへ落とした(eval/calibration.md)。
+const WEAK_FORBIDDEN_PHRASES: &[&str] = &[
+    "重要なのは",
+    "このように",
+    "不可欠",
+    "ポイントは",
+    "さて、",
+    "のではないでしょうか",
+];
 
 const TRANSLATIONESE_PATTERNS: &[&str] = &[
     r"することができ(る|ます|た)",

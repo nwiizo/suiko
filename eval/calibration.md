@@ -143,6 +143,76 @@ translated chapters measure 0.036–0.075. No threshold exists with useful
 separation, so this stays a `stats.conjunction` measurement (never a finding).
 Re-test when the corpus grows; remove in v0.4.0 if still unseparated.
 
+## v0.3.0 calibration on the external corpus (2026-08-19)
+
+First run of `suiko-eval calibrate` / `vocab` / `report --external`, using the
+committed corpus plus 81 fetched modern human web documents (64 dev / 17
+holdout, verified against `external-lock.json`). Dev human documents: 75
+(11 committed + 64 external). AI side remains 4 documents (low_n) — detection
+figures below are reference values, not performance claims. Decision rules
+were registered in `annotation-guide.md` alongside this run.
+
+### Demoted to EXPERIMENTAL (default off)
+
+- `low_lexical_diversity_ttr`: human fpr **0.613** (46/75) at the 0.45
+  default, and 0.320 even at 0.35, versus AI detection 1/4. The root cause is
+  structural: document-level TTR falls with length (the 50k-word 総務省 report
+  measures TTR=0.094), so beyond the existing 4,000-char lower gate the number
+  stops meaning "vocabulary flatness". Redesign requires length-normalized
+  diversity; until then the category is opt-in.
+- `repeated_sentence_lead`: human fpr **0.613** (46/75, 666 findings), still
+  0.373 at threshold 10. The absolute-count threshold has the same length
+  confound (「また、」×30 in a 1,000-sentence report is ordinary Japanese),
+  and part of the volume is fragmented PDF/figure-caption lines in extracted
+  text. Needs a length-normalized redesign plus extraction-noise handling.
+- `low_lexical_diversity_mtld`: AI detection 0/4 at every candidate threshold
+  (20/30/40/50) while firing only on human documents (6/75 at 40). No positive
+  evidence of doing its job; parked as experimental until more AI-side
+  eligible documents exist.
+
+### Kept unchanged (with the evidence)
+
+- `low_specificity` -0.15: human fpr 0.040 (3/75). The earlier loosening
+  candidate -0.10 — supported by only 2 human docs in v0.2.0 — is **rejected**
+  with real data: fpr 0.133 (10/75). Wilson upper at -0.15 is 0.111.
+- `nominal_ending` 0.0: human fpr 0.000 (0/75). 0.02 would add 2 human fires
+  for no measured detection gain; unchanged.
+- `low_burstiness`: human fpr 0.293 (22/75 dev; holdout 0.300) with AI 4/4 —
+  the strongest separator measured on this corpus. The 81%-fire concern from
+  the earlier blogs corpus applies to non-article document types (READMEs,
+  glossaries), which stays a TODO for 適用範囲.
+- Style-confirmation categories measure high human rates on modern documents
+  (`translationese_morph` 0.573, `forbidden_phrase` 0.493 dev / 0.700
+  holdout, `redundant_light_verb` 0.453 dev / 0.550 holdout). These are
+  info-level revision prompts whose individual hits are usually legitimately
+  revisable (redundant_light_verb was hit-level validated 15/15 on the book
+  corpus), but the rates say the "AI-smell" framing needs hit-level labeling
+  on this corpus before any severity or vocabulary expansion. That labeling
+  is the next calibration task.
+
+### Vocabulary (suiko-eval vocab, aozora excluded)
+
+On 65 modern human dev documents (608k masked chars) vs 4 AI documents:
+`のではないでしょうか` appears in 6/65 human documents → demoted to the weak
+(info) tier per the registered rule (≥5 human docs). `このように` (15/65),
+`不可欠` (5/65), `ポイントは`, `さて、` were already weak. AI-biased phrases
+confirmed by log-ratio: `いかがでしたか` (+7.45), `と言えるでしょう`,
+`重要なのは` (+7.08 each). No additions or removals: the AI side is 4
+documents, below the registered minimum of 10. The unigram candidate list
+(運用, 一方, 得る, …) is topic/register-driven, not style markers — recorded
+as data only.
+
+### One-time holdout evaluation
+
+After the decisions above were fixed, `report --split holdout --external` ran
+once over 20 human holdout documents (3 committed Aozora + 17 external):
+demoted categories 0/20 as expected; `low_burstiness` 0.300 matches dev
+0.293; `antithesis_repetition` 0.100; `low_specificity` 0.050;
+`forbidden_phrase` 0.700 and `redundant_light_verb` 0.550 confirm the dev
+observation that these confirmation categories fire routinely on real human
+prose. No decision regressed on holdout; no threshold was re-tuned after
+this run.
+
 ## Threshold sweeps and decisions
 
 - `low_lexical_diversity_ttr` (default 0.45): under Sudachi, `堕落論` has TTR

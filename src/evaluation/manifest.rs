@@ -92,6 +92,7 @@ struct SampleSpec {
 }
 
 pub(super) struct Document {
+    pub(super) id: String,
     pub(super) label: Label,
     pub(super) genre: Genre,
     pub(super) split: Split,
@@ -193,6 +194,7 @@ pub(super) fn load_corpus(manifest_path: &Path) -> Result<Corpus, EvaluationErro
         let text = String::from_utf8(bytes)
             .map_err(|_| EvaluationError::Utf8(path.display().to_string()))?;
         documents.push(Document {
+            id: spec.id,
             label: spec.label,
             genre: spec.genre,
             split: spec.split,
@@ -237,4 +239,117 @@ pub(super) fn load_corpus(manifest_path: &Path) -> Result<Corpus, EvaluationErro
         documents,
         samples,
     })
+}
+
+/// sources.toml のうち外部取得(type=web)エントリの読み込みに必要な項目。
+/// 出典系の追加フィールドは取得スクリプト用のメタデータなのでここでは無視する。
+#[derive(Debug, Deserialize)]
+struct SourceSpec {
+    id: String,
+    #[serde(rename = "type")]
+    kind: String,
+    genre: Genre,
+    #[serde(default)]
+    split: Split,
+}
+
+#[derive(Debug, Deserialize)]
+struct SourcesManifest {
+    version: u32,
+    #[serde(default)]
+    source: Vec<SourceSpec>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LockEntry {
+    #[serde(default)]
+    sha256: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ExternalLock {
+    entries: std::collections::BTreeMap<String, LockEntry>,
+}
+
+/// 外部取得文書の読み込み結果。欠落は黙って無視せず件数を記録する。
+#[derive(Debug, Default)]
+pub(super) struct ExternalStats {
+    pub(super) used_dev: usize,
+    pub(super) used_holdout: usize,
+    pub(super) missing: usize,
+    pub(super) unfetched: usize,
+}
+
+/// eval/sources.toml と external-lock.json から、ローカルに取得済みの
+/// 外部人間文書を読み込む。本文は非コミットのため、存在するファイルは
+/// lockのSHA-256と一致する場合だけ使い、不一致は取得版のずれとして
+/// エラーにする(再取得で解消する)。欠落はskipとして数える。
+pub(super) fn load_external_documents(
+    manifest_path: &Path,
+) -> Result<(Vec<Document>, ExternalStats), EvaluationError> {
+    let base = manifest_path.parent().unwrap_or_else(|| Path::new("."));
+    let sources_path = base.join("sources.toml");
+    let lock_path = base.join("corpus/external-lock.json");
+
+    let sources_text = String::from_utf8(read(&sources_path)?)
+        .map_err(|_| EvaluationError::Utf8(sources_path.display().to_string()))?;
+    let sources = toml::from_str::<SourcesManifest>(&sources_text).map_err(|error| {
+        EvaluationError::Parse {
+            path: sources_path.display().to_string(),
+            message: error.to_string(),
+        }
+    })?;
+    if sources.version != 1 {
+        return Err(EvaluationError::Invalid(format!(
+            "sources.toml の version = {} は未対応です",
+            sources.version
+        )));
+    }
+    let lock_text = String::from_utf8(read(&lock_path)?)
+        .map_err(|_| EvaluationError::Utf8(lock_path.display().to_string()))?;
+    let lock = serde_json::from_str::<ExternalLock>(&lock_text).map_err(|error| {
+        EvaluationError::Parse {
+            path: lock_path.display().to_string(),
+            message: error.to_string(),
+        }
+    })?;
+
+    let mut documents = Vec::new();
+    let mut stats = ExternalStats::default();
+    for spec in sources.source.iter().filter(|spec| spec.kind == "web") {
+        let expected = match lock.entries.get(&spec.id).and_then(|e| e.sha256.as_ref()) {
+            Some(sha256) => sha256,
+            None => {
+                stats.unfetched += 1;
+                continue;
+            }
+        };
+        let path = base.join("corpus/external").join(format!("{}.md", spec.id));
+        if !path.exists() {
+            stats.missing += 1;
+            continue;
+        }
+        let bytes = read(&path)?;
+        let actual = digest(&bytes);
+        if !actual.eq_ignore_ascii_case(expected) {
+            return Err(EvaluationError::Invalid(format!(
+                "外部文書 {} のSHA-256がexternal-lock.jsonと一致しません: expected={expected}, actual={actual}。scripts/fetch-corpus.py --id {} で再取得してください",
+                spec.id, spec.id
+            )));
+        }
+        let text = String::from_utf8(bytes)
+            .map_err(|_| EvaluationError::Utf8(path.display().to_string()))?;
+        match spec.split {
+            Split::Dev => stats.used_dev += 1,
+            Split::Holdout => stats.used_holdout += 1,
+        }
+        documents.push(Document {
+            id: spec.id.clone(),
+            label: Label::Human,
+            genre: spec.genre,
+            split: spec.split,
+            text,
+        });
+    }
+    Ok((documents, stats))
 }

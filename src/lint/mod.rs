@@ -18,6 +18,7 @@ use crate::morphology::Morphology;
 use crate::text::{mask_html_comments, mask_markdown_structure_with_stats, sentences_with_raw};
 
 pub use baseline::{BaselineReport, BaselineSummary, apply_baseline, baseline_added};
+pub(crate) use patterns::{forbidden_phrase_list, hype_expression_list};
 pub use reading_load::{analyze_reading_load, analyze_reading_load_with_thresholds};
 
 const EXPERIMENTAL_CATEGORIES: &[&str] = &[
@@ -30,6 +31,12 @@ const EXPERIMENTAL_CATEGORIES: &[&str] = &[
     "boilerplate_heading",
     "numbered_phase_structure",
     "high_emoji_symbol_density",
+    // 2026-08-19の実測(現代人間dev 75文書)で既定ONを支えられず降格した3件。
+    // TTRは文書長への構造的依存(50k語の白書でTTR=0.094)、文頭反復は絶対回数
+    // 閾値の長さ交絡(fpr 0.613)、MTLDは全候補閾値でAI検出0。eval/calibration.md
+    "low_lexical_diversity_ttr",
+    "low_lexical_diversity_mtld",
+    "repeated_sentence_lead",
 ];
 
 const RULE_CATEGORIES: &[&str] = &[

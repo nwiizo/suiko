@@ -2,13 +2,31 @@
 
 Suikoの公開リリースを記録する。日付はJSTで、各項目は実測とテストに対応づける。
 
-## [Unreleased]
+## [0.3.0] - 2026-08-19
 
-- 検出器 `redundant_light_verb` を追加した。サ変名詞に隣接する「を行う/行なう」を確認候補（info）として指摘し、終止・連用・促音便の3活用に限って安全なsuggestion（「を行う」→「する」等）を付ける。受身（行われる）・使役（行わせる）・非隣接は対象外。ラベル付き14サンプル（detection 5/5、fpr 0/9）と実コーパス15件（真陽性15/15、全件で意味・声を保持）で事前登録した採用条件を満たした（eval/calibration.md）
-- 文レベルの文頭接続詞率を`stats.conjunction`の観測値として追加した。本コーパスでは人間/AIを分離しなかったためfindingにはしない（eval/calibration.md）
-- 読解負荷レーン（`--reading-load`）に`no_comma_sentence`を追加した。60字以上の日本語散文に読点が1つもない文を指さす（岩淵悦太郎編『悪文』・本多勝一『日本語の作文技術』の句読法に基づく狭い下位事例。読点密度の検出はNO-GOのまま）。ラベル付き14サンプル（detection 5/5、fpr 0/9）と実コーパスで真陽性2/2を確認した
-- Agent SkillにCLI不在時の自己導入手順（`cargo install suiko`）を追加し、READMEへ`gh skill install`での導入方法を記載した
-- コーパス取得基盤を追加した。`eval/sources.toml`（人間93ソースのmanifest、coji/natural-japanese@0f1cc1cのsources.jsonをMIT出典明記で初期値化、unit単位のdev/holdout割当）、`scripts/fetch-corpus.py`（本文非コミットで取得し`external-lock.json`へSHA-256を記録。2026-08-18に81/81件成功）、`scripts/generate-ai-corpus.sh`（未修正AI文書の生成と出典記録）。青空文庫の随筆12件（寺田寅彦・中島敦・坂口安吾・岸田國士）を評価コーパスへ追加し、holdout splitを初めて充足した
+テーマは「経験則の閾値と語彙を実測校正へ置き換える」。現代の人間文書81件（+青空文庫12件）を再現可能に取得・検証する基盤を作り、その実測でデフォルトの検出器構成を見直した。
+
+### ハイライト
+
+- **実測に基づくデフォルト構成の見直し**: 現代人間dev 75文書での校正により、`low_lexical_diversity_ttr`（文書長への構造依存。50k語の白書でTTR=0.094、fpr 0.613）、`repeated_sentence_lead`（絶対回数閾値の長さ交絡、fpr 0.613）、`low_lexical_diversity_mtld`（全候補閾値でAI検出0）の3検出器をEXPERIMENTAL（デフォルト無効、`--experimental`で利用可）へ降格した。判断ルールはeval/annotation-guide.mdに事前登録し、全実測はeval/calibration.mdに記録した
+- **`suiko-eval calibrate` / `vocab`**: 人間fprのWilson 95%上限を制約にした閾値探索と、禁止語・誇張語彙の人間/AI出現実測（対数頻度比つき）。`--external`で非コミットの外部取得文書をSHA-256照合のうえ評価に使える。`low_specificity`の緩和候補-0.10は実測fpr 0.133で棄却、「のではないでしょうか」は人間6/65文書の実測で弱シグナル（info）へ変更
+- **GitHub Releasesのビルド済みバイナリ配布**: macOS（Apple Silicon / Intel）、Linux（x86_64 / aarch64）、Windows（x86_64）の5ターゲットをタグpushで自動添付する
+
+### 追加
+
+- 検出器 `redundant_light_verb`: サ変名詞に隣接する「を行う/行なう」を確認候補（info）として指摘し、終止・連用・促音便の3活用に限って安全なsuggestion（「を行う」→「する」等）を付ける。受身（行われる）・使役（行わせる）・非隣接は対象外。ラベル付き14サンプル（detection 5/5、fpr 0/9）と実コーパス15件（真陽性15/15、全件で意味・声を保持）で事前登録した採用条件を満たした
+- 読解負荷レーン（`--reading-load`）に `no_comma_sentence`: 60字以上の日本語散文に読点が1つもない文を指さす（岩淵悦太郎編『悪文』・本多勝一『日本語の作文技術』の句読法に基づく狭い下位事例。読点密度の検出はNO-GOのまま）。ラベル付き14サンプルと実コーパス真陽性2/2で確認した
+- 文レベルの文頭接続詞率を`stats.conjunction`の観測値として追加した。本コーパスでは人間/AIを分離しなかったためfindingにはしない
+- コーパス取得基盤: `eval/sources.toml`（人間93ソースのmanifest、coji/natural-japanese@0f1cc1cのsources.jsonをMIT出典明記で初期値化、unit単位のdev/holdout割当）、`scripts/fetch-corpus.py`（本文非コミットで取得し`external-lock.json`へSHA-256を記録。81/81件成功）、`scripts/generate-ai-corpus.sh`（未修正AI文書の生成と出典記録）。青空文庫の随筆12件を評価コーパスへ追加し、holdout splitを初めて充足した
+- `suiko-eval report --split dev|holdout` と `--external`。閾値確定後のholdout一度きり評価を2026-08-19に実施した（退行なし。eval/calibration.md）
+- Agent SkillにCLI不在時の自己導入手順（`cargo install suiko`）を追加し、READMEへ`gh skill install`とビルド済みバイナリでの導入方法を記載した
+
+### 変更
+
+- `low_lexical_diversity_ttr` / `low_lexical_diversity_mtld` / `repeated_sentence_lead` はEXPERIMENTALになった（上記ハイライト）。`--experimental`を付けない実行のfindingsからは出力されず、`suiko-eval labeled`のサンプル評価は従来どおり動く
+- 「のではないでしょうか」を`forbidden_phrase`の弱シグナル（severity info）へ変更した
+
+互換性: 出力JSONの形は不変。デフォルト実行では上記3カテゴリのfindingが出なくなる（`--experimental`で従来どおり出力）。`--baseline`比較では、旧baselineに含まれる3カテゴリのfindingがresolved扱いになる場合がある。
 
 ## [0.2.0] - 2026-08-18
 

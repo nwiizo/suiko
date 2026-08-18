@@ -214,6 +214,7 @@ fn faq_marker_leads_are_flagged_as_structured_labels() {
             path.to_str().expect("UTF-8 path"),
             "--genre",
             "tech",
+            "--experimental",
             "--json",
         ])
         .output()
@@ -317,7 +318,12 @@ fn repeated_leads_aggregate_per_key_and_flag_label_fields() {
     let (_dir, path) = draft(&format!("{glossary}\nまとめると、以上です。\n"));
 
     let output = cargo_bin_cmd!("suiko")
-        .args(["lint", path.to_str().expect("UTF-8 path"), "--json"])
+        .args([
+            "lint",
+            path.to_str().expect("UTF-8 path"),
+            "--experimental",
+            "--json",
+        ])
         .output()
         .expect("run suiko lint");
 

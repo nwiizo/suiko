@@ -97,10 +97,67 @@ fn length_analysis_reports_document_buckets_separately() {
         .stdout(predicate::str::contains("bucket=1000-3999"))
         .stdout(predicate::str::contains("bucket=>=4000"))
         .stdout(predicate::str::contains(
-            "bucket=>=4000 category=repeated_sentence_lead human=9/11 fpr=0.818",
+            "bucket=>=4000 category=repeated_sentence_lead human=0/11 fpr=0.000",
         ))
         .stdout(predicate::str::contains(
             "bucket=>=4000 lane=reading_load category=sentence_too_long",
+        ));
+}
+
+// calibrate契約: 制約(人間fprのWilson上限)をfeasible判定に使い、dev splitのみで
+// 探索する。分母が5未満の側があれば事前条件未達を明示する。
+#[test]
+fn calibrate_marks_feasibility_against_the_wilson_upper_bound() {
+    eval_command()
+        .args([
+            "calibrate",
+            "eval/corpus.toml",
+            "--rule",
+            "low-specificity",
+            "--values=-0.15,-0.10",
+            "--max-human-fpr-upper",
+            "0.10",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "constraint: human fpr wilson95 upper <= 0.100",
+        ))
+        .stdout(predicate::str::contains("feasible="))
+        .stdout(predicate::str::contains("事前条件未達"))
+        .stdout(predicate::str::contains("recommendation:"));
+}
+
+// vocab契約: 語句ごとの人間/AI出現(文書数と10万字あたり率)と対数頻度比を出し、
+// 追加候補は判断材料として提示するだけで自動採用しない。
+#[test]
+fn vocab_reports_per_phrase_rates_and_candidates() {
+    eval_command()
+        .args([
+            "vocab",
+            "eval/corpus.toml",
+            "--exclude-id-prefix",
+            "aozora-",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("excluded: id prefix \"aozora-\""))
+        .stdout(predicate::str::contains("list=forbidden_phrase phrase="))
+        .stdout(predicate::str::contains("list=hype_expression phrase="))
+        .stdout(predicate::str::contains("log2_ratio="))
+        .stdout(predicate::str::contains("candidates:"));
+}
+
+// report --split holdout: holdoutの一度きり評価の経路。dev文書は含まれない。
+#[test]
+fn report_can_evaluate_the_holdout_split_alone() {
+    eval_command()
+        .args(["report", "eval/corpus.toml", "--split", "holdout"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("documents: human=3 ai=0"))
+        .stdout(predicate::str::contains(
+            "split=holdoutのみを評価対象にしている",
         ));
 }
 

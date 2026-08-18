@@ -66,13 +66,18 @@ Suikoが維持する差別化は、埋め込み辞書を含む単一バイナリ
 - 日本語のAI文特徴の報告（広島大2025卒論ほか）: 文頭接続詞の過剰（文ごとに接続詞）、文体の完全な一貫性（文頭接続詞の過剰は2026-08-18の実測で本コーパスの人間/AIを分離せず、finding化せず観測値に留めた。eval/calibration.md）
 - perplexity・embedding・分類器はNatural Japaneseのexperimentsでも検証済みで、モデル依存・実行時重量の点でSuikoの境界に反するため引き続き採用しない
 
-### 採用
+### 採用（全て実施済み）
 
-1. **`suiko-eval calibrate`**: 人間FP率の許容上限（Wilson上限で判定）を制約にした閾値探索。dev splitのみを使い、annotation-guideの事前条件（最低標本数）を自動で確認する。設計時に、非コミットの外部取得文書（`eval/corpus/external/`、`external-lock.json`のSHA-256参照）を評価へどう組み込むか（別manifestか、本文欠落時の明示skipか）を決める
-2. **`suiko-eval vocab`**: 語句別の人間/AI頻度、対数頻度比、信頼区間の一覧。`FORBIDDEN_PHRASES`と`HYPE_EXPRESSIONS`の追加・削除をこの実測で決める（excess vocabulary法の適用）。青空文庫12件は1920〜40年代の語彙規範なので、時代スライスなしに語彙判断へ使わない
-3. **停滞課題の解消**: 上記の基盤で`low_burstiness`適用範囲、TTR/`low_specificity`、反復系severity、翻訳調表層パターンを再校正し、holdoutの一度きり評価を実施する
+v0.3.0の採用項目は2026-08-19までに完了した。コーパス取得基盤（sources.toml 93件、fetch 81/81成功、AI生成runner、青空文庫12件）、`suiko-eval calibrate`（Wilson上限制約・dev限定・`--external`で外部取得文書をlock照合のうえ使用、欠落は明示skip）、`suiko-eval vocab`（語句別実測と追加候補の提示）、および現代人間75文書での再校正とholdoutの一度きり評価。判断の全記録はeval/calibration.md、判定ルールの事前登録はeval/annotation-guide.mdにある。
 
-（採用済み: コーパス取得基盤は2026-08-18に完了。`eval/sources.toml`（93件、slide 12件は除外を記録）、`scripts/fetch-corpus.py`（81/81件取得成功、SHA-256を`external-lock.json`へ記録）、`scripts/generate-ai-corpus.sh`、青空文庫12件のコミットとcorpus.toml登録（dev 9・holdout 3）。追加直後の実測で、TTRのhuman fpr 0.714、翻訳調0.429〜0.500など時代混入による上振れを確認した。既存閾値はこの表だけでは変更せず、再校正はregister/時代でスライスして判断する。「名詞+を+行う」冗長検出と「文頭接続詞率の観測値」も実装・検証済み。eval/calibration.md）
+実測に基づく主な変更: `low_lexical_diversity_ttr`（長さ交絡、fpr 0.613）・`repeated_sentence_lead`（同、fpr 0.613）・`low_lexical_diversity_mtld`（全閾値でAI検出0）をEXPERIMENTALへ降格、「のではないでしょうか」を弱シグナル化、`low_specificity` -0.10緩和候補を棄却（fpr 0.133）。
+
+v0.3.0後に残る校正課題:
+
+- 確認候補系カテゴリ（`forbidden_phrase` dev 0.493/holdout 0.700、`translationese_morph` 0.573、`redundant_light_verb` 0.453/0.550）のヒット単位ラベリング。「発火=誤検知」ではなく「その指摘に従うと文が良くなるか」で適合率を測り、severity・語彙の見直しはその後にする
+- 降格した3検出器の長さ正規化での再設計（TTRはMTLD系の長さ頑健な代替、文頭反復は文数比か文書長ゲート）
+- 語彙の追加・削除はAI側10文書以上で再開（現在4文書。複数モデル・複数時期への拡張が先）
+- `low_burstiness`の文書種別（記事/README/手順書/用語集）ごとの適用範囲測定（記事では dev 0.293/holdout 0.300 と許容範囲）
 
 ### 悪文（日本語言語学の古典的な読みにくさ）の検出範囲
 
@@ -83,7 +88,7 @@ Suikoが維持する差別化は、埋め込み辞書を含む単一バイナリ
 - 構文解析が必要で対象外（目視・カタログ担当）: ねじれ文（B2）、係り受けの曖昧さ（B5、`nested_attributive`廃止の経緯）、修飾語の語順（B3）、読点の位置・過多（B4のNO-GO維持）
 - 一般校正の境界の外: 敬語の誤り（keigo.md）、慣用句の誤用、重言などの辞書型冗長表現
 
-残る候補は、`suiko-eval calibrate`（採用1）が入った後に、受動態の乱用（C3）とサ変名詞化（C2の未実装側）を人間FP率の制約下で再測定することだけとする。
+残る候補は、受動態の乱用（C3）とサ変名詞化（C2の未実装側）を`suiko-eval calibrate`の人間FP率制約下で測定することだけとする。
 
 ### 不採用
 
@@ -105,7 +110,7 @@ Suikoが維持する差別化は、埋め込み辞書を含む単一バイナリ
 
 書籍・連載29原稿のNatural Japanese比較はLindera時点の測定であり、Sudachi版で再実行するまで古い。`nominal_ending`と見出し統計の既知差も、Sudachiでの再測定が必要になった。
 
-評価集合は人間2文書・AI4文書になった。AI側にはClaude（claude-fable-5）生成の未修正文書3件（tech/essay/business、うちtechとessayは4,000字超）を出典・SHA-256付きで追加し、「4,000字以上のAI文書がなく検出率を比較できない」問題は解消した。`corpus.toml`の`[[sample]]`で正解ラベル付きサンプル29件（13カテゴリ）を管理し、`suiko-eval labeled`がカテゴリ別のdetectionとfprを出す。sweepは6ルール（文頭反復、TTR、MTLD、`low_specificity`、名詞止め、読解負荷の文長）へ広がった。
+評価集合は人間14文書（+外部取得64 dev/17 holdout）・AI4文書になった。AI側にはClaude（claude-fable-5）生成の未修正文書3件（tech/essay/business、うちtechとessayは4,000字超）を出典・SHA-256付きで追加し、「4,000字以上のAI文書がなく検出率を比較できない」問題は解消した。`corpus.toml`の`[[sample]]`で正解ラベル付きサンプル57件（15カテゴリ）を管理し、`suiko-eval labeled`がカテゴリ別のdetectionとfprを出す。sweepは6ルール（文頭反復、TTR、MTLD、`low_specificity`、名詞止め、読解負荷の文長）へ広がった。
 
 Sudachiでの実測では、「堕落論」のTTRは0.4107、AI tech文書は0.446で、人間文書のほうが低い。0.45では両方発火し、0.40では両方沈黙する。文書単位のTTRは、意図的反復とAI的な語彙平板を、この規模の評価集合ではどちらの向きにも分離できない。既定値0.45は変更せず、堕落論の発火を既知の不一致としてmanifestに記録した。各閾値が何を支え、何を支えないかはeval/calibration.mdにある。
 
@@ -121,9 +126,9 @@ Sudachiでの実測では、「堕落論」のTTRは0.4107、AI tech文書は0.4
 
 ### 完了条件
 
-- 出典、利用条件、SHA-256を持つ人間文書を、各ジャンル・文書長へ増やす（AI側3文書は追加済み。人間側は堕落論1件のみ）
+- 出典、利用条件、SHA-256を持つ人間文書を増やす（2026-08-19に完了: 青空文庫12件+外部取得81件。AI側の複数モデル・複数時期への拡張が残り）
 - 書籍・連載29原稿のNatural Japanese比較をSudachi版で再実行し、残る差を誤検知と見落としへ分類する
-- 人間文書が増えた時点で、TTR 0.45と`low_specificity` -0.10（現コーパスでfpr 0のままdetection 0.75になる候補）を再検討する
+- TTRと`low_specificity` -0.10の再検討は2026-08-19に完了（TTRは降格、-0.10は棄却。eval/calibration.md）
 
 ## P1: `terms`を用語監査として信頼できる精度へ上げる
 
@@ -283,7 +288,7 @@ textlintはJavaScriptルールとprocessor、RedPenは複数マークアップ�
 
 ## 実装順序
 
-依存関係を無視して機能を並行追加しない。直近は「v0.3.0: 経験則の閾値と語彙を実測校正へ置き換える」の採用1〜3を順に進める。その後を次の順とし、各段階でfixture、実コーパス、公開JSONの互換性を確認する。
+依存関係を無視して機能を並行追加しない。v0.3.0の採用項目は完了した。次を以下の順で進め、各段階でfixture、実コーパス、公開JSONの互換性を確認する。
 
 1. 人手評価手順、holdout、信頼区間を固定し、点推定だけで閾値を選ばないようにする
 2. 103/81文書の旧測定を再現可能にし、外部コーパスとAI stress setの役割を分ける
