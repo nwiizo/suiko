@@ -54,7 +54,7 @@ Rustを入れずに使う場合は、[GitHub Releases](https://github.com/nwiizo
 
 ```sh
 # 例: macOS (Apple Silicon)
-curl -LO https://github.com/nwiizo/suiko/releases/latest/download/suiko-v0.2.0-aarch64-apple-darwin.tar.gz
+curl -LO https://github.com/nwiizo/suiko/releases/download/v0.2.0/suiko-v0.2.0-aarch64-apple-darwin.tar.gz
 shasum -a 256 -c suiko-v0.2.0-aarch64-apple-darwin.tar.gz.sha256   # 事前に.sha256も取得した場合
 tar xzf suiko-v0.2.0-aarch64-apple-darwin.tar.gz
 ./suiko-v0.2.0-aarch64-apple-darwin/suiko --version
