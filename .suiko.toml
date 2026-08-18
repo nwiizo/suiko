@@ -1,0 +1,20 @@
+# このリポジトリ自身の文書をsuikoで検品するための設定。
+# README.mdは機能仕様として検出パターン名を引用するため、
+# 該当箇所だけを理由付きで許可する。textは引用箇所に限定し、
+# fixtureやテストの検出結果には影響しない。
+version = 1
+
+[[allow]]
+category = "translationese"
+text = "〜することができる"
+reason = "READMEのsuggestion仕様で、対象パターン名そのものを引用している"
+
+[[allow]]
+category = "translationese_morph"
+text = "〜することができる"
+reason = "READMEのsuggestion仕様で、対象パターン名そのものを引用している"
+
+[[allow]]
+category = "antithesis_repetition"
+text = "ではなく「反復状態の数」"
+reason = "READMEの集約finding仕様の説明として対比の言い回しを使っている"
