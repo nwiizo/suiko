@@ -1,6 +1,14 @@
 # Suiko（推敲）
 
-日本語文書の自然さと読みやすさを、再現可能なルールで診断するRust CLIです。
+[![crates.io](https://img.shields.io/crates/v/suiko.svg)](https://crates.io/crates/suiko)
+[![CI](https://github.com/nwiizo/suiko/actions/workflows/ci.yml/badge.svg)](https://github.com/nwiizo/suiko/actions/workflows/ci.yml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+日本語文書の自然さと読みやすさを、再現可能なルールで診断するRust CLIです。[crates.io](https://crates.io/crates/suiko) から導入できます。
+
+```sh
+cargo install suiko
+```
 
 名前は、文章を練り直す日本語の「推敲」から取りました。バイナリ、crate、Agent Skillの名前を `suiko` に統一しています。形態素辞書はバイナリへ埋め込まれるため、実行時に辞書やモデルをダウンロードしません。
 
