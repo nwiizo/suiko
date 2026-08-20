@@ -29,6 +29,7 @@ fn baseline_key(category: &str, excerpt: &str) -> (String, String) {
         "high_length_autocorrelation",
         "low_sentence_variance",
         "uniform_paragraph_structure",
+        "nominal_ending",
         "low_lexical_diversity_ttr",
         "low_lexical_diversity_mtld",
     ];

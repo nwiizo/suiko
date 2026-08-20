@@ -891,6 +891,37 @@ fn baseline_marks_persisting_findings_without_changing_the_base_shape() {
 }
 
 #[test]
+fn baseline_still_tracks_line_findings_by_excerpt() {
+    let (dir, path) = draft("と言えるでしょう。\n");
+    let baseline = dir.path().join("baseline.json");
+    let first = cargo_bin_cmd!("suiko")
+        .args(["lint", path.to_str().expect("UTF-8 path"), "--json"])
+        .output()
+        .expect("create baseline");
+    assert!(first.status.success());
+    fs::write(&baseline, first.stdout).expect("write baseline");
+
+    fs::write(&path, "いかがでしたか。\n").expect("rewrite finding");
+    let output = cargo_bin_cmd!("suiko")
+        .args([
+            "lint",
+            path.to_str().expect("UTF-8 path"),
+            "--json",
+            "--baseline",
+            baseline.to_str().expect("UTF-8 path"),
+        ])
+        .output()
+        .expect("compare changed line finding");
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    assert_eq!(json["baseline"]["summary"]["resolved"], 1);
+    assert_eq!(json["baseline"]["summary"]["new"], 1);
+    assert_eq!(json["baseline"]["summary"]["persisting"], 0);
+    assert_eq!(json["findings"][0]["category"], "forbidden_phrase");
+    assert_eq!(json["findings"][0]["status"], "new");
+}
+
+#[test]
 fn baseline_compares_multiple_files_and_flags_added_and_removed_ones() {
     let dir = tempdir().expect("create temporary directory");
     let a = dir.path().join("a.md");
@@ -988,6 +1019,85 @@ fn baseline_keeps_document_level_findings_persisting_when_wording_changes() {
     assert_eq!(json["baseline"]["summary"]["persisting"], 1);
     assert_eq!(json["findings"][0]["category"], "antithesis_repetition");
     assert_eq!(json["findings"][0]["status"], "persisting");
+}
+
+#[test]
+fn baseline_tracks_nominal_ending_by_category_when_document_size_changes() {
+    let prose = "文章の流れを確認する。\n".repeat(200);
+    let (dir, path) = draft(&prose);
+    let baseline = dir.path().join("baseline.json");
+    let first = cargo_bin_cmd!("suiko")
+        .args([
+            "lint",
+            path.to_str().expect("UTF-8 path"),
+            "--genre",
+            "essay",
+            "--json",
+        ])
+        .output()
+        .expect("create baseline");
+    assert!(first.status.success());
+    fs::write(&baseline, first.stdout).expect("write baseline");
+
+    fs::write(&path, format!("{prose}文章の流れを確認する。\n")).expect("extend draft");
+    let output = cargo_bin_cmd!("suiko")
+        .args([
+            "lint",
+            path.to_str().expect("UTF-8 path"),
+            "--genre",
+            "essay",
+            "--json",
+            "--baseline",
+            baseline.to_str().expect("UTF-8 path"),
+        ])
+        .output()
+        .expect("compare extended draft");
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    let nominal = json["findings"]
+        .as_array()
+        .expect("findings array")
+        .iter()
+        .find(|finding| finding["category"] == "nominal_ending")
+        .expect("nominal_ending finding");
+    assert_eq!(nominal["status"], "persisting");
+    assert!(
+        json["baseline"]["resolved"]
+            .as_array()
+            .expect("resolved array")
+            .iter()
+            .all(|finding| finding["category"] != "nominal_ending")
+    );
+
+    fs::write(&path, format!("{prose}結論。\n")).expect("add nominal ending");
+    let output = cargo_bin_cmd!("suiko")
+        .args([
+            "lint",
+            path.to_str().expect("UTF-8 path"),
+            "--genre",
+            "essay",
+            "--json",
+            "--baseline",
+            baseline.to_str().expect("UTF-8 path"),
+        ])
+        .output()
+        .expect("compare draft with nominal ending");
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    assert!(
+        json["findings"]
+            .as_array()
+            .expect("findings array")
+            .iter()
+            .all(|finding| finding["category"] != "nominal_ending")
+    );
+    assert!(
+        json["baseline"]["resolved"]
+            .as_array()
+            .expect("resolved array")
+            .iter()
+            .any(|finding| finding["category"] == "nominal_ending")
+    );
 }
 
 #[test]
