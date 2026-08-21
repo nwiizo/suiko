@@ -237,6 +237,33 @@ this run.
   documents (44 findings); 110 keeps AI documents silent. Genre defaults
   unchanged.
 
+## Sentence-ending rhythm candidates (2026-08-21)
+
+The sentence-ending profile is always emitted as an observation under
+`stats.rhythm.sentence_endings`. Two local run detectors apply only to
+documents with at least six sentences and are experimental and info-only:
+
+- `repeated_sentence_mode`: three or more sentences in one paragraph, each at
+  least 30 mora, with the same explicit ending (`である`, `だった`, `だ`,
+  `です`, or a tentative/question ending) and mora-length CV at most 0.15;
+- `consecutive_nominal_endings`: three or more noun-ended sentences in one
+  paragraph, each at most 25 mora.
+
+The first implementation classified every verb- or adjective-ended sentence
+as assertive. That version fired on 13/14 bundled human documents and was
+rejected before completion. Restricting assertion to explicit endings and
+adding the local length-CV gate reduced the bundled document proxy to 2/14
+human documents for each category. `repeated_sentence_mode` fired on 0/4 AI
+documents and `consecutive_nominal_endings` on 1/4; the AI denominator is
+`low_n`, and provenance is not a quality label, so these values do not support
+authorship claims or default enablement. Both categories remain experimental
+until hit-level review and more genre-matched samples exist.
+
+The labeled boundary set contains one fire/silent contrast pair per new
+category. Both pairs match their expected behavior, but this is below the
+pre-registered five-per-side minimum for adopting a new info category by
+default.
+
 ## Reproduction
 
 See `eval/README.md` for the full command list covering `report`, `labeled`,

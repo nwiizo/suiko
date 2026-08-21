@@ -2,6 +2,15 @@
 
 Suikoの公開リリースを記録する。日付はJSTで、各項目は実測とテストに対応づける。
 
+## [0.3.2] - 2026-08-21
+
+### 追加
+
+- `stats.rhythm.sentence_endings` に、明示的な断定、推量・保留、疑問、体言止め、その他の件数と、空行をまたがない最長連続数を追加した
+- [日本語技術文書の文章規範](https://gist.github.com/k16shikano/fd287c3133457c4fd8f5601d34aa817d) と [認知リズムを生むための日本語ライティング規範](https://gist.github.com/k16shikano/eb2929f13ed19c97188393d297be8432) を参考に、実験的検出器 `repeated_sentence_mode` と `consecutive_nominal_endings` を追加した。6文以上の文書を対象とし、前者は30モーラ以上で同じ明示的文末が3文以上続き、文長CVが0.15以下の場合、後者は25モーラ以下の体言止めが3文以上続く場合に、連続箇所を1件へ集約する
+
+互換性: 公開JSONは `stats.rhythm.sentence_endings` の追加のみ。既存フィールドは不変。新しいfindingは `--experimental` を指定した場合だけ出力する。
+
 ## [0.3.1] - 2026-08-20
 
 ### 修正

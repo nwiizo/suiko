@@ -172,6 +172,34 @@ sha256 = "a04885522a667350b6c2881e969066d651ee3b90c5811e169de81155e0f2c99f"
 # suiko-eval labeled がカテゴリ別のdetectionとfprを算出する。
 
 [[sample]]
+id = "consecutive-nominal-endings-fire-001"
+path = "labeled/consecutive_nominal_endings/fire-001.md"
+category = "consecutive_nominal_endings"
+expect = "fire"
+note = "25モーラ以下の体言止めが同一段落で3文連続"
+
+[[sample]]
+id = "consecutive-nominal-endings-silent-001"
+path = "labeled/consecutive_nominal_endings/silent-001.md"
+category = "consecutive_nominal_endings"
+expect = "silent"
+note = "短い体言止めが空行で分かれ、各段落2文以下"
+
+[[sample]]
+id = "repeated-sentence-mode-fire-001"
+path = "labeled/repeated_sentence_mode/fire-001.md"
+category = "repeated_sentence_mode"
+expect = "fire"
+note = "30モーラ以上で長さの揃った「である」終止が同一段落で3文連続"
+
+[[sample]]
+id = "repeated-sentence-mode-silent-001"
+path = "labeled/repeated_sentence_mode/silent-001.md"
+category = "repeated_sentence_mode"
+expect = "silent"
+note = "同じ長い「である」終止が空行で分かれ、各段落2文以下"
+
+[[sample]]
 id = "bullet-bold-label-fire-001"
 path = "labeled/bullet_bold_label/fire-001.md"
 category = "bullet_bold_label"

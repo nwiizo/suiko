@@ -21,7 +21,7 @@ fn calibrated_fixtures_keep_their_finding_counts() {
     let natural_experimental = lint_fixture("natural.md", true);
 
     assert_eq!(smelly["stats"]["total_findings"], 21);
-    assert_eq!(smelly_experimental["stats"]["total_findings"], 29);
+    assert_eq!(smelly_experimental["stats"]["total_findings"], 30);
     assert_eq!(natural["stats"]["total_findings"], 0);
     assert_eq!(natural_experimental["stats"]["total_findings"], 0);
 }

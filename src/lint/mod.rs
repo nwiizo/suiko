@@ -23,6 +23,7 @@ pub(crate) use patterns::{forbidden_phrase_list, hype_expression_list};
 pub use reading_load::{analyze_reading_load, analyze_reading_load_with_thresholds};
 
 const EXPERIMENTAL_CATEGORIES: &[&str] = &[
+    "consecutive_nominal_endings",
     "high_length_autocorrelation",
     "paragraph_lead_conjunction",
     "repeated_syntax_template",
@@ -38,6 +39,7 @@ const EXPERIMENTAL_CATEGORIES: &[&str] = &[
     "low_lexical_diversity_ttr",
     "low_lexical_diversity_mtld",
     "repeated_sentence_lead",
+    "repeated_sentence_mode",
 ];
 
 const RULE_CATEGORIES: &[&str] = &[
@@ -46,6 +48,7 @@ const RULE_CATEGORIES: &[&str] = &[
     "bullet_bold_label",
     "bullet_emoji",
     "buried_list",
+    "consecutive_nominal_endings",
     "double_negative",
     "english_syntax_cleft_because",
     "english_syntax_inanimate_subject",
@@ -70,6 +73,7 @@ const RULE_CATEGORIES: &[&str] = &[
     "predicate_colon_lead",
     "redundant_light_verb",
     "repeated_sentence_lead",
+    "repeated_sentence_mode",
     "repeated_syntax_template",
     "sentence_too_long",
     "translationese",

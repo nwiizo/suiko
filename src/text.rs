@@ -5,6 +5,8 @@ pub struct Sentence {
     pub line: usize,
     pub text: String,
     pub raw_text: String,
+    /// 文を閉じた句点類。行末まで句点がない文はNone。
+    pub end_mark: Option<char>,
     /// 行内での文本文の開始byte offset。マスクはbyte長を保存するため、
     /// masked行で計算した値はraw行の同じ位置を指す。
     pub line_byte_start: usize,
@@ -264,6 +266,7 @@ pub fn sentences_with_raw(text: &str, raw_text: &str) -> Vec<Sentence> {
                             .unwrap_or(sentence)
                             .trim()
                             .to_owned(),
+                        end_mark: Some(ch),
                         line_byte_start: start + leading,
                     });
                 }
@@ -278,6 +281,7 @@ pub fn sentences_with_raw(text: &str, raw_text: &str) -> Vec<Sentence> {
                 line: line_no,
                 text: tail.to_owned(),
                 raw_text: raw_line.get(start..).unwrap_or(tail).trim().to_owned(),
+                end_mark: None,
                 line_byte_start: start + leading,
             });
         }

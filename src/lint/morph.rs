@@ -28,6 +28,7 @@ pub(super) struct TokenizedSentence {
     pub(super) line: usize,
     pub(super) text: String,
     pub(super) raw_text: String,
+    pub(super) end_mark: Option<char>,
     pub(super) line_byte_start: usize,
     pub(super) tokens: Vec<Morpheme>,
 }
@@ -69,6 +70,7 @@ pub(super) fn tokenize(
                 line: sentence.line,
                 text: sentence.text.clone(),
                 raw_text: sentence.raw_text.clone(),
+                end_mark: sentence.end_mark,
                 line_byte_start: sentence.line_byte_start,
                 tokens: morphology.tokenize(&sentence.text)?,
             })

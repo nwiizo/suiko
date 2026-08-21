@@ -68,6 +68,297 @@ const PARAGRAPH_CONJUNCTIONS: &[&str] = &[
     "ただし",
 ];
 
+const SENTENCE_MODE_RUN_MIN: usize = 3;
+const LONG_SENTENCE_MORA_MIN: usize = 30;
+const SENTENCE_MODE_RUN_MAX_CV: f64 = 0.15;
+const SHORT_NOMINAL_MORA_MAX: usize = 25;
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum SentenceMode {
+    Assertive,
+    Tentative,
+    Question,
+    Nominal,
+    Other,
+}
+
+impl SentenceMode {
+    const ALL: [Self; 5] = [
+        Self::Assertive,
+        Self::Tentative,
+        Self::Question,
+        Self::Nominal,
+        Self::Other,
+    ];
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Assertive => "assertive",
+            Self::Tentative => "tentative",
+            Self::Question => "question",
+            Self::Nominal => "nominal",
+            Self::Other => "other",
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Assertive => "断定",
+            Self::Tentative => "推量・保留",
+            Self::Question => "疑問",
+            Self::Nominal => "体言止め",
+            Self::Other => "その他",
+        }
+    }
+}
+
+#[derive(Debug)]
+struct SentenceEndingObservation<'a> {
+    sentence: &'a TokenizedSentence,
+    mode: SentenceMode,
+    signature: &'static str,
+    mora: usize,
+}
+
+fn sentence_ending(sentence: &TokenizedSentence) -> (SentenceMode, &'static str) {
+    if matches!(sentence.end_mark, Some('？' | '?')) {
+        return (SentenceMode::Question, "question_mark");
+    }
+
+    let tokens = sentence
+        .tokens
+        .iter()
+        .filter(|token| !matches!(token.pos(0), "記号" | "補助記号" | "空白"))
+        .collect::<Vec<_>>();
+    if tokens.is_empty() {
+        return (SentenceMode::Other, "other");
+    }
+    if tokens
+        .last()
+        .is_some_and(|token| token.pos(0) == "助詞" && token.surface == "か")
+    {
+        return (SentenceMode::Question, "particle_ka");
+    }
+
+    let ending = tokens
+        .iter()
+        .rev()
+        .take(8)
+        .rev()
+        .map(|token| token.surface.as_str())
+        .collect::<String>();
+    if let Some(suffix) = [
+        "かもしれない",
+        "かもしれません",
+        "かもしれなかった",
+        "に違いない",
+        "に違いありません",
+        "だろう",
+        "でしょう",
+        "ようだ",
+        "ようです",
+        "らしい",
+        "らしいです",
+        "と思う",
+        "と思います",
+    ]
+    .iter()
+    .find(|suffix| ending.ends_with(**suffix))
+    {
+        return (SentenceMode::Tentative, *suffix);
+    }
+    if super::morph::noun_ended(&sentence.tokens) {
+        return (SentenceMode::Nominal, "nominal");
+    }
+    if let Some(suffix) = [
+        "である",
+        "であった",
+        "だった",
+        "なのだ",
+        "のだ",
+        "というわけだ",
+        "です",
+        "でした",
+        "だ",
+    ]
+    .iter()
+    .find(|suffix| ending.ends_with(**suffix))
+    {
+        return (SentenceMode::Assertive, *suffix);
+    }
+    (SentenceMode::Other, "other")
+}
+
+fn same_paragraph(previous: &TokenizedSentence, current: &TokenizedSentence) -> bool {
+    current.line <= previous.line + 1
+}
+
+fn sentence_ending_observations(
+    tokenized: &[TokenizedSentence],
+) -> Vec<SentenceEndingObservation<'_>> {
+    tokenized
+        .iter()
+        .map(|sentence| {
+            let (mode, signature) = sentence_ending(sentence);
+            SentenceEndingObservation {
+                sentence,
+                mode,
+                signature,
+                mora: mora_length(&sentence.tokens),
+            }
+        })
+        .collect()
+}
+
+fn sentence_ending_stats(observations: &[SentenceEndingObservation<'_>]) -> Value {
+    let mut counts = BTreeMap::new();
+    let mut longest_runs = BTreeMap::new();
+    for mode in SentenceMode::ALL {
+        counts.insert(mode.as_str(), 0_usize);
+        longest_runs.insert(mode.as_str(), 0_usize);
+    }
+
+    let mut previous: Option<&SentenceEndingObservation<'_>> = None;
+    let mut current_run = 0;
+    for observation in observations {
+        *counts
+            .get_mut(observation.mode.as_str())
+            .expect("all sentence modes initialized") += 1;
+        if previous.is_some_and(|previous| {
+            previous.mode == observation.mode
+                && same_paragraph(previous.sentence, observation.sentence)
+        }) {
+            current_run += 1;
+        } else {
+            current_run = 1;
+        }
+        let longest = longest_runs
+            .get_mut(observation.mode.as_str())
+            .expect("all sentence modes initialized");
+        *longest = (*longest).max(current_run);
+        previous = Some(observation);
+    }
+
+    json!({"counts": counts, "longest_runs": longest_runs})
+}
+
+fn matching_runs<'a>(
+    observations: &'a [SentenceEndingObservation<'a>],
+    eligible: impl Fn(&SentenceEndingObservation<'_>) -> bool,
+) -> Vec<&'a [SentenceEndingObservation<'a>]> {
+    let mut runs = Vec::new();
+    let mut start = 0;
+    while start < observations.len() {
+        if !eligible(&observations[start]) {
+            start += 1;
+            continue;
+        }
+        let mode = observations[start].mode;
+        let mut end = start + 1;
+        while end < observations.len()
+            && eligible(&observations[end])
+            && observations[end].mode == mode
+            && observations[end].signature == observations[start].signature
+            && same_paragraph(observations[end - 1].sentence, observations[end].sentence)
+        {
+            end += 1;
+        }
+        if end - start >= SENTENCE_MODE_RUN_MIN {
+            runs.push(&observations[start..end]);
+        }
+        start = end;
+    }
+    runs
+}
+
+fn run_lines(run: &[SentenceEndingObservation<'_>]) -> Vec<usize> {
+    run.iter()
+        .map(|observation| observation.sentence.line)
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+fn run_mora_cv(run: &[SentenceEndingObservation<'_>]) -> f64 {
+    let values = run
+        .iter()
+        .map(|observation| observation.mora as f64)
+        .collect::<Vec<_>>();
+    mean_and_stdev(&values).map_or(
+        0.0,
+        |(mean, stdev)| {
+            if mean == 0.0 { 0.0 } else { stdev / mean }
+        },
+    )
+}
+
+fn sentence_ending_findings(observations: &[SentenceEndingObservation<'_>]) -> Vec<Finding> {
+    // 三文だけの例文集や境界fixtureを文書のリズムとして扱わない。
+    if observations.len() < 6 {
+        return Vec::new();
+    }
+    let mut findings = Vec::new();
+    for run in matching_runs(observations, |observation| {
+        matches!(
+            observation.mode,
+            SentenceMode::Assertive | SentenceMode::Tentative | SentenceMode::Question
+        ) && observation.mora >= LONG_SENTENCE_MORA_MIN
+    }) {
+        let mora_cv = run_mora_cv(run);
+        if mora_cv > SENTENCE_MODE_RUN_MAX_CV {
+            continue;
+        }
+        let mode = run[0].mode;
+        let signature = &run[0].signature;
+        let mut finding = Finding::new(
+            run[0].sentence.line,
+            "repeated_sentence_mode",
+            run[0]
+                .sentence
+                .raw_text
+                .chars()
+                .take(40)
+                .collect::<String>(),
+            "info",
+            format!(
+                "{}モーラ以上の{}型「{}」が{}文連続し、文長の変動係数={:.3}（上限{:.2}）。同じ文末表現と長さが続き、局所的なリズムが平坦な疑い",
+                LONG_SENTENCE_MORA_MIN,
+                mode.label(),
+                signature,
+                run.len(),
+                mora_cv,
+                SENTENCE_MODE_RUN_MAX_CV
+            ),
+        );
+        finding.related_lines = Some(run_lines(run));
+        findings.push(finding);
+    }
+    for run in matching_runs(observations, |observation| {
+        observation.mode == SentenceMode::Nominal && observation.mora <= SHORT_NOMINAL_MORA_MAX
+    }) {
+        let mut finding = Finding::new(
+            run[0].sentence.line,
+            "consecutive_nominal_endings",
+            run[0]
+                .sentence
+                .raw_text
+                .chars()
+                .take(40)
+                .collect::<String>(),
+            "info",
+            format!(
+                "{}モーラ以下の体言止めが{}文連続（閾値{}文以上）。短い停止の反復が文章の流れを細切れにしている疑い",
+                SHORT_NOMINAL_MORA_MAX,
+                run.len(),
+                SENTENCE_MODE_RUN_MIN
+            ),
+        );
+        finding.related_lines = Some(run_lines(run));
+        findings.push(finding);
+    }
+    findings
+}
+
 pub(super) fn mean_and_stdev(values: &[f64]) -> Option<(f64, f64)> {
     if values.is_empty() {
         return None;
@@ -82,8 +373,11 @@ pub(super) fn mean_and_stdev(values: &[f64]) -> Option<(f64, f64)> {
 }
 
 pub(super) fn rhythm_analysis(tokenized: &[TokenizedSentence]) -> (Vec<Finding>, Value) {
+    let ending_observations = sentence_ending_observations(tokenized);
+    let ending_stats = sentence_ending_stats(&ending_observations);
+    let mut findings = sentence_ending_findings(&ending_observations);
     if tokenized.len() < 6 {
-        return (Vec::new(), json!({}));
+        return (findings, json!({"sentence_endings": ending_stats}));
     }
     let lengths = tokenized
         .iter()
@@ -114,7 +408,6 @@ pub(super) fn rhythm_analysis(tokenized: &[TokenizedSentence]) -> (Vec<Finding>,
     } else {
         None
     };
-    let mut findings = Vec::new();
     if burstiness < -0.24 {
         findings.push(Finding::new(
             tokenized[0].line,
@@ -142,6 +435,7 @@ pub(super) fn rhythm_analysis(tokenized: &[TokenizedSentence]) -> (Vec<Finding>,
             "mora_stdev": stdev,
             "burstiness": burstiness,
             "length_autocorrelation_lag1": autocorrelation,
+            "sentence_endings": ending_stats,
         }),
     )
 }

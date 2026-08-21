@@ -194,6 +194,125 @@ fn antithesis_severity_stays_info_in_long_documents() {
     assert_eq!(antithesis["severity"], "info");
 }
 
+#[test]
+fn rhythm_stats_report_sentence_ending_counts_and_runs() {
+    let (_dir, path) = draft(
+        "結果は確定済みである。判断は妥当だった。成功するだろう。失敗するかもしれない。これは妥当だろうか？最後の課題。追加の補足。\n",
+    );
+
+    let output = cargo_bin_cmd!("suiko")
+        .args(["lint", path.to_str().expect("UTF-8 path"), "--json"])
+        .output()
+        .expect("run suiko lint");
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+
+    assert_eq!(
+        json["stats"]["rhythm"]["sentence_endings"]["counts"],
+        serde_json::json!({
+            "assertive": 2,
+            "tentative": 2,
+            "question": 1,
+            "nominal": 2,
+            "other": 0
+        })
+    );
+    assert_eq!(
+        json["stats"]["rhythm"]["sentence_endings"]["longest_runs"],
+        serde_json::json!({
+            "assertive": 2,
+            "tentative": 2,
+            "question": 1,
+            "nominal": 2,
+            "other": 0
+        })
+    );
+}
+
+#[test]
+fn experimental_sentence_mode_and_nominal_runs_are_aggregated() {
+    let body = concat!(
+        "この仕組みは入力された記録を順番に比較し、差分を一覧へまとめて表示する設計である。\n",
+        "この処理は保存された設定を項目ごとに検査し、不正な値を理由とともに報告する設計である。\n",
+        "この機能は収集した測定値を期間別に集計し、変化を追跡できる形で提示する設計である。\n",
+        "処理結果の確認。\n",
+        "設定項目の再点検。\n",
+        "変更内容の記録。\n",
+    );
+    let (_dir, path) = draft(body);
+
+    let output = cargo_bin_cmd!("suiko")
+        .args([
+            "lint",
+            path.to_str().expect("UTF-8 path"),
+            "--experimental",
+            "--json",
+        ])
+        .output()
+        .expect("run suiko lint");
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+
+    let repeated = json["findings"]
+        .as_array()
+        .expect("findings array")
+        .iter()
+        .find(|finding| finding["category"] == "repeated_sentence_mode")
+        .expect("repeated sentence mode finding");
+    assert_eq!(repeated["severity"], "info");
+    assert_eq!(repeated["related_lines"], serde_json::json!([1, 2, 3]));
+
+    let nominal = json["findings"]
+        .as_array()
+        .expect("findings array")
+        .iter()
+        .find(|finding| finding["category"] == "consecutive_nominal_endings")
+        .expect("consecutive nominal endings finding");
+    assert_eq!(nominal["severity"], "info");
+    assert_eq!(nominal["related_lines"], serde_json::json!([4, 5, 6]));
+}
+
+#[test]
+fn experimental_sentence_runs_do_not_cross_blank_lines() {
+    let body = concat!(
+        "この仕組みは入力された記録を順番に比較し、差分を一覧へまとめて表示する設計である。\n",
+        "この処理は保存された設定を項目ごとに検査し、不正な値を理由とともに報告する設計である。\n",
+        "\n",
+        "この機能は収集した測定値を期間別に集計し、変化を追跡できる形で提示する設計である。\n",
+        "この画面は集計された結果を利用者ごとに整理し、必要な項目だけを表示する設計である。\n",
+        "\n",
+        "処理結果の確認。\n",
+        "設定項目の再点検。\n",
+        "\n",
+        "変更内容の記録。\n",
+        "実行手順の整理。\n",
+    );
+    let (_dir, path) = draft(body);
+
+    let output = cargo_bin_cmd!("suiko")
+        .args([
+            "lint",
+            path.to_str().expect("UTF-8 path"),
+            "--experimental",
+            "--json",
+        ])
+        .output()
+        .expect("run suiko lint");
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+
+    assert!(
+        json["findings"]
+            .as_array()
+            .expect("findings array")
+            .iter()
+            .all(|finding| !matches!(
+                finding["category"].as_str(),
+                Some("repeated_sentence_mode" | "consecutive_nominal_endings")
+            ))
+    );
+}
+
 // FAQのQ./A.のような短いマーカー+区切りの反復は、定型フィールドとして
 // 散文の無意識な文頭反復と区別する。
 #[test]
