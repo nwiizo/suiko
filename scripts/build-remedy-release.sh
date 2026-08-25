@@ -11,12 +11,15 @@ fi
 
 commit="$(git -C "$repo_root" rev-parse --verify HEAD)"
 case "$commit" in
-    [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
-    *)
+    "" | *[!0-9a-f]*)
         echo "error: git HEAD is not a canonical 40-character lowercase SHA" >&2
         exit 1
         ;;
 esac
+if [ "${#commit}" -ne 40 ]; then
+    echo "error: git HEAD is not a canonical 40-character lowercase SHA" >&2
+    exit 1
+fi
 
 cd "$repo_root"
 export SUIKO_REMEDY_COMMIT="$commit"
