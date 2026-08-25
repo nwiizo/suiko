@@ -1,4 +1,6 @@
 use assert_cmd::Command;
+use predicates::prelude::PredicateBooleanExt;
+use predicates::str::contains;
 use serde_json::Value;
 
 const REMEDY_ARGS: &[&str] = &[
@@ -170,4 +172,12 @@ fn ordinary_upstream_version_is_unchanged() {
         .assert()
         .success()
         .stdout("suiko 0.3.3\n");
+}
+
+#[test]
+fn ordinary_no_arg_cli_keeps_clap_usage_and_exit_two() {
+    suiko()
+        .assert()
+        .code(2)
+        .stderr(contains("Usage:").and(contains("a subcommand is required")));
 }

@@ -20,12 +20,18 @@ cargo install suiko
 `SUIKO_REMEDY_COMMIT=<40文字のlowercase git SHA>`を注入したバイナリの
 `suiko --version-json`だけから取得します。値が未設定・短縮SHA・大文字・非hexなら、
 `--version-json`と`remedy-seo` profileはいずれもexit 1でfail closedします。
+この値はbuild provenanceの識別子であり、署名や信頼できるattestationではありません。
+review済みsource、clean checkoutからのbuild、配布artifactのdigest検証がtrust anchorです。
 
 ```sh
-SUIKO_REMEDY_COMMIT="$(git rev-parse HEAD)" cargo build --release
+scripts/build-remedy-release.sh
 printf '<p>本文です。</p>' | ./target/release/suiko lint \
   --profile remedy-seo --input-format html --format json --redact-excerpts -
 ```
+
+build helperはuntracked fileを含むdirty checkoutを拒否し、canonicalなHEAD SHAを
+`SUIKO_REMEDY_COMMIT`へ注入します。手動buildで同じ環境変数を渡すこともできますが、
+release artifactにはhelperを使います。
 
 `remedy-seo`は上記の完全一致コマンドだけを受け付けます。入力はstdinのUTF-8 HTML
 （最大5MiB）だけで、ファイル、設定、自動検出、ネットワークは使いません。
@@ -33,6 +39,10 @@ HTML5 parserで`p`/`li`の可視本文を抽出し、見出しは構造として
 表、引用、caption、code、script/style/template/noscript、SVG/MathML、非表示要素、
 SWELLのrender済みCTA/blog-parts rootを除外します。出力は本文・抜粋・path・行番号を含めず、
 rule/category/severityと根拠のSHA-256だけを持つ固定schemaです。
+SHA-256化は平文の偶発的なログ流出を抑えるためのredactionであり、機密性を提供しません。
+候補文を辞書攻撃で照合でき、同じ文を実行・文書間でlinkできるため、著作権上安全な保存を
+保証する仕組みとして扱わないでください。出力にも入力本文と同じ保持期限・アクセス制御を
+適用します。
 
 初版の`masu-streak`はlegacy checkerのp-only・4文以上という停止判定、`filler`は
 同checkerのcount 8以上かつ2.5/1000字以上を移植しています。`translationese`は単発で

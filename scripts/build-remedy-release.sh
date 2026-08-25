@@ -1,0 +1,23 @@
+#!/bin/sh
+# clean checkoutのHEADをfork identityとして注入するrelease build helper。
+set -eu
+
+repo_root="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+
+if [ -n "$(git -C "$repo_root" status --porcelain --untracked-files=normal)" ]; then
+    echo "error: remedy release build requires a clean checkout" >&2
+    exit 1
+fi
+
+commit="$(git -C "$repo_root" rev-parse --verify HEAD)"
+case "$commit" in
+    [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+    *)
+        echo "error: git HEAD is not a canonical 40-character lowercase SHA" >&2
+        exit 1
+        ;;
+esac
+
+cd "$repo_root"
+export SUIKO_REMEDY_COMMIT="$commit"
+exec cargo build --release "$@"

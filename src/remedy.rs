@@ -315,9 +315,11 @@ fn connector_repetition(blocks: &[ProseBlock]) -> Vec<String> {
         .flat_map(|block| pattern.find_iter(&block.text))
         .map(|hit| hit.as_str().to_owned())
         .collect::<Vec<_>>();
-    (article_matches.len() >= 8)
-        .then_some(article_matches)
-        .unwrap_or_default()
+    if article_matches.len() >= 8 {
+        article_matches
+    } else {
+        Vec::new()
+    }
 }
 
 fn translationese(blocks: &[ProseBlock]) -> Option<RemedyFinding> {

@@ -3,7 +3,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{Args, CommandFactory, Parser, Subcommand, ValueEnum, error::ErrorKind};
 use serde::{Deserialize, Serialize};
 
 use crate::lint::{Finding, LintStats};
@@ -991,7 +991,13 @@ fn execute(cli: Cli) -> Result<ExitCode, Error> {
 }
 
 pub fn run() -> ExitCode {
-    match execute(Cli::parse()) {
+    let cli = Cli::parse();
+    if !cli.version_json && cli.command.is_none() {
+        Cli::command()
+            .error(ErrorKind::MissingSubcommand, "a subcommand is required")
+            .exit();
+    }
+    match execute(cli) {
         Ok(code) => code,
         Err(error) => {
             eprintln!("{error}");
