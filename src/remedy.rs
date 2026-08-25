@@ -282,10 +282,48 @@ fn push_matches(evidence: &mut Vec<String>, text: &str, pattern: &str) {
     );
 }
 
+fn connector_repetition(blocks: &[ProseBlock]) -> Vec<String> {
+    let pattern = regex(r"(?:その)?一方(?:で|、)");
+    let start_pattern = regex(r"^(?:その)?一方(?:で|、)");
+
+    // Oracle route 1: 同一blockに3回以上密集する。
+    for block in blocks {
+        let matches = pattern
+            .find_iter(&block.text)
+            .map(|hit| hit.as_str().to_owned())
+            .collect::<Vec<_>>();
+        if matches.len() >= 3 {
+            return matches;
+        }
+    }
+
+    // Oracle route 2: 隣接する3 blockが同じconnectorで始まる。
+    for window in blocks.windows(3) {
+        let matches = window
+            .iter()
+            .filter_map(|block| start_pattern.find(&block.text))
+            .map(|hit| hit.as_str().to_owned())
+            .collect::<Vec<_>>();
+        if matches.len() == 3 {
+            return matches;
+        }
+    }
+
+    // Oracle route 3: 記事全体で8回以上出現する。
+    let article_matches = blocks
+        .iter()
+        .flat_map(|block| pattern.find_iter(&block.text))
+        .map(|hit| hit.as_str().to_owned())
+        .collect::<Vec<_>>();
+    (article_matches.len() >= 8)
+        .then_some(article_matches)
+        .unwrap_or_default()
+}
+
 fn translationese(blocks: &[ProseBlock]) -> Option<RemedyFinding> {
-    // High-confidence subset of check_translationese.py. Aggregate/repetition rules whose
-    // decision depends on block identity remain deliberately outside this first profile.
-    let mut evidence = Vec::new();
+    // High-confidence subset of check_translationese.py。connector_repetitionはblock identityを
+    // 保った集約を移植済みで、その他の未移植categoryはREADMEに明記する。
+    let mut evidence = connector_repetition(blocks);
     for block in blocks {
         let text = &block.text;
         for pattern in [
@@ -308,7 +346,6 @@ fn translationese(blocks: &[ProseBlock]) -> Option<RemedyFinding> {
         None
     } else {
         evidence.sort();
-        evidence.dedup();
         Some(finding("translationese", "style", &evidence.join("\n")))
     }
 }
@@ -452,12 +489,41 @@ mod tests {
                 .iter()
                 .any(|item| item.rule_id == "translationese")
         );
-        // connector_repetitionのような文書集約categoryは初版では未移植。
+        // connector_repetitionは文書集約categoryとして移植済み。
         assert!(
-            !analyze_html("<p>一方で、Aです。</p><p>一方で、Bです。</p><p>一方で、Cです。</p>")
+            analyze_html("<p>一方で、Aです。</p><p>一方で、Bです。</p><p>一方で、Cです。</p>")
                 .findings
                 .iter()
                 .any(|item| item.rule_id == "translationese")
         );
+    }
+
+    #[test]
+    fn connector_repetition_matches_all_three_oracle_routes() {
+        let dense = extract_blocks("<p>一方でAです。一方でBです。その一方でCです。</p>");
+        assert_eq!(connector_repetition(&dense).len(), 3);
+
+        let adjacent =
+            extract_blocks("<p>一方で、Aです。</p><p>その一方でBです。</p><li>一方、Cです。</li>");
+        assert_eq!(connector_repetition(&adjacent).len(), 3);
+
+        let article = extract_blocks(
+            "<p>一方でAです。一方でBです。</p><p>Cです。</p>\
+             <p>一方でDです。一方でEです。</p><p>Fです。</p>\
+             <p>一方でGです。一方でHです。</p><p>Iです。</p>\
+             <p>一方でJです。一方でKです。</p>",
+        );
+        assert_eq!(connector_repetition(&article).len(), 8);
+    }
+
+    #[test]
+    fn connector_repetition_does_not_expand_below_oracle_thresholds() {
+        let below = extract_blocks(
+            "<p>一方でAです。一方でBです。</p><p>通常です。</p>\
+             <p>一方でCです。一方でDです。</p><p>通常です。</p>\
+             <p>一方でEです。一方でFです。</p><p>通常です。</p>\
+             <p>一方でGです。</p>",
+        );
+        assert!(connector_repetition(&below).is_empty());
     }
 }

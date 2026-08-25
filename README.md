@@ -36,8 +36,9 @@ rule/category/severityと根拠のSHA-256だけを持つ固定schemaです。
 
 初版の`masu-streak`はlegacy checkerのp-only・4文以上という停止判定、`filler`は
 同checkerのcount 8以上かつ2.5/1000字以上を移植しています。`translationese`は単発で
-高確信なcategoryのsubsetです。段落密集・記事全体反復・英語句stack・一般受動態・
-抽象名詞stackなど、block identityや集約を要するcategoryはまだ移植していません。
+高確信なcategoryと、`connector_repetition`の3経路（同一block 3回、隣接3 block先頭、
+記事全体8回）を移植したsubsetです。英語句stack、一般受動態、抽象名詞stackや、
+その他のblock identity・記事集約を要するcategoryはまだ移植していません。
 したがって、このprofileはshadow比較用であり、現行checkerとの完全parityや本番置換を
 主張しません。corpus差分の受入基準を満たして旧checkerを同時に廃止するまでは、
 production gateへ接続しないでください。
