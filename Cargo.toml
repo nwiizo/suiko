@@ -19,6 +19,8 @@ include = [
     "/README.md",
     "/LICENSE",
     "/THIRD_PARTY_NOTICES.md",
+    "/docs/dependency-security.md",
+    "/third_party/**",
 ]
 
 # 再配布crateはworkspaceから除外し、独立した依存としてビルドする。

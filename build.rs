@@ -14,6 +14,8 @@ const DICT_ZIP_SHA256: &str = "b6e835f63440f97474c2da45d80950f73746e632e40bbfc16
 const DICT_ZIP_URL: &str =
     "https://d2ej7fkh96fzlu.cloudfront.net/sudachidict/sudachi-dictionary-20260723-core.zip";
 const DICT_ZIP_ENTRY: &str = "system_core.dic";
+const MAX_DICT_ZIP_BYTES: u64 = 100 * 1024 * 1024;
+const MAX_DICT_BYTES: u64 = 256 * 1024 * 1024;
 
 fn sha256_hex(bytes: &[u8]) -> String {
     let mut output = String::with_capacity(64);
@@ -51,8 +53,12 @@ fn download_dictionary(out_dir: &Path) -> PathBuf {
     let mut zip_bytes = Vec::with_capacity(80 * 1024 * 1024);
     response
         .into_reader()
+        .take(MAX_DICT_ZIP_BYTES + 1)
         .read_to_end(&mut zip_bytes)
         .expect("read dictionary zip");
+    if zip_bytes.len() as u64 > MAX_DICT_ZIP_BYTES {
+        panic!("{DICT_NAME} のzipが許容サイズを超えています");
+    }
     let actual = sha256_hex(&zip_bytes);
     if actual != DICT_ZIP_SHA256 {
         panic!(
@@ -64,11 +70,18 @@ fn download_dictionary(out_dir: &Path) -> PathBuf {
     let mut dictionary = Vec::with_capacity(220 * 1024 * 1024);
     let mut found = false;
     for index in 0..archive.len() {
-        let mut entry = archive.by_index(index).expect("read zip entry");
+        let entry = archive.by_index(index).expect("read zip entry");
         if entry.name().ends_with(DICT_ZIP_ENTRY) {
+            if entry.size() > MAX_DICT_BYTES {
+                panic!("{DICT_ZIP_ENTRY} が許容サイズを超えています");
+            }
             entry
+                .take(MAX_DICT_BYTES + 1)
                 .read_to_end(&mut dictionary)
                 .expect("extract dictionary entry");
+            if dictionary.len() as u64 > MAX_DICT_BYTES {
+                panic!("{DICT_ZIP_ENTRY} が許容サイズを超えています");
+            }
             found = true;
             break;
         }

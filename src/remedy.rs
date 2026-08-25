@@ -11,7 +11,10 @@ use scraper::{ElementRef, Html, Selector};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-pub const MAX_INPUT_BYTES: usize = 5 * 1024 * 1024;
+// Production corpus observation (2026-08-26): <=67 KiB and <=1,928 openers.
+// Keep explicit headroom while rejecting parser-amplification inputs before DOM construction.
+pub const MAX_INPUT_BYTES: usize = 256 * 1024;
+pub const MAX_MARKUP_OPENERS: usize = 4_096;
 pub const REMEDY_VERSION: &str = "0.3.3-remedy.1";
 
 const EXCLUDED_TAGS: &[&str] = &[
@@ -93,6 +96,28 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
     output
 }
 
+fn final_inline_style_value<'a>(style: &'a str, property: &str) -> Option<&'a str> {
+    style
+        .split(';')
+        .filter_map(|declaration| {
+            let (name, value) = declaration.split_once(':')?;
+            let name = name.trim();
+            (!name.starts_with("--") && name.eq_ignore_ascii_case(property)).then(|| value.trim())
+        })
+        .next_back()
+}
+
+fn css_keyword(value: &str) -> &str {
+    let trimmed = value.trim();
+    let suffix = b"!important";
+    let suffix_start = trimmed.len().saturating_sub(suffix.len());
+    if trimmed.as_bytes()[suffix_start..].eq_ignore_ascii_case(suffix) {
+        trimmed[..suffix_start].trim()
+    } else {
+        trimmed
+    }
+}
+
 fn attr_is_hidden(element: &ElementRef<'_>) -> bool {
     let value = element.value();
     value.attr("hidden").is_some()
@@ -100,13 +125,28 @@ fn attr_is_hidden(element: &ElementRef<'_>) -> bool {
             .attr("aria-hidden")
             .is_some_and(|attribute| attribute.eq_ignore_ascii_case("true"))
         || value.attr("style").is_some_and(|style| {
-            let compact = style
-                .chars()
-                .filter(|character| !character.is_whitespace())
-                .collect::<String>()
-                .to_ascii_lowercase();
-            compact.contains("display:none") || compact.contains("visibility:hidden")
+            final_inline_style_value(style, "display")
+                .is_some_and(|display| css_keyword(display).eq_ignore_ascii_case("none"))
+                || final_inline_style_value(style, "visibility").is_some_and(|visibility| {
+                    css_keyword(visibility).eq_ignore_ascii_case("hidden")
+                })
         })
+}
+
+pub fn validate_html_input(html: &str) -> Result<(), &'static str> {
+    let bytes = html.as_bytes();
+    let markup_openers = bytes
+        .windows(2)
+        .filter(|pair| {
+            pair[0] == b'<' && (pair[1].is_ascii_alphabetic() || matches!(pair[1], b'!' | b'?'))
+        })
+        .take(MAX_MARKUP_OPENERS + 1)
+        .count();
+    if markup_openers > MAX_MARKUP_OPENERS {
+        Err("remedy-seo input has too many markup openers")
+    } else {
+        Ok(())
+    }
 }
 
 fn is_swell_rendered_root(element: &ElementRef<'_>) -> bool {
@@ -400,6 +440,34 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn inline_style_uses_declarations_and_last_value_wins() {
+        let blocks = extract_blocks(
+            r#"<div style="--note: display:none; display:none; display:block"><p>表示です。</p></div>
+            <div style="display:block; DISPLAY: none !important"><p>非表示です。</p></div>
+            <div style="visibility:hidden; visibility:visible"><p>表示2です。</p></div>"#,
+        );
+        assert_eq!(
+            blocks
+                .iter()
+                .map(|block| block.text.as_str())
+                .collect::<Vec<_>>(),
+            vec!["表示です。", "表示2です。"]
+        );
+    }
+
+    #[test]
+    fn excessive_markup_is_rejected_before_parsing() {
+        let html = "<div>".repeat(MAX_MARKUP_OPENERS + 1);
+        let started = std::time::Instant::now();
+        assert_eq!(
+            validate_html_input(&html),
+            Err("remedy-seo input has too many markup openers")
+        );
+        assert!(started.elapsed() < std::time::Duration::from_millis(100));
+        assert!(validate_html_input(&"<div>".repeat(MAX_MARKUP_OPENERS)).is_ok());
     }
 
     #[test]

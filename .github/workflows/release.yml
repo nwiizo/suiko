@@ -53,8 +53,11 @@ jobs:
         with:
           path: resources/system.dic
           key: sudachidict-20260723-core-53fa281d11eef376
-      - name: Build
-        run: cargo +1.97 build --release --locked --target ${{ matrix.target }}
+      - name: Build from clean HEAD with embedded identity
+        shell: bash
+        env:
+          RUSTUP_TOOLCHAIN: "1.97"
+        run: scripts/build-remedy-release.sh --target "${{ matrix.target }}"
       - name: Package (unix)
         if: runner.os != 'Windows'
         shell: bash
@@ -65,6 +68,12 @@ jobs:
           mkdir "${NAME}"
           cp "target/${TARGET}/release/suiko" "${NAME}/"
           cp README.md LICENSE THIRD_PARTY_NOTICES.md CHANGELOG.md "${NAME}/"
+          mkdir -p "${NAME}/docs" "${NAME}/licenses/suiko-sudachi" "${NAME}/licenses/sudachidict"
+          cp docs/dependency-security.md "${NAME}/docs/"
+          cp crates/suiko-sudachi/LICENSE "${NAME}/licenses/suiko-sudachi/LICENSE-2.0.txt"
+          cp third_party/sudachidict/LEGAL third_party/sudachidict/LICENSE-2.0.txt \
+            third_party/sudachidict/PROVENANCE.md "${NAME}/licenses/sudachidict/"
+          scripts/verify-release-notices.sh "${NAME}"
           tar czf "${NAME}.tar.gz" "${NAME}"
           if command -v sha256sum >/dev/null 2>&1; then
             sha256sum "${NAME}.tar.gz" > "${NAME}.tar.gz.sha256"
@@ -81,6 +90,11 @@ jobs:
           New-Item -ItemType Directory -Path $name | Out-Null
           Copy-Item "target/$env:TARGET/release/suiko.exe" $name/
           Copy-Item README.md,LICENSE,THIRD_PARTY_NOTICES.md,CHANGELOG.md $name/
+          New-Item -ItemType Directory -Force -Path "$name/docs","$name/licenses/suiko-sudachi","$name/licenses/sudachidict" | Out-Null
+          Copy-Item docs/dependency-security.md "$name/docs/"
+          Copy-Item crates/suiko-sudachi/LICENSE "$name/licenses/suiko-sudachi/LICENSE-2.0.txt"
+          Copy-Item third_party/sudachidict/LEGAL,third_party/sudachidict/LICENSE-2.0.txt,third_party/sudachidict/PROVENANCE.md "$name/licenses/sudachidict/"
+          bash scripts/verify-release-notices.sh $name
           Compress-Archive -Path $name -DestinationPath "$name.zip"
           (Get-FileHash "$name.zip" -Algorithm SHA256).Hash.ToLower() + "  $name.zip" | Set-Content "$name.zip.sha256"
       - name: Upload to release

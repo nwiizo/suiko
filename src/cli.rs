@@ -735,6 +735,8 @@ fn execute_remedy(args: &LintArgs) -> Result<ExitCode, Error> {
     }
     let html = std::str::from_utf8(&bytes)
         .map_err(|_| Error::InvalidArguments("remedy-seo input must be UTF-8".to_owned()))?;
+    remedy::validate_html_input(html)
+        .map_err(|message| Error::InvalidArguments(message.to_owned()))?;
     let output = remedy::analyze_html(html);
     println!("{}", serde_json::to_string(&output)?);
     Ok(if output.findings.is_empty() {

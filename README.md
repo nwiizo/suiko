@@ -34,11 +34,14 @@ build helperはuntracked fileを含むdirty checkoutを拒否し、canonicalなH
 release artifactにはhelperを使います。
 
 `remedy-seo`は上記の完全一致コマンドだけを受け付けます。入力はstdinのUTF-8 HTML
-（最大5MiB）だけで、ファイル、設定、自動検出、ネットワークは使いません。
-HTML5 parserで`p`/`li`の可視本文を抽出し、見出しは構造として扱ってlint本文には含めず、
+（最大256KiB、markup opener最大4,096個）だけで、ファイル、設定、自動検出、ネットワークは使いません。
+HTML5 parserで`p`/`li`の本文候補を抽出し、見出しは構造として扱ってlint本文には含めず、
 表、引用、caption、code、script/style/template/noscript、SVG/MathML、非表示要素、
 SWELLのrender済みCTA/blog-parts rootを除外します。出力は本文・抜粋・path・行番号を含めず、
 rule/category/severityと根拠のSHA-256だけを持つ固定schemaです。
+ここでの非表示判定はHTML属性とinline styleの`display` / `visibility`だけです。
+外部・埋込stylesheetのcomputed CSS、JavaScript実行後のDOM、閉じた`details`などのbrowser layoutは
+解釈しません。呼出側は保存HTMLを入力契約とし、render後の見た目との同一性を仮定しないでください。
 SHA-256化は平文の偶発的なログ流出を抑えるためのredactionであり、機密性を提供しません。
 候補文を辞書攻撃で照合でき、同じ文を実行・文書間でlinkできるため、著作権上安全な保存を
 保証する仕組みとして扱わないでください。出力にも入力本文と同じ保持期限・アクセス制御を
@@ -288,4 +291,4 @@ cargo run --features evaluation --bin suiko-eval -- length-analysis eval/corpus.
 
 ## ライセンス
 
-MIT。第三者由来の資料とフィクスチャに必要な表示は [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) に収録しています。
+MIT。第三者由来の資料とフィクスチャに必要な表示は [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) に収録しています。依存関係の脆弱性・保守状況の確認記録は [docs/dependency-security.md](docs/dependency-security.md) を参照してください。

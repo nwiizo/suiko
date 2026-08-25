@@ -57,9 +57,11 @@ The binary embeds the SudachiDict system dictionary at build time:
 
 SudachiDict's LEGAL notice states that parts of its lexicon and connection
 matrix derive from UniDic (Copyright (c) 2011-2013, The UniDic Consortium),
-distributed under a BSD-style license. The full notices ship inside the
-dictionary distribution zip (`LEGAL`, `LICENSE-2.0.txt`); the dictionary is
-fetched and verified by `build.rs`.
+distributed under a BSD-style license. The official notices extracted from
+the hash-pinned dictionary distribution live under `third_party/sudachidict/`
+in the source tree and ship under `licenses/sudachidict/` in binary releases.
+The redistributed sudachi.rs Apache license ships separately under
+`licenses/suiko-sudachi/`.
 
 ## AI-generated evaluation documents
 

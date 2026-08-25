@@ -155,14 +155,25 @@ fn remedy_contract_rejects_files_and_nonexact_options_as_infra() {
 }
 
 #[test]
-fn remedy_rejects_more_than_five_mib_without_echoing_input() {
-    let oversized = vec![b'x'; 5 * 1024 * 1024 + 1];
+fn remedy_rejects_more_than_input_limit_without_echoing_input() {
+    let oversized = vec![b'x'; 256 * 1024 + 1];
     suiko()
         .args(REMEDY_ARGS)
         .write_stdin(oversized)
         .assert()
         .code(1)
         .stdout("");
+}
+
+#[test]
+fn remedy_rejects_deep_markup_before_html_parsing() {
+    suiko()
+        .args(REMEDY_ARGS)
+        .write_stdin("<div>".repeat(4_097))
+        .assert()
+        .code(1)
+        .stdout("")
+        .stderr(contains("too many markup openers"));
 }
 
 #[test]

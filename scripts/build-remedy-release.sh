@@ -23,4 +23,9 @@ fi
 
 cd "$repo_root"
 export SUIKO_REMEDY_COMMIT="$commit"
-exec cargo build --release "$@"
+cargo build --release --locked "$@"
+
+if [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
+    echo "error: remedy release build changed the checkout" >&2
+    exit 1
+fi
