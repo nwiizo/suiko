@@ -1,0 +1,463 @@
+//! Remedy Media向けの隔離lint profile。
+//!
+//! 通常のSuiko解析とは入力・出力契約を分離し、stdinのHTMLを本文ブロックへ
+//! 正規化して、本文を保存・出力せずに安定したfingerprintだけを返す。
+
+use std::collections::BTreeSet;
+use std::fmt::Write as _;
+
+use regex::Regex;
+use scraper::{ElementRef, Html, Selector};
+use serde::Serialize;
+use sha2::{Digest, Sha256};
+
+pub const MAX_INPUT_BYTES: usize = 5 * 1024 * 1024;
+pub const REMEDY_VERSION: &str = "0.3.3-remedy.1";
+
+const EXCLUDED_TAGS: &[&str] = &[
+    "table",
+    "blockquote",
+    "figcaption",
+    "script",
+    "style",
+    "template",
+    "noscript",
+    "pre",
+    "code",
+    "kbd",
+    "samp",
+    "svg",
+    "math",
+];
+
+const FILLER_PATTERNS: &[&str] = &[
+    r"することが(?:でき|可能)",
+    r"を行うことが(?:でき|可能)",
+    r"(?:確認|検討|比較|分析|準備|提供|判断|選定|整理)を行(?:う|い|った|います|って)",
+    r"を実施(?:する|します|した|して)",
+    r"ということです",
+    r"のような形(?:で|に)",
+    r"することにより",
+    r"というふうに",
+    r"していきます",
+    r"させていただ(?:き|く|いた)",
+    r"ことになり(?:ます|)",
+    r"やすく(?:なり|なる|なっ)",
+    r"合わせて(?:知りたい|確認|ご覧|お読み|見たい)",
+    r"(?:知りたい|気になる|お考えの)方は",
+    r"必要があります",
+    r"ことが(?:大切|重要|肝心|ポイント)(?:です|になり(?:ます|))",
+];
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub struct RemedyFinding {
+    pub rule_id: &'static str,
+    pub category: &'static str,
+    pub severity: &'static str,
+    pub evidence_sha256: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RemedyOutput {
+    pub schema_version: &'static str,
+    pub findings: Vec<RemedyFinding>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ProseBlock {
+    element: &'static str,
+    text: String,
+}
+
+fn valid_commit(commit: &str) -> bool {
+    commit.len() == 40
+        && commit
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+pub fn remedy_commit() -> Result<&'static str, &'static str> {
+    let commit = env!("SUIKO_REMEDY_COMMIT");
+    if !valid_commit(commit) {
+        Err("SUIKO_REMEDY_COMMIT must be exactly 40 lowercase hexadecimal characters")
+    } else {
+        Ok(commit)
+    }
+}
+
+pub fn sha256_hex(bytes: &[u8]) -> String {
+    let mut output = String::with_capacity(64);
+    for byte in Sha256::digest(bytes) {
+        write!(&mut output, "{byte:02x}").expect("write to String");
+    }
+    output
+}
+
+fn attr_is_hidden(element: &ElementRef<'_>) -> bool {
+    let value = element.value();
+    value.attr("hidden").is_some()
+        || value
+            .attr("aria-hidden")
+            .is_some_and(|attribute| attribute.eq_ignore_ascii_case("true"))
+        || value.attr("style").is_some_and(|style| {
+            let compact = style
+                .chars()
+                .filter(|character| !character.is_whitespace())
+                .collect::<String>()
+                .to_ascii_lowercase();
+            compact.contains("display:none") || compact.contains("visibility:hidden")
+        })
+}
+
+fn is_swell_rendered_root(element: &ElementRef<'_>) -> bool {
+    let value = element.value();
+    let class_match = value.classes().any(|class| {
+        matches!(
+            class,
+            "swell-block-button"
+                | "swell-block-fullWide"
+                | "p-blogParts"
+                | "wp-block-buttons"
+                | "wp-block-button"
+                | "remedy-cta"
+                | "cta"
+        )
+    });
+    class_match
+        || value.attr("data-remedy-cta").is_some()
+        || value
+            .attr("data-block")
+            .is_some_and(|kind| kind.eq_ignore_ascii_case("loos/blog-parts"))
+}
+
+fn is_excluded_element(element: &ElementRef<'_>) -> bool {
+    EXCLUDED_TAGS.contains(&element.value().name())
+        || attr_is_hidden(element)
+        || is_swell_rendered_root(element)
+}
+
+fn excluded_by_ancestor(element: &ElementRef<'_>) -> bool {
+    element
+        .ancestors()
+        .filter_map(ElementRef::wrap)
+        .any(|ancestor| is_excluded_element(&ancestor))
+}
+
+fn normalize_whitespace(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn extract_blocks(html: &str) -> Vec<ProseBlock> {
+    let document = Html::parse_fragment(html);
+    let selector = Selector::parse("p, li").expect("static selector");
+    let mut blocks = Vec::new();
+    for element in document.select(&selector) {
+        if excluded_by_ancestor(&element) {
+            continue;
+        }
+        let current_id = element.id();
+        let mut text = String::new();
+        for descendant in element.descendants() {
+            if ElementRef::wrap(descendant).is_some_and(|child| {
+                child.value().name() == "br"
+                    && child
+                        .ancestors()
+                        .filter_map(ElementRef::wrap)
+                        .find(|ancestor| matches!(ancestor.value().name(), "p" | "li"))
+                        .is_some_and(|ancestor| ancestor.id() == current_id)
+            }) {
+                text.push(' ');
+                continue;
+            }
+            let Some(raw) = descendant.value().as_text() else {
+                continue;
+            };
+            let mut blocked = false;
+            let mut nearest_block = None;
+            for ancestor in descendant.ancestors().filter_map(ElementRef::wrap) {
+                if is_excluded_element(&ancestor) {
+                    blocked = true;
+                    break;
+                }
+                if matches!(ancestor.value().name(), "p" | "li") {
+                    nearest_block = Some(ancestor.id());
+                    break;
+                }
+            }
+            if !blocked && nearest_block == Some(current_id) {
+                text.push_str(raw);
+            }
+        }
+        let text = normalize_whitespace(&text);
+        if !text.is_empty() {
+            blocks.push(ProseBlock {
+                element: if element.value().name() == "p" {
+                    "p"
+                } else {
+                    "li"
+                },
+                text,
+            });
+        }
+    }
+    blocks
+}
+
+fn regex(pattern: &str) -> Regex {
+    Regex::new(pattern).expect("static Remedy regex")
+}
+
+fn finding(rule_id: &'static str, category: &'static str, evidence: &str) -> RemedyFinding {
+    RemedyFinding {
+        rule_id,
+        category,
+        severity: "warn",
+        evidence_sha256: sha256_hex(evidence.as_bytes()),
+    }
+}
+
+fn masu_streak(blocks: &[ProseBlock]) -> Option<RemedyFinding> {
+    // Legacy contract: pだけを「。」で分け、ています。を含む「ます。」終止を4連続で検出。
+    let mut run = Vec::new();
+    for block in blocks.iter().filter(|block| block.element == "p") {
+        for part in block.text.split('。') {
+            let sentence = part.trim();
+            if sentence.is_empty() {
+                continue;
+            }
+            if sentence.ends_with("ます") {
+                run.push(format!("{sentence}。"));
+                if run.len() == 4 {
+                    return Some(finding("masu-streak", "style", &run.join("\n")));
+                }
+            } else {
+                run.clear();
+            }
+        }
+    }
+    None
+}
+
+fn filler(blocks: &[ProseBlock]) -> Option<RemedyFinding> {
+    let text = blocks
+        .iter()
+        .map(|block| block.text.as_str())
+        .collect::<String>();
+    let mut hits = Vec::new();
+    for pattern in FILLER_PATTERNS {
+        hits.extend(
+            regex(pattern)
+                .find_iter(&text)
+                .map(|hit| hit.as_str().to_owned()),
+        );
+    }
+    // Python oracleの固定長lookbehind/lookaheadを、線形時間の前後文字判定で再現する。
+    let state = regex(r"(?:状態|環境|構造|領域|状況)(?:です|になり(?:ます|))");
+    hits.extend(state.find_iter(&text).filter_map(|hit| {
+        let previous = text[..hit.start()].chars().next_back();
+        (previous != Some('変')).then(|| hit.as_str().to_owned())
+    }));
+    let emphasis = regex(r"(?:基本的に|しっかりと|しっかり|非常に|きちんと)");
+    hits.extend(emphasis.find_iter(&text).filter_map(|hit| {
+        let next = text[hit.end()..].chars().next();
+        (!(hit.as_str() == "しっかり" && matches!(next, Some('と' | '一'))))
+            .then(|| hit.as_str().to_owned())
+    }));
+    let density = if text.is_empty() {
+        0.0
+    } else {
+        hits.len() as f64 / text.chars().count() as f64 * 1000.0
+    };
+    (hits.len() >= 8 && density >= 2.5).then(|| {
+        hits.sort();
+        finding("filler", "readability", &hits.join("\n"))
+    })
+}
+
+fn push_matches(evidence: &mut Vec<String>, text: &str, pattern: &str) {
+    evidence.extend(
+        regex(pattern)
+            .find_iter(text)
+            .map(|hit| hit.as_str().to_owned()),
+    );
+}
+
+fn translationese(blocks: &[ProseBlock]) -> Option<RemedyFinding> {
+    // High-confidence subset of check_translationese.py. Aggregate/repetition rules whose
+    // decision depends on block identity remain deliberately outside this first profile.
+    let mut evidence = Vec::new();
+    for block in blocks {
+        let text = &block.text;
+        for pattern in [
+            r"ことが可能(?:です|になります|となります)",
+            r"こと(?:可能|重要|必要|有効|大切)(?:です|になります|となります)",
+            r"(?:大切|重要)になります",
+            r"(?:担う|得る|積む|身につける|活かす)ことができ、",
+            r"(?:中|もと|場面)で、(?:同社|当社|[A-Za-z][A-Za-z0-9.&-]{1,30}|[ァ-ヶー]{2,24}|[一-龥々]{2,12})(?:は|が)、",
+            r"(?:評価|確認|実施|推進)される(?:構造|状態|環境|形)になります",
+            r"整(?:った|備された)(?:環境|体制)[^。！？]{0,20}整備され",
+            r"に対して[^。！？]{0,24}(?:重大な|大きな|重要な)?(?:意味|影響|重要性)を持ち(?:ます|つ)",
+            r"という以上の(?:意味|価値|重要性)を持ち(?:ます|つ)",
+            r"(?:責任|役割|権限|担当|経験)の幅を(?:読み取れる|読める|分かる)状態に(?:し|する|でき)",
+            r"(?:判断|意思決定)(?:と|や)(?:実行|施策|行動)を前へ進め",
+        ] {
+            push_matches(&mut evidence, text, pattern);
+        }
+    }
+    if evidence.is_empty() {
+        None
+    } else {
+        evidence.sort();
+        evidence.dedup();
+        Some(finding("translationese", "style", &evidence.join("\n")))
+    }
+}
+
+pub fn analyze_html(html: &str) -> RemedyOutput {
+    let blocks = extract_blocks(html);
+    let mut findings = BTreeSet::new();
+    if let Some(item) = masu_streak(&blocks) {
+        findings.insert(item);
+    }
+    if let Some(item) = filler(&blocks) {
+        findings.insert(item);
+    }
+    if let Some(item) = translationese(&blocks) {
+        findings.insert(item);
+    }
+    RemedyOutput {
+        schema_version: "1",
+        findings: findings.into_iter().collect(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parser_excludes_non_prose_hidden_and_nested_list_duplicates() {
+        let blocks = extract_blocks(
+            r#"<!-- <p>コメントです。</p> --><H2>見出しです。</H2><P>A&amp;B<br>改行です。</P>
+            <table><tbody><tr><td><p>表です。</p></td></tr></tbody></table><div hidden><p>秘密です。</p></div>
+            <div style="DISPLAY: none"><p>不可視です。</p></div><SCRIPT><p>scriptです。</p></SCRIPT>
+            <div class="p-blogParts"><p>CTAです。</p></div>
+            <ul><li>親です。<ul><li>子です。</li></ul></li></ul>"#,
+        );
+        assert_eq!(
+            blocks,
+            vec![
+                ProseBlock {
+                    element: "p",
+                    text: "A&B 改行です。".into()
+                },
+                ProseBlock {
+                    element: "li",
+                    text: "親です。".into()
+                },
+                ProseBlock {
+                    element: "li",
+                    text: "子です。".into()
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn malformed_fragment_and_entities_are_deterministic() {
+        let html = "<p>一つ&amp;二つです。<p>三つです。";
+        assert_eq!(
+            serde_json::to_string(&analyze_html(html)).unwrap(),
+            serde_json::to_string(&analyze_html(html)).unwrap()
+        );
+    }
+
+    #[test]
+    fn legacy_masu_is_p_only_and_includes_teimasu() {
+        let output = analyze_html(
+            "<li>します。します。します。します。</li><p>しています。確認します。進めます。終えます。</p>",
+        );
+        assert_eq!(
+            output
+                .findings
+                .iter()
+                .filter(|item| item.rule_id == "masu-streak")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn finding_schema_is_redacted() {
+        let output =
+            serde_json::to_value(analyze_html("<p>します。します。します。します。</p>")).unwrap();
+        let finding = &output["findings"][0];
+        assert_eq!(finding.as_object().unwrap().len(), 4);
+        assert!(
+            finding["evidence_sha256"]
+                .as_str()
+                .unwrap()
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+        );
+    }
+
+    #[test]
+    fn remedy_commit_contract_rejects_noncanonical_values() {
+        assert!(valid_commit("3651215fee9409afe016de8d8347c442e1b5c88d"));
+        assert!(!valid_commit("3651215FEE9409AFE016DE8D8347C442E1B5C88D"));
+        assert!(!valid_commit("main"));
+        assert!(!valid_commit(""));
+    }
+
+    #[test]
+    fn filler_matches_oracle_lookaround_boundaries_without_backtracking_regex() {
+        let normal = extract_blocks("<p>状態です。しっかり準備します。</p>");
+        let excluded =
+            extract_blocks("<p>変状態です。しっかりと進め、しっかり一歩ずつ行います。</p>");
+        let normal_text = normal
+            .iter()
+            .map(|block| block.text.as_str())
+            .collect::<String>();
+        let excluded_text = excluded
+            .iter()
+            .map(|block| block.text.as_str())
+            .collect::<String>();
+        let count = |text: &str| {
+            let state = regex(r"(?:状態|環境|構造|領域|状況)(?:です|になり(?:ます|))");
+            let states = state
+                .find_iter(text)
+                .filter(|hit| !text[..hit.start()].ends_with('変'))
+                .count();
+            let emphasis = regex(r"(?:基本的に|しっかりと|しっかり|非常に|きちんと)");
+            let emphases = emphasis
+                .find_iter(text)
+                .filter(|hit| {
+                    !(hit.as_str() == "しっかり"
+                        && matches!(text[hit.end()..].chars().next(), Some('と' | '一')))
+                })
+                .count();
+            states + emphases
+        };
+        assert_eq!(count(&normal_text), 2);
+        assert_eq!(count(&excluded_text), 1); // 「しっかりと」だけ。oracleと同じ。
+    }
+
+    #[test]
+    fn translationese_profile_documents_subset_boundary() {
+        // check_translationese.py の単発high-confidence categoryは移植済み。
+        assert!(
+            analyze_html("<p>この確認を行うことが可能です。</p>")
+                .findings
+                .iter()
+                .any(|item| item.rule_id == "translationese")
+        );
+        // connector_repetitionのような文書集約categoryは初版では未移植。
+        assert!(
+            !analyze_html("<p>一方で、Aです。</p><p>一方で、Bです。</p><p>一方で、Cです。</p>")
+                .findings
+                .iter()
+                .any(|item| item.rule_id == "translationese")
+        );
+    }
+}

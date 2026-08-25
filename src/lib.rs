@@ -4,6 +4,7 @@ pub mod evaluation;
 pub mod lint;
 pub mod morphology;
 pub mod outline;
+pub mod remedy;
 pub mod terms;
 mod text;
 

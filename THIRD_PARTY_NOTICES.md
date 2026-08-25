@@ -30,6 +30,11 @@ SOFTWARE.
 Rust dependencies retain their respective licenses. See `Cargo.lock` for the
 exact dependency graph.
 
+The Remedy HTML input adapter uses `scraper` and its standards-based
+`html5ever` parsing stack. These crates are distributed under MIT and/or
+Apache-2.0 terms; exact resolved versions and transitive dependencies are
+recorded in `Cargo.lock`.
+
 ## sudachi.rs and SudachiDict
 
 Morphological analysis uses [sudachi.rs](https://github.com/WorksApplications/sudachi.rs)

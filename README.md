@@ -12,6 +12,36 @@ cargo install suiko
 
 名前は、文章を練り直す日本語の「推敲」から取りました。バイナリ、crate、Agent Skillの名前を `suiko` に統一しています。形態素辞書はバイナリへ埋め込まれるため、実行時に辞書やモデルをダウンロードしません。
 
+## Remedy fork profile
+
+このforkは上流のpackage/CLI version `0.3.3`を維持したまま、Remedy Media向けの
+隔離profile identity `0.3.3-remedy.1`を追加します。通常の`lint`、`outline`、`terms`
+の挙動と出力は上流互換です。fork identityは、ビルド時に
+`SUIKO_REMEDY_COMMIT=<40文字のlowercase git SHA>`を注入したバイナリの
+`suiko --version-json`だけから取得します。値が未設定・短縮SHA・大文字・非hexなら、
+`--version-json`と`remedy-seo` profileはいずれもexit 1でfail closedします。
+
+```sh
+SUIKO_REMEDY_COMMIT="$(git rev-parse HEAD)" cargo build --release
+printf '<p>本文です。</p>' | ./target/release/suiko lint \
+  --profile remedy-seo --input-format html --format json --redact-excerpts -
+```
+
+`remedy-seo`は上記の完全一致コマンドだけを受け付けます。入力はstdinのUTF-8 HTML
+（最大5MiB）だけで、ファイル、設定、自動検出、ネットワークは使いません。
+HTML5 parserで`p`/`li`の可視本文を抽出し、見出しは構造として扱ってlint本文には含めず、
+表、引用、caption、code、script/style/template/noscript、SVG/MathML、非表示要素、
+SWELLのrender済みCTA/blog-parts rootを除外します。出力は本文・抜粋・path・行番号を含めず、
+rule/category/severityと根拠のSHA-256だけを持つ固定schemaです。
+
+初版の`masu-streak`はlegacy checkerのp-only・4文以上という停止判定、`filler`は
+同checkerのcount 8以上かつ2.5/1000字以上を移植しています。`translationese`は単発で
+高確信なcategoryのsubsetです。段落密集・記事全体反復・英語句stack・一般受動態・
+抽象名詞stackなど、block identityや集約を要するcategoryはまだ移植していません。
+したがって、このprofileはshadow比較用であり、現行checkerとの完全parityや本番置換を
+主張しません。corpus差分の受入基準を満たして旧checkerを同時に廃止するまでは、
+production gateへ接続しないでください。
+
 ## 特徴
 
 - `lint`: 禁止語、翻訳調、定型的な対比、リズム、段落構造、語彙、英語統語の疑いを検出

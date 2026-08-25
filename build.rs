@@ -84,6 +84,11 @@ fn download_dictionary(out_dir: &Path) -> PathBuf {
 
 fn main() {
     println!("cargo:rerun-if-env-changed=SUIKO_SUDACHI_DICT");
+    println!("cargo:rerun-if-env-changed=SUIKO_REMEDY_COMMIT");
+    println!(
+        "cargo:rustc-env=SUIKO_REMEDY_COMMIT={}",
+        env::var("SUIKO_REMEDY_COMMIT").unwrap_or_default()
+    );
     println!("cargo:rerun-if-env-changed=DOCS_RS");
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR is set by cargo"));
 

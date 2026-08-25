@@ -32,7 +32,6 @@ evaluation = [
     "dep:encoding_rs",
     "dep:jiff",
     "dep:pdf-extract",
-    "dep:sha2",
     "dep:ureq",
 ]
 
@@ -44,7 +43,8 @@ pdf-extract = { version = "0.12", optional = true }
 regex = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sha2 = { version = "0.11", optional = true }
+scraper = "0.24"
+sha2 = "0.11"
 # WorksApplications/sudachi.rs v0.6.11の非公式再配布(crates/suiko-sudachi)。
 # 上流が公式にcrates.ioへ公開したら sudachi = "..." へ戻す。
 sudachi = { package = "suiko-sudachi", version = "0.6.11", path = "crates/suiko-sudachi" }

@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::lint::{Finding, LintStats};
 use crate::morphology::Morphology;
-use crate::{Error, lint, outline, read_source, terms};
+use crate::{Error, lint, outline, read_source, remedy, terms};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -17,8 +17,11 @@ use crate::{Error, lint, outline, read_source, terms};
     about = "日本語文書を決定的に診断し、自然で明晰な推敲を支援する"
 )]
 struct Cli {
+    /// Remedy forkの機械可読version identityだけを出力する
+    #[arg(long)]
+    version_json: bool,
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -37,6 +40,16 @@ enum Genre {
     Essay,
     Tech,
     Business,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum Profile {
+    RemedySeo,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum InputFormat {
+    Html,
 }
 
 impl Genre {
@@ -77,6 +90,15 @@ struct LintArgs {
     /// lint 対象の Markdown/テキストファイル。複数指定可。- で標準入力
     #[arg(required = true)]
     files: Vec<String>,
+    /// 隔離されたlint profileを選択する
+    #[arg(long, value_enum)]
+    profile: Option<Profile>,
+    /// profile入力の形式
+    #[arg(long, value_enum)]
+    input_format: Option<InputFormat>,
+    /// finding本文を出力せずfingerprintだけを返す
+    #[arg(long)]
+    redact_excerpts: bool,
     /// 機械可読な JSON で出力する
     #[arg(long)]
     json: bool,
@@ -110,6 +132,7 @@ struct LintArgs {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
 enum OutputFormat {
     Github,
+    Json,
     Sarif,
 }
 
@@ -667,9 +690,91 @@ fn validate_inputs(files: &[String]) -> Result<(), Error> {
     Ok(())
 }
 
+#[derive(Serialize)]
+struct RemedyVersionOutput<'a> {
+    name: &'static str,
+    version: &'static str,
+    commit: &'a str,
+}
+
+fn execute_remedy(args: &LintArgs) -> Result<ExitCode, Error> {
+    let exact_contract = args.files == ["-"]
+        && args.profile == Some(Profile::RemedySeo)
+        && args.input_format == Some(InputFormat::Html)
+        && args.format == Some(OutputFormat::Json)
+        && args.redact_excerpts
+        && !args.json
+        && args.genre.is_none()
+        && !args.experimental
+        && args.baseline.is_none()
+        && !args.reading_load
+        && args.fail_on.is_none()
+        && args.config.is_none()
+        && !args.no_config;
+    if !exact_contract {
+        return Err(Error::InvalidArguments(
+            "remedy-seo contract is exactly: lint --profile remedy-seo --input-format html --format json --redact-excerpts -"
+                .to_owned(),
+        ));
+    }
+    remedy::remedy_commit().map_err(|message| Error::InvalidArguments(message.to_owned()))?;
+
+    let mut bytes = Vec::new();
+    std::io::stdin()
+        .take((remedy::MAX_INPUT_BYTES + 1) as u64)
+        .read_to_end(&mut bytes)
+        .map_err(|source| Error::Read {
+            path: "標準入力".to_owned(),
+            source,
+        })?;
+    if bytes.len() > remedy::MAX_INPUT_BYTES {
+        return Err(Error::InvalidArguments(format!(
+            "remedy-seo input exceeds {} bytes",
+            remedy::MAX_INPUT_BYTES
+        )));
+    }
+    let html = std::str::from_utf8(&bytes)
+        .map_err(|_| Error::InvalidArguments("remedy-seo input must be UTF-8".to_owned()))?;
+    let output = remedy::analyze_html(html);
+    println!("{}", serde_json::to_string(&output)?);
+    Ok(if output.findings.is_empty() {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(2)
+    })
+}
+
 fn execute(cli: Cli) -> Result<ExitCode, Error> {
-    match cli.command {
+    if cli.version_json {
+        if cli.command.is_some() {
+            return Err(Error::InvalidArguments(
+                "--version-json must be used alone".to_owned(),
+            ));
+        }
+        let commit = remedy::remedy_commit()
+            .map_err(|message| Error::InvalidArguments(message.to_owned()))?;
+        println!(
+            "{}",
+            serde_json::to_string(&RemedyVersionOutput {
+                name: "suiko-remedy",
+                version: remedy::REMEDY_VERSION,
+                commit,
+            })?
+        );
+        return Ok(ExitCode::SUCCESS);
+    }
+    let command = cli.command.ok_or_else(|| {
+        Error::InvalidArguments("a subcommand is required (lint, outline, terms)".to_owned())
+    })?;
+    match command {
         Command::Lint(args) => {
+            if args.profile.is_some()
+                || args.input_format.is_some()
+                || args.redact_excerpts
+                || args.format == Some(OutputFormat::Json)
+            {
+                return execute_remedy(&args);
+            }
             validate_inputs(&args.files)?;
             let config = load_config(args.config.as_deref(), args.no_config)?;
             let morphology = Morphology::new()?;
