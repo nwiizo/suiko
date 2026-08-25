@@ -156,7 +156,7 @@ fn remedy_release_helper_forces_locked_build_and_checks_afterward() {
     );
     assert_eq!(
         fs::read_to_string(state.join("cargo.args")).unwrap().trim(),
-        "build --release --locked --target test-target"
+        "build --release --locked --bins --target test-target"
     );
     assert_eq!(
         fs::read_to_string(state.join("commit")).unwrap().trim(),
@@ -240,4 +240,12 @@ fn release_notice_verifier_accepts_exact_staging_and_rejects_changes() {
             .status
             .success()
     );
+}
+
+#[test]
+fn release_workflow_packages_both_runtime_binaries() {
+    let workflow = include_str!("../.github/workflows/release.yml");
+    assert!(workflow.contains("target/${TARGET}/release/suiko-remedy"));
+    assert!(workflow.contains("target/$env:TARGET/release/suiko-remedy.exe"));
+    assert!(workflow.contains("scripts/verify-release-notices.sh"));
 }

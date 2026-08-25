@@ -63,6 +63,18 @@ HTML抽出後に`filler`だけを実行し、`masu-streak`と`translationese`は
 filler findingがなければexit 0、1件あれば固定schemaでそのfindingだけを返してexit 2です。
 既存の3カテゴリshadow比較は引き続き`remedy-seo`を使います。
 
+release archiveには通常CLIの`suiko`に加えて、production checker向けの
+`suiko-remedy` binaryを同梱します。専用binaryは`--version-json`と上記2つのexact profileだけを
+受け付け、通常のlint・outline・termsや設定ファイル経路を持ちません。Remedy adapterでpinする
+runtime artifactにはこちらを使います。辞書取得・検証は同じpackage buildで引き続き行いますが、
+未使用のSudachi辞書と通常CLIはrelease link時に専用binaryから除去されます。
+
+```sh
+./target/release/suiko-remedy --version-json
+printf '<p>本文です。</p>' | ./target/release/suiko-remedy lint \
+  --profile remedy-seo-filler --input-format html --format json --redact-excerpts -
+```
+
 ## 特徴
 
 - `lint`: 禁止語、翻訳調、定型的な対比、リズム、段落構造、語彙、英語統語の疑いを検出

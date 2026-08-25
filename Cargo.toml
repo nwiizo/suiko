@@ -70,6 +70,10 @@ name = "suiko-eval"
 path = "src/bin/suiko-eval.rs"
 required-features = ["evaluation"]
 
+[[bin]]
+name = "suiko-remedy"
+path = "src/bin/suiko-remedy.rs"
+
 [[test]]
 name = "evaluation"
 path = "tests/evaluation.rs"

@@ -66,7 +66,7 @@ jobs:
         run: |
           NAME="suiko-${RELEASE_TAG}-${TARGET}"
           mkdir "${NAME}"
-          cp "target/${TARGET}/release/suiko" "${NAME}/"
+          cp "target/${TARGET}/release/suiko" "target/${TARGET}/release/suiko-remedy" "${NAME}/"
           cp README.md LICENSE THIRD_PARTY_NOTICES.md CHANGELOG.md "${NAME}/"
           mkdir -p "${NAME}/docs" "${NAME}/licenses/suiko-sudachi" "${NAME}/licenses/sudachidict"
           cp docs/dependency-security.md "${NAME}/docs/"
@@ -88,7 +88,7 @@ jobs:
         run: |
           $name = "suiko-$env:RELEASE_TAG-$env:TARGET"
           New-Item -ItemType Directory -Path $name | Out-Null
-          Copy-Item "target/$env:TARGET/release/suiko.exe" $name/
+          Copy-Item "target/$env:TARGET/release/suiko.exe","target/$env:TARGET/release/suiko-remedy.exe" $name/
           Copy-Item README.md,LICENSE,THIRD_PARTY_NOTICES.md,CHANGELOG.md $name/
           New-Item -ItemType Directory -Force -Path "$name/docs","$name/licenses/suiko-sudachi","$name/licenses/sudachidict" | Out-Null
           Copy-Item docs/dependency-security.md "$name/docs/"
