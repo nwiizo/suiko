@@ -15,11 +15,11 @@ cargo install suiko
 ## Remedy fork profile
 
 このforkは上流のpackage/CLI version `0.3.3`を維持したまま、Remedy Media向けの
-隔離profile identity `0.3.3-remedy.1`を追加します。通常の`lint`、`outline`、`terms`
+隔離profile identity `0.3.3-remedy.2`を追加します。通常の`lint`、`outline`、`terms`
 の挙動と出力は上流互換です。fork identityは、ビルド時に
 `SUIKO_REMEDY_COMMIT=<40文字のlowercase git SHA>`を注入したバイナリの
 `suiko --version-json`だけから取得します。値が未設定・短縮SHA・大文字・非hexなら、
-`--version-json`と`remedy-seo` profileはいずれもexit 1でfail closedします。
+`--version-json`、`remedy-seo`、`remedy-seo-filler`はいずれもexit 1でfail closedします。
 この値はbuild provenanceの識別子であり、署名や信頼できるattestationではありません。
 review済みsource、clean checkoutからのbuild、配布artifactのdigest検証がtrust anchorです。
 
@@ -27,13 +27,15 @@ review済みsource、clean checkoutからのbuild、配布artifactのdigest検�
 scripts/build-remedy-release.sh
 printf '<p>本文です。</p>' | ./target/release/suiko lint \
   --profile remedy-seo --input-format html --format json --redact-excerpts -
+printf '<p>本文です。</p>' | ./target/release/suiko lint \
+  --profile remedy-seo-filler --input-format html --format json --redact-excerpts -
 ```
 
 build helperはuntracked fileを含むdirty checkoutを拒否し、canonicalなHEAD SHAを
 `SUIKO_REMEDY_COMMIT`へ注入します。手動buildで同じ環境変数を渡すこともできますが、
 release artifactにはhelperを使います。
 
-`remedy-seo`は上記の完全一致コマンドだけを受け付けます。入力はstdinのUTF-8 HTML
+`remedy-seo`と`remedy-seo-filler`は上記の完全一致コマンドだけを受け付けます。入力はstdinのUTF-8 HTML
 （最大256KiB、markup opener最大4,096個）だけで、ファイル、設定、自動検出、ネットワークは使いません。
 HTML5 parserで`p`/`li`の本文候補を抽出し、見出しは構造として扱ってlint本文には含めず、
 表、引用、caption、code、script/style/template/noscript、SVG/MathML、非表示要素、
@@ -55,6 +57,11 @@ SHA-256化は平文の偶発的なログ流出を抑えるためのredactionで�
 したがって、このprofileはshadow比較用であり、現行checkerとの完全parityや本番置換を
 主張しません。corpus差分の受入基準を満たして旧checkerを同時に廃止するまでは、
 production gateへ接続しないでください。
+
+`remedy-seo-filler`はproduction候補をカテゴリ単位で評価する専用profileです。
+HTML抽出後に`filler`だけを実行し、`masu-streak`と`translationese`は解析も出力もしません。
+filler findingがなければexit 0、1件あれば固定schemaでそのfindingだけを返してexit 2です。
+既存の3カテゴリshadow比較は引き続き`remedy-seo`を使います。
 
 ## 特徴
 

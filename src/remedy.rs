@@ -15,7 +15,7 @@ use sha2::{Digest, Sha256};
 // Keep explicit headroom while rejecting parser-amplification inputs before DOM construction.
 pub const MAX_INPUT_BYTES: usize = 256 * 1024;
 pub const MAX_MARKUP_OPENERS: usize = 4_096;
-pub const REMEDY_VERSION: &str = "0.3.3-remedy.1";
+pub const REMEDY_VERSION: &str = "0.3.3-remedy.2";
 
 const EXCLUDED_TAGS: &[&str] = &[
     "table",
@@ -410,6 +410,15 @@ pub fn analyze_html(html: &str) -> RemedyOutput {
     }
 }
 
+pub fn analyze_filler_html(html: &str) -> RemedyOutput {
+    let blocks = extract_blocks(html);
+    let findings = filler(&blocks).into_iter().collect();
+    RemedyOutput {
+        schema_version: "1",
+        findings,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -566,6 +575,19 @@ mod tests {
                 .iter()
                 .any(|item| item.rule_id == "translationese")
         );
+    }
+
+    #[test]
+    fn filler_profile_does_not_run_other_analyzers() {
+        let non_filler = analyze_filler_html(
+            "<p>進めます。確認します。整えます。終えます。</p>\
+             <p>一方で、Aです。</p><p>一方で、Bです。</p><p>一方で、Cです。</p>",
+        );
+        assert!(non_filler.findings.is_empty());
+
+        let filler = analyze_filler_html(&format!("<p>{}</p>", "必要があります。".repeat(8)));
+        assert_eq!(filler.findings.len(), 1);
+        assert_eq!(filler.findings[0].rule_id, "filler");
     }
 
     #[test]

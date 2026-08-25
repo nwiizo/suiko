@@ -15,6 +15,18 @@ const REMEDY_ARGS: &[&str] = &[
     "-",
 ];
 
+const REMEDY_FILLER_ARGS: &[&str] = &[
+    "lint",
+    "--profile",
+    "remedy-seo-filler",
+    "--input-format",
+    "html",
+    "--format",
+    "json",
+    "--redact-excerpts",
+    "-",
+];
+
 fn suiko() -> Command {
     Command::new(assert_cmd::cargo::cargo_bin!("suiko"))
 }
@@ -34,11 +46,42 @@ fn version_json_has_exact_identity_schema() {
         value,
         serde_json::json!({
             "name": "suiko-remedy",
-            "version": "0.3.3-remedy.1",
+            "version": "0.3.3-remedy.2",
             "commit": commit,
         })
     );
     assert_eq!(value.as_object().unwrap().len(), 3);
+}
+
+#[test]
+fn filler_profile_ignores_masu_and_translationese_only_input() {
+    let html = "<p>進めます。確認します。整えます。終えます。</p>\
+                <p>一方で、Aです。</p><p>一方で、Bです。</p><p>一方で、Cです。</p>";
+    suiko()
+        .args(REMEDY_FILLER_ARGS)
+        .write_stdin(html)
+        .assert()
+        .success()
+        .stdout("{\"schema_version\":\"1\",\"findings\":[]}\n");
+}
+
+#[test]
+fn filler_profile_emits_only_filler_and_returns_two() {
+    let output = suiko()
+        .args(REMEDY_FILLER_ARGS)
+        .write_stdin(format!("<p>{}</p>", "必要があります。".repeat(8)))
+        .assert()
+        .code(2)
+        .get_output()
+        .stdout
+        .clone();
+    let value: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(value["schema_version"], "1");
+    assert_eq!(value["findings"].as_array().unwrap().len(), 1);
+    assert_eq!(value["findings"][0]["rule_id"], "filler");
+    assert_eq!(value["findings"][0]["category"], "readability");
+    assert_eq!(value["findings"][0]["severity"], "warn");
+    assert_eq!(value["findings"][0].as_object().unwrap().len(), 4);
 }
 
 #[test]

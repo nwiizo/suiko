@@ -45,6 +45,7 @@ enum Genre {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
 enum Profile {
     RemedySeo,
+    RemedySeoFiller,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
@@ -698,8 +699,10 @@ struct RemedyVersionOutput<'a> {
 }
 
 fn execute_remedy(args: &LintArgs) -> Result<ExitCode, Error> {
+    let profile = args
+        .profile
+        .ok_or_else(|| Error::InvalidArguments("a Remedy profile must be selected".to_owned()))?;
     let exact_contract = args.files == ["-"]
-        && args.profile == Some(Profile::RemedySeo)
         && args.input_format == Some(InputFormat::Html)
         && args.format == Some(OutputFormat::Json)
         && args.redact_excerpts
@@ -713,7 +716,7 @@ fn execute_remedy(args: &LintArgs) -> Result<ExitCode, Error> {
         && !args.no_config;
     if !exact_contract {
         return Err(Error::InvalidArguments(
-            "remedy-seo contract is exactly: lint --profile remedy-seo --input-format html --format json --redact-excerpts -"
+            "Remedy contract is exactly: lint --profile <remedy-seo|remedy-seo-filler> --input-format html --format json --redact-excerpts -"
                 .to_owned(),
         ));
     }
@@ -737,7 +740,10 @@ fn execute_remedy(args: &LintArgs) -> Result<ExitCode, Error> {
         .map_err(|_| Error::InvalidArguments("remedy-seo input must be UTF-8".to_owned()))?;
     remedy::validate_html_input(html)
         .map_err(|message| Error::InvalidArguments(message.to_owned()))?;
-    let output = remedy::analyze_html(html);
+    let output = match profile {
+        Profile::RemedySeo => remedy::analyze_html(html),
+        Profile::RemedySeoFiller => remedy::analyze_filler_html(html),
+    };
     println!("{}", serde_json::to_string(&output)?);
     Ok(if output.findings.is_empty() {
         ExitCode::SUCCESS
