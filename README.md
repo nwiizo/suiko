@@ -77,6 +77,7 @@ filler findingがなければexit 0、1件あれば固定schemaでそのfinding�
 ruleごとに最大2件へ制限してLLM文脈判定へ渡すshadow専用profileです。候補位置、短い
 対象表現、前後の限定文脈だけをJSONへ返し、記事pathや記事IDは返しません。このpacketは
 本文を含むためログやartifactへ保存せず、ローカルのLLM reviewerへstdin/stdoutで渡します。
+対象spanが240文字を超える場合は先頭だけを返し、`target_truncated=true`を明示します。
 本profileも公開可否には接続していません。
 
 release archiveには通常CLIの`suiko`に加えて、production checker向けの

@@ -132,6 +132,7 @@ pub struct LlmPacketContext {
     pub previous: String,
     pub before: String,
     pub target: String,
+    pub target_truncated: bool,
     pub after: String,
     pub following: String,
 }
@@ -467,6 +468,7 @@ fn llm_packet_context(
             }),
         before: last_chars(&block[..start], LLM_PACKET_CONTEXT_CHARS),
         target: first_chars(&block[start..end], LLM_PACKET_TARGET_CHARS),
+        target_truncated: block[start..end].chars().count() > LLM_PACKET_TARGET_CHARS,
         after: first_chars(&block[end..], LLM_PACKET_CONTEXT_CHARS),
         following: blocks.get(index + 1).map_or_else(String::new, |value| {
             first_chars(&value.text, LLM_PACKET_CONTEXT_CHARS)
@@ -860,6 +862,28 @@ mod tests {
         assert!(!valid_commit("3651215FEE9409AFE016DE8D8347C442E1B5C88D"));
         assert!(!valid_commit("main"));
         assert!(!valid_commit(""));
+    }
+
+    #[test]
+    fn llm_packet_marks_a_clipped_target_as_truncated() {
+        let text = "検".repeat(LLM_PACKET_TARGET_CHARS + 1);
+        let blocks = vec![ProseBlock {
+            element: "p",
+            text: text.clone(),
+        }];
+        let finding = AdvisoryFinding {
+            rule: "kanji_run".into(),
+            severity: "info",
+            location: AdvisoryLocation {
+                block: 1,
+                start_byte: 0,
+                end_byte: text.len(),
+            },
+            evidence_sha256: "0".repeat(64),
+        };
+        let context = llm_packet_context(&finding, &blocks).unwrap();
+        assert!(context.target_truncated);
+        assert_eq!(context.target.chars().count(), LLM_PACKET_TARGET_CHARS);
     }
 
     #[test]

@@ -391,6 +391,7 @@ fn llm_packet_is_bounded_deterministic_and_has_no_source_identity() {
             .all(|candidate| {
                 candidate["candidate_id"].as_str().unwrap().len() == 64
                     && candidate["context"]["target"].is_string()
+                    && candidate["context"]["target_truncated"].is_boolean()
             })
     );
 }
