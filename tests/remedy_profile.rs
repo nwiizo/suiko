@@ -1,7 +1,7 @@
 use assert_cmd::Command;
 use predicates::prelude::PredicateBooleanExt;
 use predicates::str::contains;
-use serde_json::Value;
+use serde_json::{Value, json};
 
 const REMEDY_ARGS: &[&str] = &[
     "lint",
@@ -276,7 +276,7 @@ fn advisory_is_exact_allowlisted_redacted_and_nonblocking() {
     assert_eq!(value["profile"], "remedy-seo-advisory");
     assert_eq!(value["source"]["format"], "html");
     assert_eq!(value["source"]["block_count"], 3);
-    assert_eq!(value["rules"].as_array().unwrap().len(), 8);
+    assert_eq!(value["rules"], json!(["redundant_light_verb"]));
     let findings = value["findings"].as_array().unwrap();
     assert!(!findings.is_empty());
     for finding in findings {
@@ -288,6 +288,7 @@ fn advisory_is_exact_allowlisted_redacted_and_nonblocking() {
                 .unwrap()
                 .contains(&finding["rule"])
         );
+        assert_eq!(finding["rule"], "redundant_light_verb");
         assert_ne!(finding["rule"], "translationese");
         assert_ne!(finding["rule"], "sentence_too_long");
     }

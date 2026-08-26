@@ -22,16 +22,7 @@ pub const MAX_MARKUP_OPENERS: usize = 4_096;
 pub const REMEDY_VERSION: &str = "0.3.3-remedy.2";
 
 pub const ADVISORY_PROFILE: &str = "remedy-seo-advisory";
-pub const ADVISORY_RULES: &[&str] = &[
-    "abstract_metaphor",
-    "buried_list",
-    "double_negative",
-    "inanimate_subject_morph",
-    "kanji_run",
-    "no_chain",
-    "no_comma_sentence",
-    "redundant_light_verb",
-];
+pub const ADVISORY_RULES: &[&str] = &["redundant_light_verb"];
 
 const EXCLUDED_TAGS: &[&str] = &[
     "table",
@@ -792,86 +783,57 @@ mod tests {
     }
 
     #[test]
-    fn advisory_allowlist_has_positive_and_negative_examples_for_every_rule() {
+    fn advisory_allowlist_has_a_positive_and_negative_example() {
         let morphology = Morphology::new().expect("initialize morphology");
-        let cases = [
-            (
-                "redundant_light_verb",
-                "結合部分の検証を行います。",
-                "地域の祭りを行います。",
-            ),
-            (
-                "no_comma_sentence",
-                "本文書は昨年度に実施した全社的な業務プロセス改革の結果を踏まえて策定された次年度の重点施策と実行体制を体系的に整理した参考資料です。",
-                "短い文です。",
-            ),
-            (
-                "double_negative",
-                "ないわけではありません。",
-                "必要のないデータは保存しません。",
-            ),
-            (
-                "no_chain",
-                "東京の本社の営業部の担当者が資料を送ります。",
-                "東京本社の営業担当者が資料を送ります。",
-            ),
-            (
-                "kanji_run",
-                "来月から本番環境設定変更手順書を更新します。",
-                "来月から本番環境の設定手順書を更新します。",
-            ),
-            (
-                "buried_list",
-                "顧客管理、売上分析、在庫管理、採用計画について、各部門の担当者が現在の課題を確認したうえで改善を進めます。",
-                "顧客管理など四つの計画について、各部門で改善を進めます。",
-            ),
-            (
-                "inanimate_subject_morph",
-                "この事実が成果をもたらします。",
-                "担当者が成果を報告します。",
-            ),
-            (
-                "abstract_metaphor",
-                "この方針は実装判断の羅針盤になります。",
-                "船の羅針盤を点検します。",
-            ),
-        ];
-        for (rule, positive, negative) in cases {
-            let positive = analyze_advisory_html(&format!("<p>{positive}</p>"), &morphology)
-                .expect("analyze positive");
-            assert!(
-                positive.findings.iter().any(|finding| finding.rule == rule),
-                "positive did not fire {rule}"
-            );
-            let negative = analyze_advisory_html(&format!("<p>{negative}</p>"), &morphology)
-                .expect("analyze negative");
-            assert!(
-                negative.findings.iter().all(|finding| finding.rule != rule),
-                "negative fired {rule}"
-            );
-        }
+        let positive = analyze_advisory_html("<p>結合部分の検証を行います。</p>", &morphology)
+            .expect("analyze positive");
+        assert_eq!(positive.findings.len(), 1);
+        assert_eq!(positive.findings[0].rule, "redundant_light_verb");
+        let negative = analyze_advisory_html("<p>地域の祭りを行います。</p>", &morphology)
+            .expect("analyze negative");
+        assert!(negative.findings.is_empty());
     }
 
     #[test]
-    fn advisory_allowlist_excludes_a_firing_normal_rule() {
+    fn advisory_allowlist_excludes_discovery_rules_that_did_not_advance() {
         let morphology = Morphology::new().expect("initialize morphology");
-        let text = "重要なのは、距離を克服することができる点だと言えるでしょう。";
-        let normal =
-            lint::analyze(text, &morphology, Some("business"), false).expect("analyze normal lint");
-        assert!(
-            normal
-                .findings
-                .iter()
-                .any(|finding| !ADVISORY_RULES.contains(&finding.category.as_str())),
-            "fixture must exercise a non-allowlisted normal rule"
-        );
-        let advisory = analyze_advisory_html(&format!("<p>{text}</p>"), &morphology)
-            .expect("analyze advisory");
-        assert!(
-            advisory
-                .findings
-                .iter()
-                .all(|finding| ADVISORY_RULES.contains(&finding.rule.as_str()))
-        );
+        let cases = [
+            (
+                "no_comma_sentence",
+                "本文書は昨年度に実施した全社的な業務プロセス改革の結果を踏まえて策定された次年度の重点施策と実行体制を体系的に整理した参考資料です。",
+            ),
+            ("double_negative", "ないわけではありません。"),
+            ("no_chain", "東京の本社の営業部の担当者が資料を送ります。"),
+            ("kanji_run", "来月から本番環境設定変更手順書を更新します。"),
+            (
+                "buried_list",
+                "顧客管理、売上分析、在庫管理、採用計画について、各部門の担当者が現在の課題を確認したうえで改善を進めます。",
+            ),
+            ("inanimate_subject_morph", "この事実が成果をもたらします。"),
+            (
+                "abstract_metaphor",
+                "この方針は実装判断の羅針盤になります。",
+            ),
+        ];
+        for (rule, text) in cases {
+            let normal = lint::analyze(text, &morphology, Some("business"), false)
+                .expect("analyze normal lint");
+            let reading = lint::analyze_reading_load(text, &morphology, Some("business"))
+                .expect("analyze reading load");
+            assert!(
+                normal
+                    .findings
+                    .iter()
+                    .chain(&reading.findings)
+                    .any(|finding| finding.category == rule),
+                "fixture must fire excluded rule {rule}"
+            );
+            let advisory = analyze_advisory_html(&format!("<p>{text}</p>"), &morphology)
+                .expect("analyze advisory");
+            assert!(
+                advisory.findings.iter().all(|finding| finding.rule != rule),
+                "excluded rule leaked from advisory: {rule}"
+            );
+        }
     }
 }

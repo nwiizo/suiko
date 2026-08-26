@@ -66,10 +66,12 @@ HTML抽出後に`filler`だけを実行し、`masu-streak`と`translationese`は
 filler findingがなければexit 0、1件あれば固定schemaでそのfindingだけを返してexit 2です。
 既存の3カテゴリshadow比較は引き続き`remedy-seo`を使います。
 
-`remedy-seo-advisory`は一般Suikoから選定したruleをRemedyのSWELL可視本文へ適用する、
-追加併用のPoCです。入力契約は他のRemedy profileと同じで、8つのallowlist ruleだけを
+`remedy-seo-advisory`は一般Suikoの`redundant_light_verb`をRemedyのSWELL可視本文へ
+適用する、追加併用のPoCです。このruleは未使用30記事のblind calibrationで29件が
+修正価値ありと判定されました。入力契約は他のRemedy profileと同じで、findingを
 `info`としてredacted JSONへ返します。findingがあってもexit 0の非blocking診断であり、
-本番gateや公開可否には接続していません。
+本番gateや公開可否には接続していません。他の7 ruleはdiscovery後の精度不足または
+未較正によりallowlistから除外しています。
 
 release archiveには通常CLIの`suiko`に加えて、production checker向けの
 `suiko-remedy` binaryを同梱します。専用binaryは`--version-json`と上記2つのexact profileだけを
