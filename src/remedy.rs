@@ -23,6 +23,20 @@ pub const REMEDY_VERSION: &str = "0.3.3-remedy.2";
 
 pub const ADVISORY_PROFILE: &str = "remedy-seo-advisory";
 pub const ADVISORY_RULES: &[&str] = &["redundant_light_verb"];
+pub const LLM_PACKET_PROFILE: &str = "remedy-seo-llm-packet";
+pub const LLM_PACKET_RULES: &[&str] = &[
+    "abstract_metaphor",
+    "buried_list",
+    "double_negative",
+    "inanimate_subject_morph",
+    "kanji_run",
+    "no_chain",
+    "no_comma_sentence",
+    "redundant_light_verb",
+];
+pub const LLM_PACKET_PER_RULE_LIMIT: usize = 2;
+const LLM_PACKET_CONTEXT_CHARS: usize = 160;
+const LLM_PACKET_TARGET_CHARS: usize = 240;
 
 const EXCLUDED_TAGS: &[&str] = &[
     "table",
@@ -111,6 +125,43 @@ pub struct AdvisoryOutput {
     pub rules: &'static [&'static str],
     pub summary: AdvisorySummary,
     pub findings: Vec<AdvisoryFinding>,
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub struct LlmPacketContext {
+    pub previous: String,
+    pub before: String,
+    pub target: String,
+    pub after: String,
+    pub following: String,
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub struct LlmPacketCandidate {
+    pub candidate_id: String,
+    pub rule: String,
+    pub location: AdvisoryLocation,
+    pub context: LlmPacketContext,
+}
+
+#[derive(Debug, Serialize)]
+pub struct LlmPacketSummary {
+    pub raw_total: usize,
+    pub candidate_total: usize,
+    pub raw_by_rule: BTreeMap<String, usize>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct LlmPacketOutput {
+    pub schema_version: &'static str,
+    pub suiko_version: &'static str,
+    pub commit: &'static str,
+    pub profile: &'static str,
+    pub source: AdvisorySource,
+    pub rules: &'static [&'static str],
+    pub per_rule_limit: usize,
+    pub summary: LlmPacketSummary,
+    pub candidates: Vec<LlmPacketCandidate>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -349,27 +400,25 @@ fn advisory_evidence_hash(
     sha256_hex(&evidence)
 }
 
-/// SWELLの可視本文だけを一般Suikoから選定したruleへ渡す、非blockingのPoC profile。
-pub fn analyze_advisory_html(html: &str, morphology: &Morphology) -> Result<AdvisoryOutput, Error> {
-    let blocks = extract_blocks(html);
-    let visible = blocks
-        .iter()
-        .map(|block| block.text.as_str())
-        .collect::<Vec<_>>()
-        .join("\n");
-    let visible_sha256 = sha256_hex(visible.as_bytes());
-    let normal = lint::analyze(&visible, morphology, Some("business"), false)?;
-    let reading = lint::analyze_reading_load(&visible, morphology, Some("business"))?;
+fn collect_advisory_findings(
+    visible: &str,
+    visible_sha256: &str,
+    blocks: &[ProseBlock],
+    morphology: &Morphology,
+    rules: &[&str],
+) -> Result<Vec<AdvisoryFinding>, Error> {
+    let normal = lint::analyze(visible, morphology, Some("business"), false)?;
+    let reading = lint::analyze_reading_load(visible, morphology, Some("business"))?;
     let mut findings = normal
         .findings
         .into_iter()
         .chain(reading.findings)
-        .filter(|finding| ADVISORY_RULES.contains(&finding.category.as_str()))
+        .filter(|finding| rules.contains(&finding.category.as_str()))
         .filter_map(|finding| {
-            let (location, preimage) = advisory_span(&finding, &blocks)?;
+            let (location, preimage) = advisory_span(&finding, blocks)?;
             Some(AdvisoryFinding {
                 evidence_sha256: advisory_evidence_hash(
-                    &visible_sha256,
+                    visible_sha256,
                     &finding.category,
                     &location,
                     &preimage,
@@ -382,6 +431,65 @@ pub fn analyze_advisory_html(html: &str, morphology: &Morphology) -> Result<Advi
         .collect::<Vec<_>>();
     findings.sort();
     findings.dedup();
+    Ok(findings)
+}
+
+fn first_chars(text: &str, limit: usize) -> String {
+    text.chars().take(limit).collect()
+}
+
+fn last_chars(text: &str, limit: usize) -> String {
+    let mut chars = text.chars().rev().take(limit).collect::<Vec<_>>();
+    chars.reverse();
+    chars.into_iter().collect()
+}
+
+fn llm_packet_context(
+    finding: &AdvisoryFinding,
+    blocks: &[ProseBlock],
+) -> Option<LlmPacketContext> {
+    let index = finding.location.block.checked_sub(1)?;
+    let block = blocks.get(index)?.text.as_str();
+    let start = finding.location.start_byte;
+    let end = finding.location.end_byte;
+    if start >= end
+        || end > block.len()
+        || !block.is_char_boundary(start)
+        || !block.is_char_boundary(end)
+    {
+        return None;
+    }
+    Some(LlmPacketContext {
+        previous: blocks
+            .get(index.wrapping_sub(1))
+            .map_or_else(String::new, |value| {
+                last_chars(&value.text, LLM_PACKET_CONTEXT_CHARS)
+            }),
+        before: last_chars(&block[..start], LLM_PACKET_CONTEXT_CHARS),
+        target: first_chars(&block[start..end], LLM_PACKET_TARGET_CHARS),
+        after: first_chars(&block[end..], LLM_PACKET_CONTEXT_CHARS),
+        following: blocks.get(index + 1).map_or_else(String::new, |value| {
+            first_chars(&value.text, LLM_PACKET_CONTEXT_CHARS)
+        }),
+    })
+}
+
+/// SWELLの可視本文だけを一般Suikoから選定したruleへ渡す、非blockingのPoC profile。
+pub fn analyze_advisory_html(html: &str, morphology: &Morphology) -> Result<AdvisoryOutput, Error> {
+    let blocks = extract_blocks(html);
+    let visible = blocks
+        .iter()
+        .map(|block| block.text.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let visible_sha256 = sha256_hex(visible.as_bytes());
+    let findings = collect_advisory_findings(
+        &visible,
+        &visible_sha256,
+        &blocks,
+        morphology,
+        ADVISORY_RULES,
+    )?;
 
     let mut by_rule = BTreeMap::new();
     for finding in &findings {
@@ -403,6 +511,71 @@ pub fn analyze_advisory_html(html: &str, morphology: &Morphology) -> Result<Advi
             by_rule,
         },
         findings,
+    })
+}
+
+/// 一般Suikoの広い候補を、LLM文脈判定用の上限付きpacketへ変換するshadow profile。
+pub fn analyze_llm_packet_html(
+    html: &str,
+    morphology: &Morphology,
+) -> Result<LlmPacketOutput, Error> {
+    let blocks = extract_blocks(html);
+    let visible = blocks
+        .iter()
+        .map(|block| block.text.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let visible_sha256 = sha256_hex(visible.as_bytes());
+    let findings = collect_advisory_findings(
+        &visible,
+        &visible_sha256,
+        &blocks,
+        morphology,
+        LLM_PACKET_RULES,
+    )?;
+    let mut raw_by_rule = BTreeMap::new();
+    for finding in &findings {
+        *raw_by_rule.entry(finding.rule.clone()).or_default() += 1;
+    }
+    let mut selected_by_rule = BTreeMap::<String, usize>::new();
+    let candidates = findings
+        .iter()
+        .filter(|finding| {
+            let count = selected_by_rule.entry(finding.rule.clone()).or_default();
+            if *count >= LLM_PACKET_PER_RULE_LIMIT {
+                false
+            } else {
+                *count += 1;
+                true
+            }
+        })
+        .filter_map(|finding| {
+            Some(LlmPacketCandidate {
+                candidate_id: finding.evidence_sha256.clone(),
+                rule: finding.rule.clone(),
+                location: finding.location.clone(),
+                context: llm_packet_context(finding, &blocks)?,
+            })
+        })
+        .collect::<Vec<_>>();
+    Ok(LlmPacketOutput {
+        schema_version: "1",
+        suiko_version: env!("CARGO_PKG_VERSION"),
+        commit: remedy_commit().map_err(|message| Error::InvalidArguments(message.to_owned()))?,
+        profile: LLM_PACKET_PROFILE,
+        source: AdvisorySource {
+            format: "html",
+            visible_sha256,
+            block_count: blocks.len(),
+        },
+        rules: LLM_PACKET_RULES,
+        per_rule_limit: LLM_PACKET_PER_RULE_LIMIT,
+        summary: LlmPacketSummary {
+            raw_total: findings.len(),
+            candidate_total: candidates.len(),
+            raw_by_rule,
+        },
+        candidates,
     })
 }
 
@@ -835,5 +1008,47 @@ mod tests {
                 "excluded rule leaked from advisory: {rule}"
             );
         }
+    }
+
+    #[test]
+    fn llm_packet_includes_broad_rules_with_bounded_context_and_per_rule_cap() {
+        let morphology = Morphology::new().expect("initialize morphology");
+        let html = "<p>結合部分の検証を行います。追加の確認を行います。最終確認を行います。</p>\
+            <p>本文書は昨年度に実施した全社的な業務プロセス改革の結果を踏まえて策定された次年度の重点施策と実行体制を体系的に整理した参考資料です。</p>\
+            <p>ないわけではありません。</p>\
+            <p>東京の本社の営業部の担当者が資料を送ります。</p>\
+            <p>来月から本番環境設定変更手順書を更新します。</p>\
+            <p>顧客管理、売上分析、在庫管理、採用計画について、各部門の担当者が現在の課題を確認したうえで改善を進めます。</p>\
+            <p>この事実が成果をもたらします。</p>\
+            <p>この方針は実装判断の羅針盤になります。</p>";
+        let packet = analyze_llm_packet_html(html, &morphology).expect("analyze LLM packet");
+        assert_eq!(packet.profile, LLM_PACKET_PROFILE);
+        assert_eq!(packet.rules, LLM_PACKET_RULES);
+        assert_eq!(packet.summary.candidate_total, packet.candidates.len());
+        assert!(packet.summary.raw_total >= packet.summary.candidate_total);
+        for rule in LLM_PACKET_RULES {
+            assert!(
+                packet
+                    .candidates
+                    .iter()
+                    .any(|candidate| candidate.rule == *rule),
+                "packet did not include {rule}"
+            );
+            assert!(
+                packet
+                    .candidates
+                    .iter()
+                    .filter(|candidate| candidate.rule == *rule)
+                    .count()
+                    <= LLM_PACKET_PER_RULE_LIMIT
+            );
+        }
+        assert!(packet.candidates.iter().all(|candidate| {
+            candidate.context.previous.chars().count() <= LLM_PACKET_CONTEXT_CHARS
+                && candidate.context.before.chars().count() <= LLM_PACKET_CONTEXT_CHARS
+                && candidate.context.target.chars().count() <= LLM_PACKET_TARGET_CHARS
+                && candidate.context.after.chars().count() <= LLM_PACKET_CONTEXT_CHARS
+                && candidate.context.following.chars().count() <= LLM_PACKET_CONTEXT_CHARS
+        }));
     }
 }

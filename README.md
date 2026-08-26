@@ -73,6 +73,12 @@ filler findingがなければexit 0、1件あれば固定schemaでそのfinding�
 本番gateや公開可否には接続していません。他の7 ruleはdiscovery後の精度不足または
 未較正によりallowlistから除外しています。
 
+`remedy-seo-llm-packet`は、上記で直接表示しない7 ruleを含む8 ruleの候補を、
+ruleごとに最大2件へ制限してLLM文脈判定へ渡すshadow専用profileです。候補位置、短い
+対象表現、前後の限定文脈だけをJSONへ返し、記事pathや記事IDは返しません。このpacketは
+本文を含むためログやartifactへ保存せず、ローカルのLLM reviewerへstdin/stdoutで渡します。
+本profileも公開可否には接続していません。
+
 release archiveには通常CLIの`suiko`に加えて、production checker向けの
 `suiko-remedy` binaryを同梱します。専用binaryは`--version-json`と上記2つのexact profileだけを
 受け付け、通常のlint・outline・termsや設定ファイル経路を持ちません。Remedy adapterでpinする

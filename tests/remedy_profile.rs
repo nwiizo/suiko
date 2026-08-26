@@ -39,6 +39,18 @@ const REMEDY_ADVISORY_ARGS: &[&str] = &[
     "-",
 ];
 
+const REMEDY_LLM_PACKET_ARGS: &[&str] = &[
+    "lint",
+    "--profile",
+    "remedy-seo-llm-packet",
+    "--input-format",
+    "html",
+    "--format",
+    "json",
+    "--redact-excerpts",
+    "-",
+];
+
 fn suiko() -> Command {
     Command::new(assert_cmd::cargo::cargo_bin!("suiko"))
 }
@@ -343,6 +355,43 @@ fn advisory_output_is_byte_identical_and_evidence_is_document_bound() {
     assert_ne!(
         first["findings"][0]["evidence_sha256"],
         other["findings"][0]["evidence_sha256"]
+    );
+}
+
+#[test]
+fn llm_packet_is_bounded_deterministic_and_has_no_source_identity() {
+    let html = "<p>東京の本社の営業部の担当者が、結合部分の検証を行います。</p>";
+    let run = || {
+        suiko()
+            .args(REMEDY_LLM_PACKET_ARGS)
+            .write_stdin(html)
+            .output()
+            .unwrap()
+    };
+    let first = run();
+    let second = run();
+    assert!(first.status.success());
+    assert_eq!(first.stdout, second.stdout);
+    let rendered = String::from_utf8(first.stdout.clone()).unwrap();
+    assert!(!rendered.contains("05_final.html"));
+    assert!(!rendered.contains("article_id"));
+    let value: Value = serde_json::from_slice(&first.stdout).unwrap();
+    assert_eq!(value["profile"], "remedy-seo-llm-packet");
+    assert_eq!(value["per_rule_limit"], 2);
+    assert!(value["summary"]["candidate_total"].as_u64().unwrap() <= 16);
+    assert_eq!(
+        value["summary"]["candidate_total"].as_u64().unwrap() as usize,
+        value["candidates"].as_array().unwrap().len()
+    );
+    assert!(
+        value["candidates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|candidate| {
+                candidate["candidate_id"].as_str().unwrap().len() == 64
+                    && candidate["context"]["target"].is_string()
+            })
     );
 }
 

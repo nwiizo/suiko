@@ -48,6 +48,8 @@ enum Profile {
     Seo,
     #[value(name = "remedy-seo-advisory")]
     SeoAdvisory,
+    #[value(name = "remedy-seo-llm-packet")]
+    SeoLlmPacket,
     #[value(name = "remedy-seo-filler")]
     SeoFiller,
 }
@@ -720,7 +722,7 @@ fn execute_remedy(args: &LintArgs) -> Result<ExitCode, Error> {
         && !args.no_config;
     if !exact_contract {
         return Err(Error::InvalidArguments(
-            "Remedy contract is exactly: lint --profile <remedy-seo|remedy-seo-advisory|remedy-seo-filler> --input-format html --format json --redact-excerpts -"
+            "Remedy contract is exactly: lint --profile <remedy-seo|remedy-seo-advisory|remedy-seo-llm-packet|remedy-seo-filler> --input-format html --format json --redact-excerpts -"
                 .to_owned(),
         ));
     }
@@ -757,6 +759,12 @@ fn execute_remedy(args: &LintArgs) -> Result<ExitCode, Error> {
         Profile::SeoAdvisory => {
             let morphology = Morphology::new()?;
             let output = remedy::analyze_advisory_html(html, &morphology)?;
+            println!("{}", serde_json::to_string(&output)?);
+            Ok(ExitCode::SUCCESS)
+        }
+        Profile::SeoLlmPacket => {
+            let morphology = Morphology::new()?;
+            let output = remedy::analyze_llm_packet_html(html, &morphology)?;
             println!("{}", serde_json::to_string(&output)?);
             Ok(ExitCode::SUCCESS)
         }
