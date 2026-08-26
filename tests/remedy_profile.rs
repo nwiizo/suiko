@@ -27,6 +27,18 @@ const REMEDY_FILLER_ARGS: &[&str] = &[
     "-",
 ];
 
+const REMEDY_ADVISORY_ARGS: &[&str] = &[
+    "lint",
+    "--profile",
+    "remedy-seo-advisory",
+    "--input-format",
+    "html",
+    "--format",
+    "json",
+    "--redact-excerpts",
+    "-",
+];
+
 fn suiko() -> Command {
     Command::new(assert_cmd::cargo::cargo_bin!("suiko"))
 }
@@ -234,4 +246,137 @@ fn ordinary_no_arg_cli_keeps_clap_usage_and_exit_two() {
         .assert()
         .code(2)
         .stderr(contains("Usage:").and(contains("a subcommand is required")));
+}
+
+#[test]
+fn advisory_is_exact_allowlisted_redacted_and_nonblocking() {
+    let secret = "機密顧客名アルファ";
+    let html = format!(
+        "<p>{secret}の結合部分の検証を行います。</p>\
+         <p>この方針は実装判断の羅針盤になります。</p>\
+         <p>重要なのは距離を克服することができる点だと言えるでしょう。</p>"
+    );
+    let output = suiko()
+        .args(REMEDY_ADVISORY_ARGS)
+        .write_stdin(html)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let rendered = String::from_utf8(output.clone()).unwrap();
+    assert!(!rendered.contains(secret));
+    assert!(!rendered.contains("検証を行います"));
+    assert!(!rendered.contains("羅針盤"));
+    assert!(!rendered.contains("克服"));
+    let value: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(value["schema_version"], "1");
+    assert_eq!(value["suiko_version"], "0.3.3");
+    assert_eq!(value["commit"], env!("SUIKO_REMEDY_COMMIT"));
+    assert_eq!(value["profile"], "remedy-seo-advisory");
+    assert_eq!(value["source"]["format"], "html");
+    assert_eq!(value["source"]["block_count"], 3);
+    assert_eq!(value["rules"].as_array().unwrap().len(), 8);
+    let findings = value["findings"].as_array().unwrap();
+    assert!(!findings.is_empty());
+    for finding in findings {
+        assert_eq!(finding["severity"], "info");
+        assert_eq!(finding.as_object().unwrap().len(), 4);
+        assert!(
+            value["rules"]
+                .as_array()
+                .unwrap()
+                .contains(&finding["rule"])
+        );
+        assert_ne!(finding["rule"], "translationese");
+        assert_ne!(finding["rule"], "sentence_too_long");
+    }
+}
+
+#[test]
+fn advisory_visible_extraction_handles_entities_breaks_malformed_and_nested_lists() {
+    let html = "<!-- <p>コメント</p> --><p>A&amp;B<br>短い文です。<p>壊れた段落\
+        <table><tbody><tr><td><p>表の秘密</p></td></tr></tbody></table><div hidden><p>隠した秘密</p></div>\
+        <div class='p-blogParts'><p>CTAの秘密</p></div>\
+        <ul><li>親項目<ul><li>子項目</li></ul></li></ul>";
+    let output = suiko()
+        .args(REMEDY_ADVISORY_ARGS)
+        .write_stdin(html)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let rendered = String::from_utf8(output.clone()).unwrap();
+    for secret in ["コメント", "表の秘密", "隠した秘密", "CTAの秘密"] {
+        assert!(!rendered.contains(secret));
+    }
+    let value: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(value["source"]["block_count"], 4);
+    let expected_visible = "A&B 短い文です。\n壊れた段落\n親項目\n子項目";
+    assert_eq!(
+        value["source"]["visible_sha256"],
+        suiko::remedy::sha256_hex(expected_visible.as_bytes())
+    );
+}
+
+#[test]
+fn advisory_output_is_byte_identical_and_evidence_is_document_bound() {
+    let html = "<p>結合部分の検証を行います。</p>";
+    let run = |input: &str| {
+        suiko()
+            .args(REMEDY_ADVISORY_ARGS)
+            .write_stdin(input)
+            .output()
+            .unwrap()
+    };
+    let first = run(html);
+    let second = run(html);
+    assert!(first.status.success());
+    assert_eq!(first.stdout, second.stdout);
+    assert_eq!(first.stderr, second.stderr);
+
+    let other = run("<p>前置きです。</p><p>結合部分の検証を行います。</p>");
+    let first: Value = serde_json::from_slice(&first.stdout).unwrap();
+    let other: Value = serde_json::from_slice(&other.stdout).unwrap();
+    assert_ne!(
+        first["findings"][0]["evidence_sha256"],
+        other["findings"][0]["evidence_sha256"]
+    );
+}
+
+#[test]
+fn advisory_contract_and_invalid_input_fail_as_infrastructure() {
+    suiko()
+        .args([
+            "lint",
+            "--profile",
+            "remedy-seo-advisory",
+            "--input-format",
+            "html",
+            "--format",
+            "json",
+            "--redact-excerpts",
+            "README.md",
+        ])
+        .assert()
+        .code(1);
+    suiko()
+        .args(REMEDY_ADVISORY_ARGS)
+        .write_stdin([0xff, 0xfe])
+        .assert()
+        .code(1)
+        .stdout("");
+    suiko()
+        .args(REMEDY_ADVISORY_ARGS)
+        .write_stdin(vec![b'x'; 256 * 1024 + 1])
+        .assert()
+        .code(1)
+        .stdout("");
+    suiko()
+        .args(REMEDY_ADVISORY_ARGS)
+        .write_stdin("<div>".repeat(4_097))
+        .assert()
+        .code(1)
+        .stdout("");
 }

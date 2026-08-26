@@ -3,7 +3,7 @@
 //! 通常のSuiko解析とは入力・出力契約を分離し、stdinのHTMLを本文ブロックへ
 //! 正規化して、本文を保存・出力せずに安定したfingerprintだけを返す。
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
 use regex::Regex;
@@ -11,11 +11,27 @@ use scraper::{ElementRef, Html, Selector};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
+use crate::Error;
+use crate::lint::{self, Finding, Span};
+use crate::morphology::Morphology;
+
 // Production corpus observation (2026-08-26): <=67 KiB and <=1,928 openers.
 // Keep explicit headroom while rejecting parser-amplification inputs before DOM construction.
 pub const MAX_INPUT_BYTES: usize = 256 * 1024;
 pub const MAX_MARKUP_OPENERS: usize = 4_096;
 pub const REMEDY_VERSION: &str = "0.3.3-remedy.2";
+
+pub const ADVISORY_PROFILE: &str = "remedy-seo-advisory";
+pub const ADVISORY_RULES: &[&str] = &[
+    "abstract_metaphor",
+    "buried_list",
+    "double_negative",
+    "inanimate_subject_morph",
+    "kanji_run",
+    "no_chain",
+    "no_comma_sentence",
+    "redundant_light_verb",
+];
 
 const EXCLUDED_TAGS: &[&str] = &[
     "table",
@@ -64,6 +80,46 @@ pub struct RemedyFinding {
 pub struct RemedyOutput {
     pub schema_version: &'static str,
     pub findings: Vec<RemedyFinding>,
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub struct AdvisoryLocation {
+    pub block: usize,
+    pub start_byte: usize,
+    pub end_byte: usize,
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub struct AdvisoryFinding {
+    pub rule: String,
+    pub severity: &'static str,
+    pub location: AdvisoryLocation,
+    pub evidence_sha256: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AdvisorySource {
+    pub format: &'static str,
+    pub visible_sha256: String,
+    pub block_count: usize,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AdvisorySummary {
+    pub total: usize,
+    pub by_rule: BTreeMap<String, usize>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AdvisoryOutput {
+    pub schema_version: &'static str,
+    pub suiko_version: &'static str,
+    pub commit: &'static str,
+    pub profile: &'static str,
+    pub source: AdvisorySource,
+    pub rules: &'static [&'static str],
+    pub summary: AdvisorySummary,
+    pub findings: Vec<AdvisoryFinding>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -241,6 +297,122 @@ fn extract_blocks(html: &str) -> Vec<ProseBlock> {
         }
     }
     blocks
+}
+
+fn advisory_span(finding: &Finding, blocks: &[ProseBlock]) -> Option<(AdvisoryLocation, String)> {
+    let block = finding.span.map_or(finding.line, |span| span.start_line);
+    let text = blocks.get(block.checked_sub(1)?)?.text.as_str();
+    let (start_byte, end_byte) = match finding.span {
+        Some(Span {
+            start_line,
+            end_line,
+            start_byte,
+            end_byte,
+            ..
+        }) if start_line == block
+            && end_line == block
+            && start_byte < end_byte
+            && end_byte <= text.len()
+            && text.is_char_boundary(start_byte)
+            && text.is_char_boundary(end_byte) =>
+        {
+            (start_byte, end_byte)
+        }
+        _ => {
+            let excerpt = finding.excerpt.as_str();
+            if excerpt.is_empty() {
+                (0, text.len())
+            } else if let Some(start) = text.find(excerpt) {
+                (start, start + excerpt.len())
+            } else {
+                (0, text.len())
+            }
+        }
+    };
+    Some((
+        AdvisoryLocation {
+            block,
+            start_byte,
+            end_byte,
+        },
+        text[start_byte..end_byte].to_owned(),
+    ))
+}
+
+fn advisory_evidence_hash(
+    visible_sha256: &str,
+    rule: &str,
+    location: &AdvisoryLocation,
+    preimage: &str,
+) -> String {
+    let domain = "suiko-remedy-advisory-evidence-v1";
+    let span = format!(
+        "{}:{}:{}",
+        location.block, location.start_byte, location.end_byte
+    );
+    let mut evidence = Vec::new();
+    for part in [domain, visible_sha256, rule, span.as_str(), preimage] {
+        evidence.extend_from_slice(part.as_bytes());
+        evidence.push(0);
+    }
+    sha256_hex(&evidence)
+}
+
+/// SWELLの可視本文だけを一般Suikoから選定したruleへ渡す、非blockingのPoC profile。
+pub fn analyze_advisory_html(html: &str, morphology: &Morphology) -> Result<AdvisoryOutput, Error> {
+    let blocks = extract_blocks(html);
+    let visible = blocks
+        .iter()
+        .map(|block| block.text.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let visible_sha256 = sha256_hex(visible.as_bytes());
+    let normal = lint::analyze(&visible, morphology, Some("business"), false)?;
+    let reading = lint::analyze_reading_load(&visible, morphology, Some("business"))?;
+    let mut findings = normal
+        .findings
+        .into_iter()
+        .chain(reading.findings)
+        .filter(|finding| ADVISORY_RULES.contains(&finding.category.as_str()))
+        .filter_map(|finding| {
+            let (location, preimage) = advisory_span(&finding, &blocks)?;
+            Some(AdvisoryFinding {
+                evidence_sha256: advisory_evidence_hash(
+                    &visible_sha256,
+                    &finding.category,
+                    &location,
+                    &preimage,
+                ),
+                rule: finding.category,
+                severity: "info",
+                location,
+            })
+        })
+        .collect::<Vec<_>>();
+    findings.sort();
+    findings.dedup();
+
+    let mut by_rule = BTreeMap::new();
+    for finding in &findings {
+        *by_rule.entry(finding.rule.clone()).or_default() += 1;
+    }
+    Ok(AdvisoryOutput {
+        schema_version: "1",
+        suiko_version: env!("CARGO_PKG_VERSION"),
+        commit: remedy_commit().map_err(|message| Error::InvalidArguments(message.to_owned()))?,
+        profile: ADVISORY_PROFILE,
+        source: AdvisorySource {
+            format: "html",
+            visible_sha256,
+            block_count: blocks.len(),
+        },
+        rules: ADVISORY_RULES,
+        summary: AdvisorySummary {
+            total: findings.len(),
+            by_rule,
+        },
+        findings,
+    })
 }
 
 fn regex(pattern: &str) -> Regex {
@@ -617,5 +789,89 @@ mod tests {
              <p>一方でGです。</p>",
         );
         assert!(connector_repetition(&below).is_empty());
+    }
+
+    #[test]
+    fn advisory_allowlist_has_positive_and_negative_examples_for_every_rule() {
+        let morphology = Morphology::new().expect("initialize morphology");
+        let cases = [
+            (
+                "redundant_light_verb",
+                "結合部分の検証を行います。",
+                "地域の祭りを行います。",
+            ),
+            (
+                "no_comma_sentence",
+                "本文書は昨年度に実施した全社的な業務プロセス改革の結果を踏まえて策定された次年度の重点施策と実行体制を体系的に整理した参考資料です。",
+                "短い文です。",
+            ),
+            (
+                "double_negative",
+                "ないわけではありません。",
+                "必要のないデータは保存しません。",
+            ),
+            (
+                "no_chain",
+                "東京の本社の営業部の担当者が資料を送ります。",
+                "東京本社の営業担当者が資料を送ります。",
+            ),
+            (
+                "kanji_run",
+                "来月から本番環境設定変更手順書を更新します。",
+                "来月から本番環境の設定手順書を更新します。",
+            ),
+            (
+                "buried_list",
+                "顧客管理、売上分析、在庫管理、採用計画について、各部門の担当者が現在の課題を確認したうえで改善を進めます。",
+                "顧客管理など四つの計画について、各部門で改善を進めます。",
+            ),
+            (
+                "inanimate_subject_morph",
+                "この事実が成果をもたらします。",
+                "担当者が成果を報告します。",
+            ),
+            (
+                "abstract_metaphor",
+                "この方針は実装判断の羅針盤になります。",
+                "船の羅針盤を点検します。",
+            ),
+        ];
+        for (rule, positive, negative) in cases {
+            let positive = analyze_advisory_html(&format!("<p>{positive}</p>"), &morphology)
+                .expect("analyze positive");
+            assert!(
+                positive.findings.iter().any(|finding| finding.rule == rule),
+                "positive did not fire {rule}"
+            );
+            let negative = analyze_advisory_html(&format!("<p>{negative}</p>"), &morphology)
+                .expect("analyze negative");
+            assert!(
+                negative.findings.iter().all(|finding| finding.rule != rule),
+                "negative fired {rule}"
+            );
+        }
+    }
+
+    #[test]
+    fn advisory_allowlist_excludes_a_firing_normal_rule() {
+        let morphology = Morphology::new().expect("initialize morphology");
+        let text = "重要なのは、距離を克服することができる点だと言えるでしょう。";
+        let normal =
+            lint::analyze(text, &morphology, Some("business"), false).expect("analyze normal lint");
+        assert!(
+            normal
+                .findings
+                .iter()
+                .any(|finding| !ADVISORY_RULES.contains(&finding.category.as_str())),
+            "fixture must exercise a non-allowlisted normal rule"
+        );
+        let advisory = analyze_advisory_html(&format!("<p>{text}</p>"), &morphology)
+            .expect("analyze advisory");
+        assert!(
+            advisory
+                .findings
+                .iter()
+                .all(|finding| ADVISORY_RULES.contains(&finding.rule.as_str()))
+        );
     }
 }

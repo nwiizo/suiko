@@ -44,8 +44,12 @@ enum Genre {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
 enum Profile {
-    RemedySeo,
-    RemedySeoFiller,
+    #[value(name = "remedy-seo")]
+    Seo,
+    #[value(name = "remedy-seo-advisory")]
+    SeoAdvisory,
+    #[value(name = "remedy-seo-filler")]
+    SeoFiller,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
@@ -716,7 +720,7 @@ fn execute_remedy(args: &LintArgs) -> Result<ExitCode, Error> {
         && !args.no_config;
     if !exact_contract {
         return Err(Error::InvalidArguments(
-            "Remedy contract is exactly: lint --profile <remedy-seo|remedy-seo-filler> --input-format html --format json --redact-excerpts -"
+            "Remedy contract is exactly: lint --profile <remedy-seo|remedy-seo-advisory|remedy-seo-filler> --input-format html --format json --redact-excerpts -"
                 .to_owned(),
         ));
     }
@@ -740,16 +744,32 @@ fn execute_remedy(args: &LintArgs) -> Result<ExitCode, Error> {
         .map_err(|_| Error::InvalidArguments("remedy-seo input must be UTF-8".to_owned()))?;
     remedy::validate_html_input(html)
         .map_err(|message| Error::InvalidArguments(message.to_owned()))?;
-    let output = match profile {
-        Profile::RemedySeo => remedy::analyze_html(html),
-        Profile::RemedySeoFiller => remedy::analyze_filler_html(html),
-    };
-    println!("{}", serde_json::to_string(&output)?);
-    Ok(if output.findings.is_empty() {
-        ExitCode::SUCCESS
-    } else {
-        ExitCode::from(2)
-    })
+    match profile {
+        Profile::Seo => {
+            let output = remedy::analyze_html(html);
+            println!("{}", serde_json::to_string(&output)?);
+            Ok(if output.findings.is_empty() {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::from(2)
+            })
+        }
+        Profile::SeoAdvisory => {
+            let morphology = Morphology::new()?;
+            let output = remedy::analyze_advisory_html(html, &morphology)?;
+            println!("{}", serde_json::to_string(&output)?);
+            Ok(ExitCode::SUCCESS)
+        }
+        Profile::SeoFiller => {
+            let output = remedy::analyze_filler_html(html);
+            println!("{}", serde_json::to_string(&output)?);
+            Ok(if output.findings.is_empty() {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::from(2)
+            })
+        }
+    }
 }
 
 fn execute(cli: Cli) -> Result<ExitCode, Error> {

@@ -19,7 +19,7 @@ cargo install suiko
 の挙動と出力は上流互換です。fork identityは、ビルド時に
 `SUIKO_REMEDY_COMMIT=<40文字のlowercase git SHA>`を注入したバイナリの
 `suiko --version-json`だけから取得します。値が未設定・短縮SHA・大文字・非hexなら、
-`--version-json`、`remedy-seo`、`remedy-seo-filler`はいずれもexit 1でfail closedします。
+`--version-json`と3つのRemedy profileはいずれもexit 1でfail closedします。
 この値はbuild provenanceの識別子であり、署名や信頼できるattestationではありません。
 review済みsource、clean checkoutからのbuild、配布artifactのdigest検証がtrust anchorです。
 
@@ -29,18 +29,21 @@ printf '<p>本文です。</p>' | ./target/release/suiko lint \
   --profile remedy-seo --input-format html --format json --redact-excerpts -
 printf '<p>本文です。</p>' | ./target/release/suiko lint \
   --profile remedy-seo-filler --input-format html --format json --redact-excerpts -
+printf '<p>本文です。</p>' | ./target/release/suiko lint \
+  --profile remedy-seo-advisory --input-format html --format json --redact-excerpts -
 ```
 
 build helperはuntracked fileを含むdirty checkoutを拒否し、canonicalなHEAD SHAを
 `SUIKO_REMEDY_COMMIT`へ注入します。手動buildで同じ環境変数を渡すこともできますが、
 release artifactにはhelperを使います。
 
-`remedy-seo`と`remedy-seo-filler`は上記の完全一致コマンドだけを受け付けます。入力はstdinのUTF-8 HTML
+3つのRemedy profileは上記の完全一致コマンドだけを受け付けます。入力はstdinのUTF-8 HTML
 （最大256KiB、markup opener最大4,096個）だけで、ファイル、設定、自動検出、ネットワークは使いません。
 HTML5 parserで`p`/`li`の本文候補を抽出し、見出しは構造として扱ってlint本文には含めず、
 表、引用、caption、code、script/style/template/noscript、SVG/MathML、非表示要素、
-SWELLのrender済みCTA/blog-parts rootを除外します。出力は本文・抜粋・path・行番号を含めず、
-rule/category/severityと根拠のSHA-256だけを持つ固定schemaです。
+SWELLのrender済みCTA/blog-parts rootを除外します。出力は本文・抜粋・pathを含めません。
+shadow用2 profileはrule/category/severityと根拠SHA-256、advisoryはrule・block内byte位置・
+文書に束縛した根拠SHA-256を持つ固定schemaです。
 ここでの非表示判定はHTML属性とinline styleの`display` / `visibility`だけです。
 外部・埋込stylesheetのcomputed CSS、JavaScript実行後のDOM、閉じた`details`などのbrowser layoutは
 解釈しません。呼出側は保存HTMLを入力契約とし、render後の見た目との同一性を仮定しないでください。
@@ -62,6 +65,11 @@ production gateへ接続しないでください。
 HTML抽出後に`filler`だけを実行し、`masu-streak`と`translationese`は解析も出力もしません。
 filler findingがなければexit 0、1件あれば固定schemaでそのfindingだけを返してexit 2です。
 既存の3カテゴリshadow比較は引き続き`remedy-seo`を使います。
+
+`remedy-seo-advisory`は一般Suikoから選定したruleをRemedyのSWELL可視本文へ適用する、
+追加併用のPoCです。入力契約は他のRemedy profileと同じで、8つのallowlist ruleだけを
+`info`としてredacted JSONへ返します。findingがあってもexit 0の非blocking診断であり、
+本番gateや公開可否には接続していません。
 
 release archiveには通常CLIの`suiko`に加えて、production checker向けの
 `suiko-remedy` binaryを同梱します。専用binaryは`--version-json`と上記2つのexact profileだけを
