@@ -55,10 +55,10 @@ Rustを入れずに使う場合は、[GitHub Releases](https://github.com/nwiizo
 
 ```sh
 # 例: macOS (Apple Silicon)
-curl -LO https://github.com/nwiizo/suiko/releases/download/v0.3.4/suiko-v0.3.4-aarch64-apple-darwin.tar.gz
-shasum -a 256 -c suiko-v0.3.4-aarch64-apple-darwin.tar.gz.sha256   # 事前に.sha256も取得した場合
-tar xzf suiko-v0.3.4-aarch64-apple-darwin.tar.gz
-./suiko-v0.3.4-aarch64-apple-darwin/suiko --version
+curl -LO https://github.com/nwiizo/suiko/releases/download/v0.3.5/suiko-v0.3.5-aarch64-apple-darwin.tar.gz
+shasum -a 256 -c suiko-v0.3.5-aarch64-apple-darwin.tar.gz.sha256   # 事前に.sha256も取得した場合
+tar xzf suiko-v0.3.5-aarch64-apple-darwin.tar.gz
+./suiko-v0.3.5-aarch64-apple-darwin/suiko --version
 ```
 
 macOSでは、ダウンロードしたバイナリに検疫属性（quarantine）が付くため初回実行がGatekeeperに止められます。`xattr -d com.apple.quarantine <suikoのパス>` で解除するか、確認ダイアログを避けたい場合は `cargo install suiko` で自分のマシンでビルドしてください（署名の出所が自分になるため、以降の確認が出ません）。
@@ -154,11 +154,13 @@ suiko academic paper.md --contract academic-contract.json \
 
 `stats.rhythm.sentence_endings` には、文末を `assertive`（明示的な断定）、`tentative`（推量・保留）、`question`（疑問）、`nominal`（体言止め）、`other` に近似分類した件数と、空行をまたがない最長連続数が入ります。これは文章の良否を決める値ではなく、局所的なリズムを確認するための観測値です。6文以上の文書で `--experimental` を指定すると、30モーラ以上で同じ明示的文末が3文以上続き、文長の変動係数が0.15以下の箇所を `repeated_sentence_mode`、25モーラ以下の体言止めが3文以上続く箇所を `consecutive_nominal_endings` として指さします。
 
-`abstract_metaphor` は、地図、羅針盤、道標、土台、架け橋などの名詞が、抽象的な対象の役割を表す述語や「〜の〜」型で使われた箇所を `info` で指さします。候補語の出現だけでは発火せず、地理情報の表示や船具の点検など本来の意味での用例は対象外です。比喩かどうかを断定せず、判断対象、判断基準、具体的な効果を明記できるか確認するためのfindingです。CIで必ず止める場合は `--fail-on info` を使い、必要な用例は `.suiko.toml` の `allow` へ理由付きで記録します。
+`abstract_metaphor` は、地図、羅針盤、道標、土台、架け橋などの名詞が、抽象的な対象の役割を表す述語や「〜の〜」型で使われた箇所を `info` で指さします。候補語の出現だけでは発火せず、地理情報の表示や船具の点検など本来の意味での用例は対象外です。`--genre tech --experimental`では、`仕様は意図を実装へ運ぶ`のように抽象的な主語・目的語・移動先を`運ぶ`でつなぐ形と、`複雑さは知識量で効く`のように数量名詞の直後を`で効く`とする形も対象にします。比喩かどうかを断定せず、判断対象、判断基準、具体的な効果を明記できるか確認するためのfindingです。CIで必ず止める場合は `--fail-on info` を使い、必要な用例は `.suiko.toml` の `allow` へ理由付きで記録します。
 
 `--baseline` には前回の `lint --json` 出力（単一オブジェクトまたは配列）をそのまま渡せます。レコードは `file` 文字列の完全一致で対応づけ、改名は推測しません。baselineにないファイルは全findingを新規として `baseline.file_status = "added"` で示し、baselineにあって今回対象にないファイルはstderrへ警告します。genre、`--experimental`、Suikoバージョンが一致しない場合は実行エラーになります。`antithesis_repetition` や `low_burstiness` のような文書単位のfindingは、文章の言い換えで抜粋が変わっても同一カテゴリとして継続扱いします。
 
 `antithesis_repetition` と `repeated_sentence_lead` は文書単位の集約findingです。同じ反復キーは1件にまとめ、全対象行を `related_lines` で示します。finding件数は「一致した箇所の数」ではなく「反復状態の数」を意味します。文頭のラベル+コロン（用語集やFAQの定型フィールド）は、散文の無意識な反復と区別して `detail` に明記します。
+
+`--genre tech --experimental`の`repeated_explanation_preview`は、「本節では〜説明します」「ここでは〜紹介する」などの予告が、同じ節の段落頭で3回以上繰り返される場合に`info`を返します。形態素の基本形と文末の活用を使い、過去・否定・可能・義務の表現や、別の主語がある説明行為は対象外にします。章ごとに一度置く案内や単発の予告は残し、自動修正はしません。同じ文頭に既存の`repeated_syntax_template`も出る場合は、具体的な予告の指摘を優先します。
 
 ### `--experimental`で反復・指示範囲・技術現場の言い回しを確認する
 
@@ -175,7 +177,7 @@ suiko academic paper.md --contract academic-contract.json \
 
 反復を扱う3カテゴリは文書内の該当箇所を1件へまとめ、対象行を`related_lines`で返します。`self_labeling_repetition`は「〜のは」型だけを扱い、書き手の立場を示す表現は混ぜません。`negative_listing`は意図的な対比にも使えるため、誤りではなく修辞を確認するきっかけとして示します。`uniform_bullet_structure`はMarkdownのコードフェンスと引用内を検査せず、明示的に`essay`を選んだ場合だけ出力します。文末品詞と内容語数の近さを測るもので、項目間の意味関係や構文上の並列性までは判定しません。
 
-技術文書向けの3カテゴリは、読者が複数の解釈で迷う可能性がある箇所のうち、形態素列で位置を示せる指示語、`それぞれ`の範囲、技術現場の比喩的な言い回しに絞っています。`technical_jargon_metaphor`は同じ節にある対象語と状態語の組み合わせだけを扱い、表示や物理配送を示す語が同じ文にあれば除外します。いずれも表現の誤りとは断定せず、AIまたは人が前後関係を確認する候補だけを返します。
+技術文書向けの3カテゴリは、読者が複数の解釈で迷う可能性がある箇所のうち、形態素列で位置を示せる指示語、`それぞれ`の範囲、技術現場の比喩的な言い回しに絞っています。`technical_jargon_metaphor`は同じ節にある対象語と状態語の組み合わせだけを扱い、表示や物理配送を示す語が同じ文にあれば除外します。`abstract_metaphor`の技術文書向けパターンも、抽象語の格関係または数量名詞に隣接する`で効く`が確認できる場合だけ報告します。いずれも表現の誤りとは断定せず、AIまたは人が前後関係を確認する候補だけを返します。
 
 主語の省略、修飾先、照応先、節をまたぐ並列関係は、形態素列だけでは正誤を決められないためfindingにしません。
 

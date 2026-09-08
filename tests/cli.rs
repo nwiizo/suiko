@@ -93,6 +93,40 @@ fn double_negative_distinguishes_relative_clauses_from_same_predicate() {
 }
 
 #[test]
+fn double_negative_ignores_independent_predicates_and_parallel_modifiers() {
+    let morphology = Morphology::new().expect("initialize morphology");
+    for text in [
+        "耳が聞こえず話せない人物です。",
+        "根拠のない情報や信頼できない情報を除きます。",
+        "読者が思わぬ落とし穴に遭わずに済みます。",
+        "根拠のない情報や価値のある情報を区別できない。",
+    ] {
+        let report =
+            lint::analyze_reading_load(text, &morphology, Some("tech")).expect("analyze text");
+        assert_eq!(
+            report.stats.by_category.get("double_negative"),
+            None,
+            "{text}"
+        );
+    }
+    for text in [
+        "できないわけではない。",
+        "できなくはない。",
+        "見ずにはいられない。",
+        "知らぬわけではない。",
+        "根拠のない情報や信頼できない情報を、使わないわけではない。",
+    ] {
+        let report =
+            lint::analyze_reading_load(text, &morphology, Some("tech")).expect("analyze text");
+        assert_eq!(
+            report.stats.by_category.get("double_negative"),
+            Some(&1),
+            "{text}"
+        );
+    }
+}
+
+#[test]
 fn help_describes_the_analysis_commands() {
     cargo_bin_cmd!("suiko")
         .arg("--help")
@@ -486,6 +520,125 @@ fn experimental_sentence_runs_do_not_cross_blank_lines() {
 }
 
 #[test]
+fn explanation_preview_repetition_uses_morphology_and_preserves_meaning() {
+    let morphology = Morphology::new().expect("initialize morphology");
+    let positive = "## 設定\n本節では設定方法を説明します。\n\nここでは接続方法を紹介する。\n\n以下では保存方法について解説します。\n";
+    let report = lint::analyze(positive, &morphology, Some("tech"), true).expect("analyze text");
+    let findings = report
+        .findings
+        .iter()
+        .filter(|f| f.category == "repeated_explanation_preview")
+        .collect::<Vec<_>>();
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0].severity, "info");
+    assert_eq!(findings[0].related_lines, Some(vec![2, 4, 6]));
+    assert!(findings[0].suggestion.is_none());
+    let span = findings[0].span.expect("source span");
+    assert_eq!(
+        &positive.lines().nth(1).unwrap()[span.start_byte..span.end_byte],
+        findings[0].excerpt
+    );
+
+    for text in [
+        "本節では設定方法を説明しました。",
+        "本節では設定方法を説明しません。",
+        "本節では設定方法を説明できる。",
+        "本節では設定方法を説明する必要があります。",
+        "本節では担当者が設定方法を説明します。",
+        "担当者が設定方法を説明します。",
+        "本節では設定方法を説明すると記録しました。",
+        "本節では設定方法を説明しますか。",
+        "本節では設定方法を説明し",
+        "本節では設定方法を説明せよ。",
+    ] {
+        let repeated = format!("{text}\n\n{text}\n\n{text}\n");
+        let report =
+            lint::analyze(&repeated, &morphology, Some("tech"), true).expect("analyze text");
+        assert!(
+            !report
+                .findings
+                .iter()
+                .any(|f| f.category == "repeated_explanation_preview"),
+            "{text}"
+        );
+    }
+    for (genre, experimental) in [
+        (Some("tech"), false),
+        (Some("essay"), true),
+        (Some("business"), true),
+        (None, true),
+    ] {
+        let report =
+            lint::analyze(positive, &morphology, genre, experimental).expect("analyze text");
+        assert!(
+            !report
+                .findings
+                .iter()
+                .any(|f| f.category == "repeated_explanation_preview")
+        );
+    }
+}
+
+#[test]
+fn explanation_preview_repetition_respects_paragraphs_and_sections() {
+    let morphology = Morphology::new().expect("initialize morphology");
+    for body in [
+        "本節では設定を説明します。\n\nここでは接続を紹介します。",
+        "# 設定\n本節では設定を説明します。\n# 接続\nここでは接続を紹介します。\n# 保存\n以下では保存を解説します。",
+        "本節では設定を説明します。\nここでは接続を紹介します。\n以下では保存を解説します。",
+        "設定を変更します。本節では設定を説明します。\n\n接続を変更します。ここでは接続を紹介します。\n\n保存します。以下では保存を解説します。",
+        "> 本節では設定を説明します。\n\n> ここでは接続を紹介します。\n\n> 以下では保存を解説します。",
+        "- 本節では設定を説明します。\n\n- ここでは接続を紹介します。\n\n- 以下では保存を解説します。",
+        "```text\n本節では設定を説明します。\n\nここでは接続を紹介します。\n\n以下では保存を解説します。\n```",
+    ] {
+        let report = lint::analyze(body, &morphology, Some("tech"), true).expect("analyze text");
+        assert!(
+            !report
+                .findings
+                .iter()
+                .any(|f| f.category == "repeated_explanation_preview"),
+            "{body}"
+        );
+    }
+    let body = "本節では設定を説明します。\n\n```text\n# サンプル内の見出し\n```\n\nここでは接続を紹介します。\n\n以下では保存を解説します。";
+    let report = lint::analyze(body, &morphology, Some("tech"), true).expect("analyze text");
+    assert_eq!(
+        report.stats.by_category.get("repeated_explanation_preview"),
+        Some(&1)
+    );
+}
+
+#[test]
+fn explanation_preview_repetition_does_not_duplicate_generic_syntax_hits() {
+    let morphology = Morphology::new().expect("initialize morphology");
+    let body = "本節では設定方法を説明します。\n\nまずサーバーに接続します。\n\n本節では認証方法を紹介します。\n\n接続を確認できたら準備は完了です。\n\n本節では保存方法を解説します。\n\n保存した内容は翌日から利用できます。";
+    let report = lint::analyze(body, &morphology, Some("tech"), true).expect("analyze text");
+    assert_eq!(
+        report.stats.by_category.get("repeated_explanation_preview"),
+        Some(&1)
+    );
+    assert!(
+        !report
+            .findings
+            .iter()
+            .any(|f| f.category == "repeated_syntax_template" && [1, 5, 9].contains(&f.line))
+    );
+    let body = "本節では設定方法を説明します。本節では接続方法を紹介します。\n\n本節では保存方法を解説します。本節では操作方法を説明します。\n\n本節では認証方法を説明します。本節では復旧方法を紹介します。";
+    let report = lint::analyze(body, &morphology, Some("tech"), true).expect("analyze text");
+    let generic = report
+        .findings
+        .iter()
+        .filter(|f| f.category == "repeated_syntax_template")
+        .collect::<Vec<_>>();
+    assert_eq!(
+        generic.len(),
+        3,
+        "same-line later sentences retain their own findings"
+    );
+    assert!(generic.iter().all(|f| f.span.unwrap().start_byte > 0));
+}
+
+#[test]
 fn self_labeling_repetition_requires_three_hits_and_experimental_mode() {
     let morphology = Morphology::new().expect("initialize morphology");
     let body = concat!(
@@ -798,6 +951,64 @@ fn technical_jargon_metaphors_require_tech_and_experimental_mode() {
 }
 
 #[test]
+fn abstract_predicate_metaphors_require_tech_and_experimental_mode() {
+    let morphology = Morphology::new().expect("initialize morphology");
+    let positive = concat!(
+        "仕様はチームの意図を実装へ運べます。\n",
+        "設計が判断を実装へ運びます。\n",
+        "複雑さは行数より、安全な変更に必要な知識量で効く。\n",
+        "品質は機能数ではなく、障害数で効きます。\n",
+    );
+    let contrast = concat!(
+        "配送サービスは荷物を倉庫から店舗へ運びます。\n",
+        "担当者はチームの意図を実装へ運びます。\n",
+        "仕様はAPIの入出力を示します。\n",
+        "この薬は痛みに効きます。\n",
+        "キャッシュは読み込み時間の短縮に効きます。\n",
+        "複雑さは知識量に効きます。\n",
+        "この設定は帯域幅で効きます。\n",
+        "品質は高いですが、施策は障害数で効きます。\n",
+    );
+
+    let report = lint::analyze(positive, &morphology, Some("tech"), true)
+        .expect("analyze abstract predicate metaphors");
+    let findings = report
+        .findings
+        .iter()
+        .filter(|finding| finding.category == "abstract_metaphor")
+        .collect::<Vec<_>>();
+    assert_eq!(findings.len(), 4);
+    assert!(findings.iter().all(|finding| finding.severity == "info"));
+    assert!(findings.iter().all(|finding| finding.suggestion.is_none()));
+
+    let literal = lint::analyze(contrast, &morphology, Some("tech"), true)
+        .expect("analyze literal contrasts");
+    assert!(
+        literal
+            .findings
+            .iter()
+            .all(|finding| finding.category != "abstract_metaphor")
+    );
+
+    for (genre, experimental) in [
+        (Some("tech"), false),
+        (Some("essay"), true),
+        (Some("business"), true),
+        (None, true),
+    ] {
+        let disabled = lint::analyze(positive, &morphology, genre, experimental)
+            .expect("analyze disabled mode");
+        assert!(
+            disabled
+                .findings
+                .iter()
+                .all(|finding| finding.category != "abstract_metaphor"),
+            "genre={genre:?}, experimental={experimental}"
+        );
+    }
+}
+
+#[test]
 fn abstract_metaphor_morph_distinguishes_figurative_and_literal_contexts() {
     let body = concat!(
         "この方針は実装判断の羅針盤になる。\n",
@@ -975,6 +1186,47 @@ fn local_ai_patterns_fire_on_short_documents() {
     assert!(output.status.success());
     let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
     assert_eq!(json["stats"]["total_findings"], 0);
+}
+
+#[test]
+fn antithesis_excludes_temporal_changes_but_keeps_actual_contrasts() {
+    let morphology = Morphology::new().expect("initialize morphology");
+    for ending in [
+        "なくなる",
+        "なくなった",
+        "なくなりました",
+        "なくなります",
+        "なくなれば",
+        "なくなっている",
+    ] {
+        let text = format!(
+            "この部屋は会議室では{ending}。\n\n今は倉庫では{ending}。\n\nこの作業は手作業では{ending}。"
+        );
+        let report = lint::analyze(&text, &morphology, Some("essay"), false).expect("analyze text");
+        assert_eq!(
+            report.stats.by_category.get("antithesis_repetition"),
+            None,
+            "{text}"
+        );
+    }
+    // 状態変化と本来の対比が同じ行にあっても、後続の対比を数える。
+    let text = "会議室ではなくなった。Aではなく、Bです。\n倉庫ではなくなりました。CではなくDです。\n手作業ではなくなる。Eではなく、Fです。";
+    let report = lint::analyze(text, &morphology, Some("essay"), false).expect("analyze text");
+    let finding = report
+        .findings
+        .iter()
+        .find(|f| f.category == "antithesis_repetition")
+        .expect("actual contrasts");
+    assert!(finding.detail.contains("3回"), "{}", finding.detail);
+    assert_eq!(finding.related_lines, Some(vec![1, 2, 3]));
+    assert!(finding.excerpt.starts_with("ではなく、B"));
+    // 「なく」から始まる肯定側を、活用語尾の部分一致で除外しない。
+    let text = "泣くのではなくなくすのです。\nAではなく、Bです。\nCではなく、Dです。";
+    let report = lint::analyze(text, &morphology, Some("essay"), false).expect("analyze text");
+    assert_eq!(
+        report.stats.by_category.get("antithesis_repetition"),
+        Some(&1)
+    );
 }
 
 #[test]

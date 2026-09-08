@@ -1,5 +1,7 @@
 //! 品詞列（Sudachi形態素）ベースの検出器と、文単位のtoken補助。
 
+use std::collections::BTreeMap;
+
 use crate::Error;
 use crate::morphology::{Morpheme, Morphology};
 use crate::text::Sentence;
@@ -91,6 +93,14 @@ const PHYSICAL_SHIPMENT_NOUNS: &[&str] = &[
     "工場", "倉庫", "在庫", "配送", "端末", "機器", "製品", "検品",
 ];
 
+const ABSTRACT_TRANSPORT_SUBJECTS: &[&str] = &["仕様", "設計", "仕組み", "指標", "議論"];
+
+const ABSTRACT_TRANSPORT_OBJECTS: &[&str] = &["意図", "判断", "理解", "実装", "成果"];
+
+const ABSTRACT_EFFECT_SUBJECTS: &[&str] = &["複雑", "品質", "生産性", "リスク"];
+
+const QUANTITY_NOUN_ENDINGS: &[&str] = &["量", "数"];
+
 #[derive(Clone, Debug)]
 pub(super) struct TokenizedSentence {
     pub(super) line: usize,
@@ -124,6 +134,24 @@ impl TokenizedSentence {
             .get(byte_start..byte_end)
             .unwrap_or(&self.text[byte_start..byte_end])
             .to_owned()
+    }
+
+    fn info_finding(
+        &self,
+        raw_lines: &[&str],
+        bytes: std::ops::Range<usize>,
+        category: &str,
+        detail: impl Into<String>,
+    ) -> Finding {
+        let mut finding = Finding::new(
+            self.line,
+            category,
+            self.excerpt(bytes.start, bytes.end),
+            "info",
+            detail,
+        );
+        finding.span = self.span(raw_lines, bytes.start, bytes.end);
+        finding
     }
 }
 
@@ -320,6 +348,94 @@ fn self_labeling_span(tokens: &[Morpheme]) -> Option<(usize, usize)> {
     None
 }
 
+pub(super) fn explanation_preview_findings(
+    tokenized: &[TokenizedSentence],
+    raw: &str,
+) -> Vec<Finding> {
+    let raw_lines = raw.split('\n').collect::<Vec<_>>();
+    // コード内の「#」や参考文献を節の区切りとして扱わない。
+    let structural = crate::text::mask_markdown_structure_preserving_headings(raw);
+    let heading_lines = structural
+        .lines()
+        .enumerate()
+        .filter_map(|(index, line)| crate::text::is_heading(line).then_some(index + 1))
+        .collect::<Vec<_>>();
+    let mut sections = BTreeMap::<usize, Vec<AggregateHit>>::new();
+    for sentence in tokenized {
+        let raw_line = raw_lines[sentence.line - 1];
+        let paragraph_start = sentence.line == 1
+            || raw_lines[sentence.line - 2].trim().is_empty()
+            || heading_lines.binary_search(&(sentence.line - 1)).is_ok();
+        if !paragraph_start
+            || sentence.line_byte_start != raw_line.len() - raw_line.trim_start().len()
+        {
+            continue;
+        }
+        let Some((start, end)) = explanation_preview_span(&sentence.tokens) else {
+            continue;
+        };
+        let section = heading_lines.partition_point(|line| *line < sentence.line);
+        sections.entry(section).or_default().push(AggregateHit {
+            line: sentence.line,
+            excerpt: sentence.excerpt(start, end),
+            span: sentence.span(&raw_lines, start, end),
+            related_lines: vec![sentence.line],
+        });
+    }
+    sections
+        .into_values()
+        .flat_map(|hits| {
+            aggregate_pattern_finding(hits, 3, "repeated_explanation_preview", |count, related| {
+                format!(
+                    "同じ節の段落頭で、説明・紹介・解説を予告する形態素列が{count}回ある（閾値3回以上）。必要な案内は残し、予告の代わりに内容から書き始められる箇所を確認してください。対応箇所: {related}"
+                )
+            })
+        })
+        .collect()
+}
+
+fn explanation_preview_span(tokens: &[Morpheme]) -> Option<(usize, usize)> {
+    let first = tokens.first()?;
+    if !matches!(first.surface.as_str(), "本節" | "本章" | "ここ" | "以下")
+        || tokens.get(1)?.surface != "で"
+        || tokens.get(2)?.surface != "は"
+    {
+        return None;
+    }
+    let last = tokens.len().checked_sub(1)?;
+    let verb_index = if tokens[last].dictionary_form() == "ます" {
+        last.checked_sub(1)?
+    } else {
+        last
+    };
+    let verb = &tokens[verb_index];
+    let noun_index = verb_index.checked_sub(1)?;
+    let noun = &tokens[noun_index];
+    if noun_index <= 3
+        || verb.pos(0) != "動詞"
+        || verb.dictionary_form() != "する"
+        || !tokens[last].pos(5).starts_with("終止形")
+        || noun.pos(2) != "サ変可能"
+        || !matches!(noun.dictionary_form(), "説明" | "紹介" | "解説")
+    {
+        return None;
+    }
+    // 別の主語や引用、否定・過去・可能を含む述語を予告へまとめない。
+    // 述語の後ろは「ます」だけを許すので、活用に伴う意味の違いを保てる。
+    if tokens[3..noun_index]
+        .iter()
+        .enumerate()
+        .any(|(index, token)| {
+            (token.pos(0) == "助詞" && matches!(token.surface.as_str(), "は" | "が"))
+                || (matches!(token.pos(0), "記号" | "補助記号")
+                    && !(index == 0 && token.surface == "、"))
+        })
+    {
+        return None;
+    }
+    Some((first.byte_start, tokens[last].byte_end))
+}
+
 pub(super) fn negative_listing_findings(
     tokenized: &[TokenizedSentence],
     raw_lines: &[&str],
@@ -426,17 +542,14 @@ pub(super) fn translationese_morph_findings(
         if let Some((byte_start, byte_end, pattern)) =
             abstract_motsu_candidate(&sentence.tokens, index)
         {
-            let mut finding = Finding::new(
-                sentence.line,
+            findings.push(sentence.info_finding(
+                raw_lines,
+                byte_start..byte_end,
                 "translationese_morph",
-                sentence.excerpt(byte_start, byte_end),
-                "info",
                 format!(
                     "品詞列マッチ: {pattern}。抽象的な内容と「持つ」の組み合わせを読み直す候補"
                 ),
-            );
-            finding.span = sentence.span(raw_lines, byte_start, byte_end);
-            findings.push(finding);
+            ));
         }
 
         let Some(particle) = sentence.tokens.get(index + 1) else {
@@ -462,14 +575,12 @@ pub(super) fn translationese_morph_findings(
             && verb.surface.starts_with("でき")
         {
             let start = sentence.tokens[index.saturating_sub(4)].byte_start;
-            let mut finding = Finding::new(
-                sentence.line,
+            let mut finding = sentence.info_finding(
+                raw_lines,
+                start..verb.byte_end,
                 "translationese_morph",
-                sentence.excerpt(start, verb.byte_end),
-                "info",
                 "品詞列マッチ: 名詞/動詞+こと+が/は+できる型の翻訳調構文",
             );
-            finding.span = sentence.span(raw_lines, start, verb.byte_end);
             finding.suggestion = suru_koto_ga_suggestion(sentence, raw_lines, index, particle);
             findings.push(finding);
         }
@@ -531,18 +642,15 @@ pub(super) fn technical_ambiguity_findings(
                     .count();
                 if predicate_count >= 2 {
                     let end = sentence.tokens[index + 1].byte_end;
-                    let mut finding = Finding::new(
-                        sentence.line,
+                    findings.push(sentence.info_finding(
+                        raw_lines,
+                        token.byte_start..end,
                         "demonstrative_reference",
-                        sentence.excerpt(token.byte_start, end),
-                        "info",
                         format!(
                             "品詞列マッチ: 同じ文の前方に動詞が{predicate_count}個あり、その後に「{}こと」がある。指示先を読み直す候補",
                             token.surface
                         ),
-                    );
-                    finding.span = sentence.span(raw_lines, token.byte_start, end);
-                    findings.push(finding);
+                    ));
                 }
             }
 
@@ -565,15 +673,12 @@ pub(super) fn technical_ambiguity_findings(
                 .iter()
                 .find(|candidate| candidate.pos(0) == "動詞")
                 .map_or(token.byte_end, |candidate| candidate.byte_end);
-            let mut finding = Finding::new(
-                sentence.line,
+            findings.push(sentence.info_finding(
+                raw_lines,
+                start..end,
                 "respectively_scope",
-                sentence.excerpt(start, end),
-                "info",
                 "品詞列マッチ: 列挙の後に「それぞれ」があり、後方に対応する列挙がない。どの要素を一つずつ扱うか読み直す候補",
-            );
-            finding.span = sentence.span(raw_lines, start, end);
-            findings.push(finding);
+            ));
         }
     }
     findings
@@ -596,29 +701,53 @@ pub(super) fn technical_jargon_metaphor_findings(
         if !contains_any(&sentence.tokens, DISPLAY_NOUNS)
             && let Some((start, end)) = color_status_span(&sentence.tokens)
         {
-            let mut finding = Finding::new(
-                sentence.line,
+            findings.push(sentence.info_finding(
+                raw_lines,
+                start..end,
                 "technical_jargon_metaphor",
-                sentence.excerpt(start, end),
-                "info",
                 "テストや検査の状態を色で表す技術現場の言い回し。何が通ったか、成功したかを直接書けるか確認してください",
-            );
-            finding.span = sentence.span(raw_lines, start, end);
-            findings.push(finding);
+            ));
         }
 
         if !contains_any(&sentence.tokens, PHYSICAL_SHIPMENT_NOUNS)
             && let Some((start, end)) = software_shipment_span(&sentence.tokens)
         {
-            let mut finding = Finding::new(
-                sentence.line,
+            findings.push(sentence.info_finding(
+                raw_lines,
+                start..end,
                 "technical_jargon_metaphor",
-                sentence.excerpt(start, end),
-                "info",
                 "ソフトウェアの公開を物流語で表す技術現場の言い回し。公開、配布、リリースなど具体的な動作を書けるか確認してください",
-            );
-            finding.span = sentence.span(raw_lines, start, end);
-            findings.push(finding);
+            ));
+        }
+    }
+    findings
+}
+
+/// 抽象名詞を動作主にして移動や効果を表す、技術文書の翻訳調候補。
+/// 物理的な運搬や一般的な「効く」を拾わないよう、観測済みの格関係と
+/// 数量名詞の直後に限定する。
+pub(super) fn abstract_predicate_metaphor_findings(
+    tokenized: &[TokenizedSentence],
+    raw_lines: &[&str],
+) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    for sentence in tokenized {
+        if let Some((start, end)) = abstract_transport_span(&sentence.tokens) {
+            findings.push(sentence.info_finding(
+                raw_lines,
+                start..end,
+                "abstract_metaphor",
+                "抽象名詞と移動動詞の組み合わせ。意図や判断がどのように実装へ反映されるか、具体的に書けるか確認してください",
+            ));
+        }
+
+        if let Some((start, end)) = abstract_effect_span(&sentence.tokens) {
+            findings.push(sentence.info_finding(
+                raw_lines,
+                start..end,
+                "abstract_metaphor",
+                "抽象的な尺度と「で効く」の組み合わせ。何がどのように影響するか、具体的に書けるか確認してください",
+            ));
         }
     }
     findings
@@ -694,6 +823,110 @@ fn software_shipment_span(tokens: &[Morpheme]) -> Option<(usize, usize)> {
     ))
 }
 
+fn abstract_transport_span(tokens: &[Morpheme]) -> Option<(usize, usize)> {
+    let verb = tokens
+        .iter()
+        .position(|token| token.dictionary_form() == "運ぶ")?;
+    let destination = tokens[..verb]
+        .iter()
+        .enumerate()
+        .find_map(|(index, token)| {
+            ABSTRACT_TRANSPORT_OBJECTS
+                .contains(&token.dictionary_form())
+                .then_some(index)
+                .filter(|index| {
+                    tokens
+                        .get(*index + 1)
+                        .is_some_and(|particle| matches!(particle.surface.as_str(), "へ" | "に"))
+                })
+        })?;
+    let object = tokens[..destination]
+        .iter()
+        .enumerate()
+        .find_map(|(index, token)| {
+            ABSTRACT_TRANSPORT_OBJECTS
+                .contains(&token.dictionary_form())
+                .then_some(index)
+                .filter(|index| {
+                    tokens
+                        .get(*index + 1)
+                        .is_some_and(|particle| particle.surface == "を")
+                })
+        })?;
+    let subject = tokens[..object]
+        .iter()
+        .enumerate()
+        .find_map(|(index, token)| {
+            ABSTRACT_TRANSPORT_SUBJECTS
+                .contains(&token.dictionary_form())
+                .then_some(index)
+                .filter(|index| {
+                    tokens
+                        .get(*index + 1)
+                        .is_some_and(|particle| matches!(particle.surface.as_str(), "は" | "が"))
+                })
+        })?;
+    if punctuation_between(tokens, subject, object)
+        || punctuation_between(tokens, object, destination)
+        || punctuation_between(tokens, destination, verb)
+    {
+        return None;
+    }
+    Some((tokens[subject].byte_start, tokens[verb].byte_end))
+}
+
+fn abstract_effect_span(tokens: &[Morpheme]) -> Option<(usize, usize)> {
+    let verb = tokens
+        .iter()
+        .position(|token| token.dictionary_form() == "効く")?;
+    let particle = verb.checked_sub(1)?;
+    let quantity = particle.checked_sub(1)?;
+    if tokens[particle].surface != "で"
+        || tokens[quantity].pos(0) != "名詞"
+        || !QUANTITY_NOUN_ENDINGS.iter().any(|ending| {
+            tokens[quantity].dictionary_form() == *ending
+                || tokens[quantity].surface.ends_with(ending)
+        })
+    {
+        return None;
+    }
+    let (subject, subject_particle) = abstract_effect_subject(tokens, quantity)?;
+    if subject_particle >= quantity
+        || (subject_particle + 1..quantity).any(|index| {
+            let token = &tokens[index];
+            token.pos(0) == "助詞"
+                && (token.surface == "が"
+                    || (token.surface == "は" && tokens[index - 1].pos(0) != "助詞"))
+        })
+    {
+        return None;
+    }
+    Some((tokens[subject].byte_start, tokens[verb].byte_end))
+}
+
+fn abstract_effect_subject(tokens: &[Morpheme], before: usize) -> Option<(usize, usize)> {
+    tokens[..before]
+        .iter()
+        .enumerate()
+        .find_map(|(index, token)| {
+            if !ABSTRACT_EFFECT_SUBJECTS.contains(&token.dictionary_form()) {
+                return None;
+            }
+            let suffix = tokens.get(index + 1);
+            let particle_index = if token.dictionary_form() == "複雑"
+                && suffix.is_some_and(|candidate| {
+                    candidate.surface == "さ" && candidate.pos(0) == "接尾辞"
+                }) {
+                index + 2
+            } else {
+                index + 1
+            };
+            tokens.get(particle_index).and_then(|particle| {
+                matches!(particle.surface.as_str(), "は" | "が").then_some((index, particle_index))
+            })
+        })
+}
+
 /// 機械的に安全な唯一の縮約: 「〜することができる」→「〜できる」。
 /// 直前が動詞「する」で助詞が「が」の場合だけ、「することが」の削除候補を出す。
 /// raw行のpreimageが一致しないときは出さない。
@@ -765,17 +998,15 @@ pub(super) fn redundant_light_verb_findings(
         if passive_or_causative {
             continue;
         }
-        let mut finding = Finding::new(
-            sentence.line,
+        let mut finding = sentence.info_finding(
+            raw_lines,
+            noun.byte_start..verb.byte_end,
             "redundant_light_verb",
-            sentence.excerpt(noun.byte_start, verb.byte_end),
-            "info",
             format!(
                 "サ変名詞+を+行う型の冗長候補: 「{}を{}」は「{}する」へ畳める。名詞の動作性を活かす方が簡潔（意図的な文体なら維持する）",
                 noun.surface, verb.surface, noun.surface
             ),
         );
-        finding.span = sentence.span(raw_lines, noun.byte_start, verb.byte_end);
         finding.suggestion = light_verb_suggestion(sentence, raw_lines, particle, verb);
         findings.push(finding);
     }
@@ -814,18 +1045,15 @@ pub(super) fn abstract_metaphor_findings(
         let byte_end = predicate_end
             .map(|end| sentence.tokens[end].byte_end)
             .unwrap_or(token.byte_end);
-        let mut finding = Finding::new(
-            sentence.line,
+        findings.push(sentence.info_finding(
+            raw_lines,
+            byte_start..byte_end,
             "abstract_metaphor",
-            sentence.excerpt(byte_start, byte_end),
-            "info",
             format!(
                 "抽象比喩の可能性: 「{}」。判断対象・判断基準・具体的な効果を明記してください",
                 token.surface
             ),
-        );
-        finding.span = sentence.span(raw_lines, byte_start, byte_end);
-        findings.push(finding);
+        ));
     }
     findings
 }
@@ -945,19 +1173,16 @@ pub(super) fn inanimate_morph_findings(
                 .iter()
                 .map(|token| token.surface.as_str())
                 .collect::<String>();
-            let mut finding = Finding::new(
-                sentence.line,
+            findings.push(sentence.info_finding(
+                raw_lines,
+                byte_start..verb.byte_end,
                 "inanimate_subject_morph",
-                sentence.excerpt(byte_start, verb.byte_end),
-                "info",
                 format!(
                     "品詞列マッチ: 抽象主語「{subject}」+ {} + 他動詞的述語「{}」（英語統語の直訳調の疑い）",
                     particle.surface,
                     verb.dictionary_form()
                 ),
-            );
-            finding.span = sentence.span(raw_lines, byte_start, verb.byte_end);
-            findings.push(finding);
+            ));
         }
     }
     findings
