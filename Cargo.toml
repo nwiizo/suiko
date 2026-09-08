@@ -14,6 +14,7 @@ categories = ["command-line-utilities", "text-processing"]
 # SHA-256固定で取得または既存ファイルを検証して埋め込む。
 include = [
     "/src/**",
+    "/data/**",
     "/build.rs",
     "/Cargo.toml",
     "/README.md",
@@ -31,8 +32,6 @@ default = []
 evaluation = [
     "dep:encoding_rs",
     "dep:jiff",
-    "dep:pdf-extract",
-    "dep:sha2",
     "dep:ureq",
 ]
 
@@ -40,17 +39,19 @@ evaluation = [
 clap = { version = "4.5", features = ["derive"] }
 encoding_rs = { version = "0.8", optional = true }
 jiff = { version = "0.2", default-features = false, features = ["std"], optional = true }
-pdf-extract = { version = "0.12", optional = true }
+pdf-extract = "0.12"
+quick-xml = "0.38"
 regex = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sha2 = { version = "0.11", optional = true }
+sha2 = "0.11"
 # WorksApplications/sudachi.rs v0.6.11の非公式再配布(crates/suiko-sudachi)。
 # 上流が公式にcrates.ioへ公開したら sudachi = "..." へ戻す。
 sudachi = { package = "suiko-sudachi", version = "0.6.11", path = "crates/suiko-sudachi" }
 thiserror = "2"
 toml = "1.1"
 ureq = { version = "2", optional = true }
+zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [build-dependencies]
 sha2 = "0.11"

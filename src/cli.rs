@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::lint::{Finding, LintStats};
 use crate::morphology::Morphology;
-use crate::{Error, lint, outline, read_source, terms};
+use crate::{Error, academic, lexical, lint, outline, read_source, terms};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -29,6 +29,10 @@ enum Command {
     Outline(FileArgs),
     /// 専門用語候補と初出時の説明手掛かりを抽出する
     Terms(TermsArgs),
+    /// 一般名詞複合語、表記・レジスターの揺れを読み取り専用で監査する
+    LexicalAudit(LexicalAuditArgs),
+    /// 中心命題、論証順序、用語、引用、注、Word/PDF納品を監査契約に照らして検証する
+    Academic(AcademicArgs),
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, ValueEnum)]
@@ -70,6 +74,43 @@ struct TermsArgs {
     /// 複数ファイルの用語を集計し、表記揺れを一覧化する（ファイルは書き換えない）
     #[arg(long)]
     audit: bool,
+}
+
+#[derive(Debug, Args)]
+struct LexicalAuditArgs {
+    /// 対象の Markdown/テキストファイル。複数指定可
+    #[arg(required = true)]
+    files: Vec<String>,
+    /// 固定コーパス頻度、登録語、レジスター集合を記したJSON参照資源
+    #[arg(long)]
+    reference: PathBuf,
+    /// 機械可読なJSONで出力する
+    #[arg(long)]
+    json: bool,
+}
+
+#[derive(Debug, Args)]
+struct AcademicArgs {
+    /// 監査するMarkdown原稿
+    source: PathBuf,
+    /// 中心命題、説明対象、用語来歴、章間接続、注分類を記したJSON契約
+    #[arg(long)]
+    contract: PathBuf,
+    /// 同期とOOXML不変条件を確認するDOCX
+    #[arg(long)]
+    docx: Option<PathBuf>,
+    /// Microsoft Wordから書き出した最終PDF
+    #[arg(long)]
+    pdf: Option<PathBuf>,
+    /// 成果物の設計権威となる公式DOCXテンプレート
+    #[arg(long, requires = "docx")]
+    template: Option<PathBuf>,
+    /// Word出力、PDF全頁目視、三成果物のSHA-256を記録したJSON
+    #[arg(long, requires_all = ["docx", "pdf"])]
+    export_record: Option<PathBuf>,
+    /// 機械可読なJSONで出力する
+    #[arg(long)]
+    json: bool,
 }
 
 #[derive(Debug, Args)]
@@ -339,6 +380,26 @@ fn print_terms_audit_human(report: &terms::TermsAuditReport) {
                 entry.file, entry.first_line, entry.count
             );
         }
+    }
+}
+
+fn print_lexical_audit_human(report: &lexical::LexicalAuditReport) {
+    println!("=== lexical audit: {}ファイル ===", report.files.len());
+    println!("参照資源: {}", report.reference_source);
+    println!(
+        "候補 {}件。Suikoは本文を書き換えません。\n",
+        report.findings.len()
+    );
+    for finding in &report.findings {
+        println!(
+            "[{}:{}] {} L{} {} — {}",
+            finding.severity,
+            finding.category,
+            finding.file,
+            finding.line,
+            finding.term,
+            finding.rationale
+        );
     }
 }
 
@@ -658,6 +719,28 @@ fn print_terms_human(file: &str, report: &terms::TermsReport) {
     }
 }
 
+fn print_academic_human(report: &academic::AcademicReport) {
+    println!(
+        "=== 原稿・指定成果物の監査: {} ===",
+        if report.passed { "PASS" } else { "FAIL" }
+    );
+    println!(
+        "提出準備完了: {}\n",
+        if report.delivery_ready {
+            "YES（自己申告のWord出力・PDF目視記録を含む）"
+        } else {
+            "NO（原稿PASSだけでは提出準備完了ではありません）"
+        }
+    );
+    for item in &report.checks {
+        println!("[{}] {}: {}", item.status, item.id, item.detail);
+    }
+    println!("\n=== 段落第一文と見出し ===\n");
+    for entry in &report.first_sentences {
+        println!("L{} {}: {}", entry.line, entry.kind, entry.text);
+    }
+}
+
 fn validate_inputs(files: &[String]) -> Result<(), Error> {
     if files.len() > 1 && files.iter().any(|file| file == "-") {
         return Err(Error::InvalidArguments(
@@ -880,6 +963,46 @@ fn execute(cli: Cli) -> Result<ExitCode, Error> {
                     print_terms_human(file, &report);
                 }
             }
+        }
+        Command::LexicalAudit(args) => {
+            validate_inputs(&args.files)?;
+            let morphology = Morphology::new()?;
+            let reference =
+                serde_json::from_str::<lexical::LexicalReference>(&read_source(&args.reference)?)?;
+            let mut inputs = Vec::new();
+            for file in &args.files {
+                inputs.push((file.clone(), read_input(file)?));
+            }
+            let report = lexical::audit(&inputs, &morphology, &reference)?;
+            if args.json {
+                println!("{}", serde_json::to_string_pretty(&report)?);
+            } else {
+                print_lexical_audit_human(&report);
+            }
+            return Ok(ExitCode::SUCCESS);
+        }
+        Command::Academic(args) => {
+            let source = read_source(&args.source)?;
+            let contract =
+                serde_json::from_str::<academic::AcademicContract>(&read_source(&args.contract)?)?;
+            let paths = academic::ArtifactPaths {
+                source: &args.source,
+                docx: args.docx.as_deref(),
+                pdf: args.pdf.as_deref(),
+                template: args.template.as_deref(),
+                export_record: args.export_record.as_deref(),
+            };
+            let report = academic::audit(&source, &contract, &paths)?;
+            if args.json {
+                println!("{}", serde_json::to_string_pretty(&report)?);
+            } else {
+                print_academic_human(&report);
+            }
+            return Ok(if report.passed {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::from(2)
+            });
         }
     }
     Ok(ExitCode::SUCCESS)

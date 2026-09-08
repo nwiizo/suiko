@@ -17,6 +17,8 @@ cargo install suiko
 - `lint`: 禁止語、翻訳調、定型的な対比、リズム、段落構造、語彙、英語統語の疑いを検出
 - `outline`: 見出し、段落の先頭文、箇条書きを抽出して論旨を俯瞰
 - `terms`: 略語、カタカナ複合語、固有名詞候補と初出時の説明手掛かりを抽出
+- `lexical-audit`: 一般名詞複合語の新奇性、表記正規化、明示したレジスター集合を読み取り専用で監査
+- `academic`: 執筆者が記録した監査契約に照らして、論証と提出用成果物の不変条件を確認
 - Markdownのfront matter、コードフェンス、インラインコード、リンクURL、埋め込み引用行、表、HTMLタグとコメント、参考文献リスト行（`[1] …`、`[^1]: …`）、「参考文献」「引用文献」「References」「Bibliography」見出し以下の行、コード注釈行（`#A …`）をマスク（抑制した行数は`stats.masking`に出力）
 - `essay` / `tech` / `business` のジャンル別閾値
 - 修正前JSONとの `resolved` / `new` / `persisting` 比較
@@ -94,9 +96,29 @@ suiko terms draft.md --json
 # 複数ファイルの用語集計と表記揺れの一覧（読み取り専用）
 suiko terms --audit docs/*.md --json
 
+# 固定参照資源に照らした一般語彙監査
+suiko lexical-audit draft.md --reference data/lexical-reference-v1.json --json
+
 # 標準入力
 printf '重要なのは、結論です。\n' | suiko lint - --json
 ```
+
+### 学術稿の論証・納品監査
+
+`academic` は、学術論文の意味を自動採点する機能ではありません。中心命題、説明対象、用語の来歴、維持する論証順序、節間の橋、注の置き場所を、執筆者が先に記録した**監査契約**（Suiko内のローカルな機械可読作業記録）と照合します。契約があることで、推敲の都合だけで研究課題、章順、概念、結論を変えることを防ぎます。
+
+```sh
+suiko academic paper.md --contract academic-contract.json --json
+
+# 提出用成果物まで確認する場合
+suiko academic paper.md --contract academic-contract.json \
+  --docx submission.docx --template official-template.docx \
+  --pdf submission.pdf --export-record delivery-record.json
+```
+
+このレーンは、形式的なリサーチ・クエスチョンを置かない方針、用語の出典又は造語表示、防御的留保候補、本文引用と参考文献の著者・年又は`[@citation-key]`の双方向照合、段落第一文と節間の共有対象、本文・注・不要の注分類を確認します。引用符付きの分類名、公式値、短いラベルは`accepted_labels`へ登録できます。契約の論証順序、用語、第一文順、文体プロファイルは明示必須です。DOCXとPDFを片方でも指定した場合は、公式テンプレートと納品記録も必須になります。同期は本文・表・注・参考文献を双方向照合するため、旧文や余計な内容の残存も失敗になります。`delivery-record.json` のWord出力とPDF目視は自己申告であり、Suikoが実施事実を証明するものではありません。JSONの`passed`は指定された全チェックの合格、`delivery_ready`は提出可能な成果物監査まで通った状態を示します。
+
+契約の完全な項目と、最終PDFの目視確認を含む手順は[academic-delivery.md](skills/suiko/references/academic-delivery.md)を参照してください。
 
 複数ファイルのJSONは、単一ファイルと同じレコードを配列で返します。単一ファイルの `lint --json` は `file`、`suiko_version`、`stats`、`findings` を持つオブジェクトです。
 
@@ -125,6 +147,8 @@ printf '重要なのは、結論です。\n' | suiko lint - --json
 `--format github` はfindingをGitHub Actionsのworkflowコマンド（`::warning file=...,line=...,col=...::`）として出力し、PRの該当行へ注釈を付けられます。severityは `critical→error` / `warn→warning` / `info→notice` に対応します。`--format sarif` はSARIF 2.1.0を出力し、`columnKind: unicodeCodePoints` を宣言して `span` の列をそのまま使います（severityは `error` / `warning` / `note`）。
 
 `terms --audit` は複数ファイルの用語候補を集計し、SudachiDictの正規化表記で表記揺れ（サーバー/サーバ等）をクラスタして返します。読み取り専用で、置換や辞書の書き込みは行いません。
+
+`lexical-audit`は既存`terms`のJSONを変更しない独立レーンです。固定フォーマットと小標本は`data/lexical-reference-v1.json`に収録しています。参照JSONは`version: 1`、`source`、`known_compounds`、`corpus_counts`、`register_sets`を持ちます。一般名詞・接尾辞・必要な形状詞の連続を候補化し、`forbidden_match`、`orthographic_variation`、`register_variation`、`novel_compound`を根拠別に返します。新奇複合語は本文5回以下、参照コーパス1回以下、定義手掛かりなし、登録なしをすべて満たし、参照資源にコーパス頻度が明記された場合だけinfoになります。参照資源にない語を頻度0とはみなしません。Sudachiだけでは意味的同義性を決められないため、漢語・和語等のレジスター比較は参照資源に明示した集合だけを扱います。自動置換や原稿の書き換えは行いません。
 
 `lint --json` の `stats.readability` には平均文長、動詞・助詞比率、文字種比率の観測値が入ります。読者別の難易度スコアは、正解ラベル付きコーパスで校正できるまで実装しません（観測値のみを提供します）。
 

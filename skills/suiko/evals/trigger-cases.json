@@ -58,6 +58,13 @@
       "prompt": "過去の日本語記事4本から文体の傾向を学び、style-profile.mdを作って次の記事へ反映してください。"
     },
     {
+      "id": "academic-delivery-audit",
+      "split": "train",
+      "expected": "trigger",
+      "capability": "academic audit",
+      "prompt": "この日本語の投稿論文について、中心命題、用語の出典、節間のつながり、注、Wordで出力したPDFまで確認して仕上げてください。"
+    },
+    {
       "id": "conclusion-first-directive",
       "split": "train",
       "expected": "trigger",
@@ -147,6 +154,13 @@
       "expected": "trigger",
       "capability": "style learning",
       "prompt": "私が以前書いたコラムを読んで文体プロファイルを作り、新しい日本語原稿の調子を合わせてください。"
+    },
+    {
+      "id": "holdout-academic-terms",
+      "split": "test",
+      "expected": "trigger",
+      "capability": "academic audit",
+      "prompt": "研究報告の改稿で造語の導入根拠と引用・参考文献を照合し、提出用DOCXとPDFの整合性も監査してください。"
     },
     {
       "id": "holdout-heading-directive",

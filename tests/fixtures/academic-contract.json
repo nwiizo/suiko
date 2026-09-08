@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "central_claim": "執政の創造性は、日常業務に現れる判断の連鎖を説明する。",
+  "explanandum": "政策問題",
+  "allow_formal_research_question": false,
+  "reject_defensive_caveats": true,
+  "required_order": ["執政の創造性", "政策規範", "行政計画"],
+  "terms": [
+    {"term": "執政の創造性", "status": "coined"},
+    {"term": "政策規範", "status": "established", "source": "佐野"}
+  ],
+  "proper_nouns": ["佐野", "研究者A"],
+  "first_sentence_order": ["行政組織が日常的に政策問題を形成し", "佐野", "政策問題を行政計画へ"],
+  "section_bridges": [
+    {"from": "導入", "to": "制度", "shared_terms": ["政策問題"]}
+  ],
+  "note_decisions": [
+    {"marker": "[^1]", "disposition": "note", "text": "資料来歴"}
+  ],
+  "style_profile": {
+    "sentence_length_mean_min": 15.0,
+    "sentence_length_mean_max": 80.0,
+    "citation_led_paragraph_ratio_max": 0.5,
+    "connectives": ["以上より", "本稿は"],
+    "discovery_marker_at_paragraph_end": false
+  }
+}
