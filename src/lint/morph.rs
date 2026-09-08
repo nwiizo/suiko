@@ -1,5 +1,7 @@
 //! 品詞列（Sudachi形態素）ベースの検出器と、文単位のtoken補助。
 
+use std::collections::BTreeMap;
+
 use crate::Error;
 use crate::morphology::{Morpheme, Morphology};
 use crate::text::Sentence;
@@ -90,6 +92,14 @@ const SOFTWARE_NOUNS: &[&str] = &[
 const PHYSICAL_SHIPMENT_NOUNS: &[&str] = &[
     "工場", "倉庫", "在庫", "配送", "端末", "機器", "製品", "検品",
 ];
+
+const ABSTRACT_TRANSPORT_SUBJECTS: &[&str] = &["仕様", "設計", "仕組み", "指標", "議論"];
+
+const ABSTRACT_TRANSPORT_OBJECTS: &[&str] = &["意図", "判断", "理解", "実装", "成果"];
+
+const ABSTRACT_EFFECT_SUBJECTS: &[&str] = &["複雑", "品質", "生産性", "リスク"];
+
+const QUANTITY_NOUN_ENDINGS: &[&str] = &["量", "数"];
 
 #[derive(Clone, Debug)]
 pub(super) struct TokenizedSentence {
@@ -318,6 +328,94 @@ fn self_labeling_span(tokens: &[Morpheme]) -> Option<(usize, usize)> {
     }
 
     None
+}
+
+pub(super) fn explanation_preview_findings(
+    tokenized: &[TokenizedSentence],
+    raw: &str,
+) -> Vec<Finding> {
+    let raw_lines = raw.split('\n').collect::<Vec<_>>();
+    // コード内の「#」や参考文献を節の区切りとして扱わない。
+    let structural = crate::text::mask_markdown_structure_preserving_headings(raw);
+    let heading_lines = structural
+        .lines()
+        .enumerate()
+        .filter_map(|(index, line)| crate::text::is_heading(line).then_some(index + 1))
+        .collect::<Vec<_>>();
+    let mut sections = BTreeMap::<usize, Vec<AggregateHit>>::new();
+    for sentence in tokenized {
+        let raw_line = raw_lines[sentence.line - 1];
+        let paragraph_start = sentence.line == 1
+            || raw_lines[sentence.line - 2].trim().is_empty()
+            || heading_lines.binary_search(&(sentence.line - 1)).is_ok();
+        if !paragraph_start
+            || sentence.line_byte_start != raw_line.len() - raw_line.trim_start().len()
+        {
+            continue;
+        }
+        let Some((start, end)) = explanation_preview_span(&sentence.tokens) else {
+            continue;
+        };
+        let section = heading_lines.partition_point(|line| *line < sentence.line);
+        sections.entry(section).or_default().push(AggregateHit {
+            line: sentence.line,
+            excerpt: sentence.excerpt(start, end),
+            span: sentence.span(&raw_lines, start, end),
+            related_lines: vec![sentence.line],
+        });
+    }
+    sections
+        .into_values()
+        .flat_map(|hits| {
+            aggregate_pattern_finding(hits, 3, "repeated_explanation_preview", |count, related| {
+                format!(
+                    "同じ節の段落頭で、説明・紹介・解説を予告する形態素列が{count}回ある（閾値3回以上）。必要な案内は残し、予告の代わりに内容から書き始められる箇所を確認してください。対応箇所: {related}"
+                )
+            })
+        })
+        .collect()
+}
+
+fn explanation_preview_span(tokens: &[Morpheme]) -> Option<(usize, usize)> {
+    let first = tokens.first()?;
+    if !matches!(first.surface.as_str(), "本節" | "本章" | "ここ" | "以下")
+        || tokens.get(1)?.surface != "で"
+        || tokens.get(2)?.surface != "は"
+    {
+        return None;
+    }
+    let last = tokens.len().checked_sub(1)?;
+    let verb_index = if tokens[last].dictionary_form() == "ます" {
+        last.checked_sub(1)?
+    } else {
+        last
+    };
+    let verb = &tokens[verb_index];
+    let noun_index = verb_index.checked_sub(1)?;
+    let noun = &tokens[noun_index];
+    if noun_index <= 3
+        || verb.pos(0) != "動詞"
+        || verb.dictionary_form() != "する"
+        || !tokens[last].pos(5).starts_with("終止形")
+        || noun.pos(2) != "サ変可能"
+        || !matches!(noun.dictionary_form(), "説明" | "紹介" | "解説")
+    {
+        return None;
+    }
+    // 別の主語や引用、否定・過去・可能を含む述語を予告へまとめない。
+    // 述語の後ろは「ます」だけを許すので、活用に伴う意味の違いを保てる。
+    if tokens[3..noun_index]
+        .iter()
+        .enumerate()
+        .any(|(index, token)| {
+            (token.pos(0) == "助詞" && matches!(token.surface.as_str(), "は" | "が"))
+                || (matches!(token.pos(0), "記号" | "補助記号")
+                    && !(index == 0 && token.surface == "、"))
+        })
+    {
+        return None;
+    }
+    Some((first.byte_start, tokens[last].byte_end))
 }
 
 pub(super) fn negative_listing_findings(
@@ -624,6 +722,42 @@ pub(super) fn technical_jargon_metaphor_findings(
     findings
 }
 
+/// 抽象名詞を動作主にして移動や効果を表す、技術文書の翻訳調候補。
+/// 物理的な運搬や一般的な「効く」を拾わないよう、観測済みの格関係と
+/// 数量名詞の直後に限定する。
+pub(super) fn abstract_predicate_metaphor_findings(
+    tokenized: &[TokenizedSentence],
+    raw_lines: &[&str],
+) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    for sentence in tokenized {
+        if let Some((start, end)) = abstract_transport_span(&sentence.tokens) {
+            let mut finding = Finding::new(
+                sentence.line,
+                "abstract_metaphor",
+                sentence.excerpt(start, end),
+                "info",
+                "抽象名詞と移動動詞の組み合わせ。意図や判断がどのように実装へ反映されるか、具体的に書けるか確認してください",
+            );
+            finding.span = sentence.span(raw_lines, start, end);
+            findings.push(finding);
+        }
+
+        if let Some((start, end)) = abstract_effect_span(&sentence.tokens) {
+            let mut finding = Finding::new(
+                sentence.line,
+                "abstract_metaphor",
+                sentence.excerpt(start, end),
+                "info",
+                "抽象的な尺度と「で効く」の組み合わせ。何がどのように影響するか、具体的に書けるか確認してください",
+            );
+            finding.span = sentence.span(raw_lines, start, end);
+            findings.push(finding);
+        }
+    }
+    findings
+}
+
 fn contains_any(tokens: &[Morpheme], candidates: &[&str]) -> bool {
     position_any(tokens, candidates).is_some()
 }
@@ -692,6 +826,110 @@ fn software_shipment_span(tokens: &[Morpheme]) -> Option<(usize, usize)> {
         tokens[context.min(shipment)].byte_start,
         tokens[end].byte_end,
     ))
+}
+
+fn abstract_transport_span(tokens: &[Morpheme]) -> Option<(usize, usize)> {
+    let verb = tokens
+        .iter()
+        .position(|token| token.dictionary_form() == "運ぶ")?;
+    let destination = tokens[..verb]
+        .iter()
+        .enumerate()
+        .find_map(|(index, token)| {
+            ABSTRACT_TRANSPORT_OBJECTS
+                .contains(&token.dictionary_form())
+                .then_some(index)
+                .filter(|index| {
+                    tokens
+                        .get(*index + 1)
+                        .is_some_and(|particle| matches!(particle.surface.as_str(), "へ" | "に"))
+                })
+        })?;
+    let object = tokens[..destination]
+        .iter()
+        .enumerate()
+        .find_map(|(index, token)| {
+            ABSTRACT_TRANSPORT_OBJECTS
+                .contains(&token.dictionary_form())
+                .then_some(index)
+                .filter(|index| {
+                    tokens
+                        .get(*index + 1)
+                        .is_some_and(|particle| particle.surface == "を")
+                })
+        })?;
+    let subject = tokens[..object]
+        .iter()
+        .enumerate()
+        .find_map(|(index, token)| {
+            ABSTRACT_TRANSPORT_SUBJECTS
+                .contains(&token.dictionary_form())
+                .then_some(index)
+                .filter(|index| {
+                    tokens
+                        .get(*index + 1)
+                        .is_some_and(|particle| matches!(particle.surface.as_str(), "は" | "が"))
+                })
+        })?;
+    if punctuation_between(tokens, subject, object)
+        || punctuation_between(tokens, object, destination)
+        || punctuation_between(tokens, destination, verb)
+    {
+        return None;
+    }
+    Some((tokens[subject].byte_start, tokens[verb].byte_end))
+}
+
+fn abstract_effect_span(tokens: &[Morpheme]) -> Option<(usize, usize)> {
+    let verb = tokens
+        .iter()
+        .position(|token| token.dictionary_form() == "効く")?;
+    let particle = verb.checked_sub(1)?;
+    let quantity = particle.checked_sub(1)?;
+    if tokens[particle].surface != "で"
+        || tokens[quantity].pos(0) != "名詞"
+        || !QUANTITY_NOUN_ENDINGS.iter().any(|ending| {
+            tokens[quantity].dictionary_form() == *ending
+                || tokens[quantity].surface.ends_with(ending)
+        })
+    {
+        return None;
+    }
+    let (subject, subject_particle) = abstract_effect_subject(tokens, quantity)?;
+    if subject_particle >= quantity
+        || (subject_particle + 1..quantity).any(|index| {
+            let token = &tokens[index];
+            token.pos(0) == "助詞"
+                && (token.surface == "が"
+                    || (token.surface == "は" && tokens[index - 1].pos(0) != "助詞"))
+        })
+    {
+        return None;
+    }
+    Some((tokens[subject].byte_start, tokens[verb].byte_end))
+}
+
+fn abstract_effect_subject(tokens: &[Morpheme], before: usize) -> Option<(usize, usize)> {
+    tokens[..before]
+        .iter()
+        .enumerate()
+        .find_map(|(index, token)| {
+            if !ABSTRACT_EFFECT_SUBJECTS.contains(&token.dictionary_form()) {
+                return None;
+            }
+            let suffix = tokens.get(index + 1);
+            let particle_index = if token.dictionary_form() == "複雑"
+                && suffix.is_some_and(|candidate| {
+                    candidate.surface == "さ" && candidate.pos(0) == "接尾辞"
+                }) {
+                index + 2
+            } else {
+                index + 1
+            };
+            tokens.get(particle_index).and_then(|particle| {
+                matches!(particle.surface.as_str(), "は" | "が").then_some((index, particle_index))
+            })
+        })
 }
 
 /// 機械的に安全な唯一の縮約: 「〜することができる」→「〜できる」。

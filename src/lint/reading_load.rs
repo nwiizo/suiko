@@ -21,12 +21,6 @@ fn first_negation_modifies_noun(
     first: usize,
     second: usize,
 ) -> bool {
-    if tokens[first + 1..second]
-        .iter()
-        .any(|token| token.dictionary_form() == "ある")
-    {
-        return false;
-    }
     let Some(_) = tokens.get(first + 1).filter(|token| {
         matches!(token.pos(0), "名詞" | "代名詞")
             && !matches!(token.surface.as_str(), "こと" | "わけ" | "はず")
@@ -36,9 +30,23 @@ fn first_negation_modifies_noun(
     let Some(particle) = tokens.get(first + 2) else {
         return false;
     };
+    // 「必要のないデータはない」のような存在の否定は候補に残す。
+    // 別の修飾句にある「ある」まで、この例外へ含めない。
+    if matches!(particle.surface.as_str(), "は" | "が" | "も")
+        && tokens[first + 1..second]
+            .iter()
+            .rev()
+            .find(|token| token.pos(0) == "動詞")
+            .is_some_and(|token| token.dictionary_form() == "ある")
+    {
+        return false;
+    }
     first + 2 < second
         && particle.pos(0) == "助詞"
-        && matches!(particle.surface.as_str(), "は" | "が" | "を" | "も")
+        && matches!(
+            particle.surface.as_str(),
+            "は" | "が" | "を" | "も" | "や" | "に"
+        )
 }
 
 pub fn analyze_reading_load(
@@ -197,6 +205,11 @@ pub fn analyze_reading_load_with_thresholds(
                 && !obligation
                 && !conditional_negative.is_match(&phrase)
                 && !first_negation_modifies_noun(&sentence.tokens, first, second)
+                // 「聞こえず話せない」は別述語。「見ずにはいられない」は残す。
+                && !(sentence.tokens[first].surface == "ず"
+                    && sentence.tokens.get(first + 1).is_some_and(|token| {
+                        token.pos(0) == "動詞" && token.dictionary_form() != "いる"
+                    }))
             {
                 let mut finding = Finding::new(
                     sentence.line,

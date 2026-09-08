@@ -280,3 +280,25 @@ one clause, and suppresses sentences containing display or physical-shipment
 context words. It does not provide automatic suggestions because the intended
 replacement depends on whether the text means pass, success, publish, release,
 or distribution.
+
+## Abstract predicate metaphor candidates (2026-09-04)
+
+The `abstract_metaphor` category now has two additional patterns limited to
+`--genre tech --experimental`: an abstract subject, object, and destination
+joined by `運ぶ`, and an abstract scale followed by a quantity noun and
+`で効く`. Four fire samples and eight silent samples cover the two patterns,
+physical transport, ordinary efficacy expressions, excluded subjects and
+cross-clause subjects. Combined with the existing noun-metaphor fixtures, the
+category detects 9/9 fire samples and 0/17 silent samples (Wilson 95% FPR upper
+bound 0.184). Passive reporting expressions such as `関係が示された` remain a
+manual review item because they are also ordinary technical prose.
+
+## 説明予告の反復（2026-09-06）
+
+`repeated_explanation_preview`を`tech + experimental`の`info`候補として追加した。対象は、同じ節の段落頭にある「本節／本章／ここ／以下 + では + 対象 + 説明／紹介／解説 + する（ます）」の反復3回以上。終止形を確認し、否定・過去・可能・義務や別主語を含む文を除外する。数詞や新情報の量から総合点を作る機能ではない。
+
+`suiko-eval labeled eval/corpus.toml`で正例5/5、対照例0/10。Wilson 95%区間はdetection 0.566–1.000、fpr 0.000–0.278。独立した一般文書の精度評価ではなく、構文境界の合成fixtureによる確認であり、閾値3回の最適性や推敲の改善率は未評価。既定ONやseverity昇格の根拠には使わない。
+
+回帰テストでは、単発・2回、別見出し、同一段落の折り返し、文中、引用、リスト、コードを対照にした。同じ文頭の`repeated_syntax_template`だけを抑制し、同じ行の後続文に対する指摘は維持する。既存の`low-ttr-silent-002`不一致は今回も残る。
+
+`suiko-eval report eval/corpus.toml --experimental --split dev --external`も実行し、取得済み外部文書64件を含む人間75文書・AI4文書で発火ゼロだった。対象ジャンルのtechだけでは人間0/35・AI0/1。essay・businessは機能を有効にしないため、その沈黙を精度へ加算しない。実文書中に正例があるかの人手ラベルは付けておらず、見落とし率や改善効果の根拠にはならない。holdoutはこの検討では使っていない。

@@ -37,7 +37,7 @@ CLI が見つからない場合（`suiko --version` が失敗する場合）は�
 
 ## 2. 文体制約の下で書く
 
-新規執筆や大きな改稿では [writing-constitution.md](references/writing-constitution.md) を読む。特に次を守る。
+新規執筆や大きな改稿では [writing-constitution.md](references/writing-constitution.md) を読む。以下を基本とし、エッセイの結論の位置や意図した反復は [ジャンル別の方針](references/genre-notes.md) に従う。
 
 - 結論を先に置き、前置きで助走しない。
 - 見出しを内容ラベルではなくメッセージにする。
@@ -101,6 +101,7 @@ finding は疑いであって命令ではない。該当行と周辺文脈を読
 - 読みやすさの原則: [readability-principles.md](references/readability-principles.md)
 - 読解負荷の詳細: [readability-antipatterns.md](references/readability-antipatterns.md)
 - ジャンル差: [genre-notes.md](references/genre-notes.md)
+- エッセイで反復・迷い・語調の変化を残す判断: [narrative-judgment.md](references/narrative-judgment.md)
 - Before/After: [examples.md](references/examples.md)
 
 `outline` では論旨、見出し、反復、節の濃淡、結論の位置を見る。`terms` の `has_gloss_hint` は説明済みという判定ではなく、初出付近に説明マーカーがあるという手掛かりとして扱う。

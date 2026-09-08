@@ -8,7 +8,7 @@ mod morph;
 mod patterns;
 mod reading_load;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -35,6 +35,7 @@ const EXPERIMENTAL_CATEGORIES: &[&str] = &[
     "high_emoji_symbol_density",
     "demonstrative_reference",
     "negative_listing",
+    "repeated_explanation_preview",
     "repeated_sentence_mode",
     "respectively_scope",
     "self_labeling_repetition",
@@ -81,6 +82,7 @@ const RULE_CATEGORIES: &[&str] = &[
     "paragraph_lead_conjunction",
     "predicate_colon_lead",
     "redundant_light_verb",
+    "repeated_explanation_preview",
     "repeated_sentence_lead",
     "repeated_sentence_mode",
     "repeated_syntax_template",
@@ -341,6 +343,7 @@ pub fn analyze_with_thresholds(
     findings.extend(patterns::antithesis_findings(
         &masked,
         raw,
+        &tokenized,
         split.len(),
         critical_above,
     ));
@@ -351,8 +354,12 @@ pub fn analyze_with_thresholds(
     ));
     findings.extend(morph::negative_listing_findings(&tokenized, &raw_lines));
     if experimental && genre == Some("tech") {
+        findings.extend(morph::explanation_preview_findings(&tokenized, raw));
         findings.extend(morph::technical_ambiguity_findings(&tokenized, &raw_lines));
         findings.extend(morph::technical_jargon_metaphor_findings(
+            &tokenized, &raw_lines,
+        ));
+        findings.extend(morph::abstract_predicate_metaphor_findings(
             &tokenized, &raw_lines,
         ));
     }
@@ -361,6 +368,24 @@ pub fn analyze_with_thresholds(
     findings.extend(morph::redundant_light_verb_findings(&tokenized, &raw_lines));
     findings.extend(rhythm_findings);
     findings.extend(ngram_findings);
+    let preview_starts = findings
+        .iter()
+        .filter(|finding| finding.category == "repeated_explanation_preview")
+        .flat_map(|finding| finding.related_lines.iter().flatten().copied())
+        .map(|line| {
+            (
+                line,
+                raw_lines[line - 1].len() - raw_lines[line - 1].trim_start().len(),
+            )
+        })
+        .collect::<BTreeSet<_>>();
+    // 同じ文頭に対する品詞4-gramより、述語まで見た具体的な指摘を残す。
+    findings.retain(|finding| {
+        finding.category != "repeated_syntax_template"
+            || !finding
+                .span
+                .is_some_and(|span| preview_starts.contains(&(span.start_line, span.start_byte)))
+    });
     findings.extend(lexical_findings);
     findings.extend(specificity_findings);
     findings.extend(paragraph_analysis.findings);

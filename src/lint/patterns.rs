@@ -217,25 +217,59 @@ pub(super) fn translationese_findings(masked: &str, raw: &str) -> Vec<Finding> {
 pub(super) fn antithesis_findings(
     masked: &str,
     raw: &str,
+    tokenized: &[super::morph::TokenizedSentence],
     sentence_count: usize,
     critical_above: f64,
 ) -> Vec<Finding> {
     let raw_lines = raw.split('\n').collect::<Vec<_>>();
     let patterns = [
-        Regex::new(r"ではなく、?.{0,30}").expect("valid antithesis regex"),
+        Regex::new(r"ではなく").expect("valid antithesis regex"),
         Regex::new(r"だけでなく.{0,10}も").expect("valid antithesis regex"),
     ];
+    let temporal_starts = tokenized
+        .iter()
+        .flat_map(|sentence| {
+            sentence
+                .tokens
+                .iter()
+                .enumerate()
+                .filter_map(|(index, token)| {
+                    let temporal = token.dictionary_form() == "なくなる"
+                        || (token.surface == "なく"
+                            && sentence.tokens.get(index + 1).is_some_and(|next| {
+                                next.dictionary_form() == "なる"
+                                    && token.byte_end == next.byte_start
+                            }));
+                    temporal.then_some((sentence.line, sentence.line_byte_start + token.byte_start))
+                })
+        })
+        .collect::<BTreeSet<_>>();
     let mut hits = Vec::<(usize, usize, usize, String)>::new();
     for (line_no, line) in numbered_lines(masked) {
         let raw_line = raw_lines.get(line_no - 1).copied().unwrap_or(line);
         for pattern in &patterns {
             for found in pattern.find_iter(line) {
+                // 状態変化は除外するが、同じ行の後続の対比は走査し続ける。
+                let end = if found.as_str() == "ではなく" {
+                    if temporal_starts.contains(&(line_no, found.start() + "では".len())) {
+                        continue;
+                    }
+                    let tail = &line[found.end()..];
+                    found.end()
+                        + tail
+                            .chars()
+                            .take(30 + usize::from(tail.starts_with('、')))
+                            .map(char::len_utf8)
+                            .sum::<usize>()
+                } else {
+                    found.end()
+                };
                 hits.push((
                     line_no,
                     found.start(),
-                    found.end(),
+                    end,
                     raw_line
-                        .get(found.start()..found.end())
+                        .get(found.start()..end)
                         .unwrap_or(found.as_str())
                         .trim()
                         .to_owned(),

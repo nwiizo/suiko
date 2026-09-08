@@ -705,6 +705,102 @@ expect = "silent"
 note = "建材の用途を示す述語での本来の用例"
 
 [[sample]]
+id = "abstract-predicate-metaphor-fire-001"
+path = "labeled/abstract_predicate_metaphor/fire-001.md"
+category = "abstract_metaphor"
+expect = "fire"
+genre = "tech"
+note = "抽象的な仕様が意図を実装へ運ぶ"
+
+[[sample]]
+id = "abstract-predicate-metaphor-fire-002"
+path = "labeled/abstract_predicate_metaphor/fire-002.md"
+category = "abstract_metaphor"
+expect = "fire"
+genre = "tech"
+note = "抽象的な設計が判断を実装へ運ぶ"
+
+[[sample]]
+id = "abstract-predicate-metaphor-fire-003"
+path = "labeled/abstract_predicate_metaphor/fire-003.md"
+category = "abstract_metaphor"
+expect = "fire"
+genre = "tech"
+note = "複雑さを知識量で測る「で効く」の用例"
+
+[[sample]]
+id = "abstract-predicate-metaphor-fire-004"
+path = "labeled/abstract_predicate_metaphor/fire-004.md"
+category = "abstract_metaphor"
+expect = "fire"
+genre = "tech"
+note = "品質を障害数で測る「で効く」の用例"
+
+[[sample]]
+id = "abstract-predicate-metaphor-silent-001"
+path = "labeled/abstract_predicate_metaphor/silent-001.md"
+category = "abstract_metaphor"
+expect = "silent"
+genre = "tech"
+note = "荷物を店舗へ運ぶ物理的な運搬"
+
+[[sample]]
+id = "abstract-predicate-metaphor-silent-002"
+path = "labeled/abstract_predicate_metaphor/silent-002.md"
+category = "abstract_metaphor"
+expect = "silent"
+genre = "tech"
+note = "人を動作主にした運ぶの用例"
+
+[[sample]]
+id = "abstract-predicate-metaphor-silent-003"
+path = "labeled/abstract_predicate_metaphor/silent-003.md"
+category = "abstract_metaphor"
+expect = "silent"
+genre = "tech"
+note = "仕様が入出力を示す自然な用例"
+
+[[sample]]
+id = "abstract-predicate-metaphor-silent-004"
+path = "labeled/abstract_predicate_metaphor/silent-004.md"
+category = "abstract_metaphor"
+expect = "silent"
+genre = "tech"
+note = "薬が痛みに効く用例"
+
+[[sample]]
+id = "abstract-predicate-metaphor-silent-005"
+path = "labeled/abstract_predicate_metaphor/silent-005.md"
+category = "abstract_metaphor"
+expect = "silent"
+genre = "tech"
+note = "機能が時間短縮に効く用例"
+
+[[sample]]
+id = "abstract-predicate-metaphor-silent-006"
+path = "labeled/abstract_predicate_metaphor/silent-006.md"
+category = "abstract_metaphor"
+expect = "silent"
+genre = "tech"
+note = "数量名詞の後に「に効く」が続く用例"
+
+[[sample]]
+id = "abstract-predicate-metaphor-silent-007"
+path = "labeled/abstract_predicate_metaphor/silent-007.md"
+category = "abstract_metaphor"
+expect = "silent"
+genre = "tech"
+note = "対象外の主語と「で効く」の組み合わせ"
+
+[[sample]]
+id = "abstract-predicate-metaphor-silent-008"
+path = "labeled/abstract_predicate_metaphor/silent-008.md"
+category = "abstract_metaphor"
+expect = "silent"
+genre = "tech"
+note = "別の節にある品質を「で効く」と結び付けない"
+
+[[sample]]
 id = "technical-jargon-metaphor-fire-001"
 path = "labeled/technical_jargon_metaphor/fire-001.md"
 category = "technical_jargon_metaphor"
@@ -815,3 +911,123 @@ category = "technical_jargon_metaphor"
 expect = "silent"
 genre = "tech"
 note = "物の状態を理由に出荷停止を決める物流の用例"
+
+[[sample]]
+id = "repeated-explanation-preview-fire-001"
+path = "labeled/repeated_explanation_preview/fire-001.md"
+category = "repeated_explanation_preview"
+expect = "fire"
+genre = "tech"
+note = "同じ節で説明予告が3段落の先頭にある"
+
+[[sample]]
+id = "repeated-explanation-preview-fire-002"
+path = "labeled/repeated_explanation_preview/fire-002.md"
+category = "repeated_explanation_preview"
+expect = "fire"
+genre = "tech"
+note = "異なる予告動詞と丁寧体・常体をまとめる"
+
+[[sample]]
+id = "repeated-explanation-preview-fire-003"
+path = "labeled/repeated_explanation_preview/fire-003.md"
+category = "repeated_explanation_preview"
+expect = "fire"
+genre = "tech"
+note = "見出しの直後と読点付きの予告"
+
+[[sample]]
+id = "repeated-explanation-preview-fire-004"
+path = "labeled/repeated_explanation_preview/fire-004.md"
+category = "repeated_explanation_preview"
+expect = "fire"
+genre = "tech"
+note = "各段落の本文があっても冒頭の予告を数える"
+
+[[sample]]
+id = "repeated-explanation-preview-fire-005"
+path = "labeled/repeated_explanation_preview/fire-005.md"
+category = "repeated_explanation_preview"
+expect = "fire"
+genre = "tech"
+note = "コード内の見出しで節の集計を分断しない"
+
+[[sample]]
+id = "repeated-explanation-preview-silent-001"
+path = "labeled/repeated_explanation_preview/silent-001.md"
+category = "repeated_explanation_preview"
+expect = "silent"
+genre = "tech"
+note = "予告2回は集計しない"
+
+[[sample]]
+id = "repeated-explanation-preview-silent-002"
+path = "labeled/repeated_explanation_preview/silent-002.md"
+category = "repeated_explanation_preview"
+expect = "silent"
+genre = "tech"
+note = "各章の冒頭に一度ずつ置かれた案内"
+
+[[sample]]
+id = "repeated-explanation-preview-silent-003"
+path = "labeled/repeated_explanation_preview/silent-003.md"
+category = "repeated_explanation_preview"
+expect = "silent"
+genre = "tech"
+note = "実際に説明した過去の行為"
+
+[[sample]]
+id = "repeated-explanation-preview-silent-004"
+path = "labeled/repeated_explanation_preview/silent-004.md"
+category = "repeated_explanation_preview"
+expect = "silent"
+genre = "tech"
+note = "説明しないという否定"
+
+[[sample]]
+id = "repeated-explanation-preview-silent-005"
+path = "labeled/repeated_explanation_preview/silent-005.md"
+category = "repeated_explanation_preview"
+expect = "silent"
+genre = "tech"
+note = "説明できるという可能性"
+
+[[sample]]
+id = "repeated-explanation-preview-silent-006"
+path = "labeled/repeated_explanation_preview/silent-006.md"
+category = "repeated_explanation_preview"
+expect = "silent"
+genre = "tech"
+note = "別の主体の説明行為"
+
+[[sample]]
+id = "repeated-explanation-preview-silent-007"
+path = "labeled/repeated_explanation_preview/silent-007.md"
+category = "repeated_explanation_preview"
+expect = "silent"
+genre = "tech"
+note = "説明義務は予告の現在形と異なる"
+
+[[sample]]
+id = "repeated-explanation-preview-silent-008"
+path = "labeled/repeated_explanation_preview/silent-008.md"
+category = "repeated_explanation_preview"
+expect = "silent"
+genre = "tech"
+note = "引用した例文"
+
+[[sample]]
+id = "repeated-explanation-preview-silent-009"
+path = "labeled/repeated_explanation_preview/silent-009.md"
+category = "repeated_explanation_preview"
+expect = "silent"
+genre = "tech"
+note = "一段落中の折り返しを段落頭に数えない"
+
+[[sample]]
+id = "repeated-explanation-preview-silent-010"
+path = "labeled/repeated_explanation_preview/silent-010.md"
+category = "repeated_explanation_preview"
+expect = "silent"
+genre = "tech"
+note = "予告文型について述べる引用"
