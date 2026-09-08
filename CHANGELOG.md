@@ -4,6 +4,8 @@ Suikoの公開リリースを記録する。日付はJSTで、各項目は実測
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-09-08
+
 ### 追加
 
 - `--genre tech --experimental`に`repeated_explanation_preview`を追加した。文書を指す語と説明・紹介・解説の現在形を形態素列で確認し、同じ節の段落頭で3回以上繰り返す場合に`info`を返す。過去・否定・可能・義務や別主語の文は除外し、同じ文頭の品詞4-gramの指摘は重複させない
@@ -14,12 +16,20 @@ Suikoの公開リリースを記録する。日付はJSTで、各項目は実測
 - `--genre tech --experimental`に、テストやCIの成功状態を色で表す言い回しと、ソフトウェアの公開を物流語で表す言い回しを示す`technical_jargon_metaphor`を追加した。表示色と物理配送を示す語が同じ文にある場合は除外し、修正候補を付けない`info`として返す
 - `--genre tech --experimental`の`abstract_metaphor`に、抽象的な主語・目的語・移動先を`運ぶ`でつなぐ形と、数量名詞の直後を`で効く`とする形を追加した。物理的な運搬、薬や機能の効能、別の節にある主語は対象外とし、自動修正候補は付けない
 
-互換性: 公開JSONのキーは不変。`--genre tech --experimental`では`technical_jargon_metaphor`、`abstract_metaphor`、`repeated_explanation_preview`が新たに出力される場合がある。
+互換性: 既存の`lint`、`outline`、`terms`のJSON形式は不変。新しい2コマンドは独立したJSONを返す。`--genre tech --experimental`では`technical_jargon_metaphor`、`abstract_metaphor`、`repeated_explanation_preview`が新たに出力される場合がある。旧版のbaselineはv0.3.5で作り直す必要がある。
 
 ### 修正
 
+- 学術監査で括弧内の著者・年引用を照合し、語彙監査ではコメント・コード・参考文献等の本文外を共起判定から除外する。用語の2回目以降にある定義も反映する
+- 一般語「残る」は既定の禁止語へ追加せず、文脈に応じた目視確認の手引きとして扱う
 - `antithesis_repetition`で「ではなくなる」の活用形を状態変化として除外する。同じ行に続く本来の対比は引き続き集計する（#13）
 - `double_negative`で「聞こえず話せない」の別述語と、「根拠のない情報や信頼できない情報」「思わぬ落とし穴に遭わず」の別の対象に掛かる否定を除外する。「ないわけではない」「なくはない」「ずにはいられない」は候補に残す（#9）
+
+### 整理
+
+- `similarity-rs`で重複を確認し、学術監査の見出し正規化とMarkdown抽出、形態素ベースの検出結果に抜粋と位置情報を付ける処理を共通化した
+- Agent Skillへ、エッセイの意図した反復や記憶の限界を推敲で保つ判断例を追加した
+- Renovateを導入し、上流版を再配布する`crates/suiko-sudachi`は依存更新の対象外にした
 
 ## [0.3.4] - 2026-08-31
 
