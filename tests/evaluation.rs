@@ -198,7 +198,7 @@ fn report_summarizes_human_and_ai_documents_by_category() {
             "nominal_ending\thuman=0/14 fpr=0.000 ci95=0.000-0.215 findings=0\tai=1/4 detection=0.250 ci95=0.046-0.699 low_n findings=1",
         ))
         .stdout(predicate::str::contains(
-            "forbidden_phrase\thuman=9/14 fpr=0.643 ci95=0.388-0.837 findings=19\tai=3/4 detection=0.750 ci95=0.301-0.954 low_n findings=19",
+            "forbidden_phrase\thuman=6/14 fpr=0.429 ci95=0.214-0.674 findings=14\tai=3/4 detection=0.750 ci95=0.301-0.954 low_n findings=19",
         ))
         .stdout(predicate::str::contains(
             "lane=reading_load category=sentence_too_long\thuman=13/14 prevalence=0.929",

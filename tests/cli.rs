@@ -1277,26 +1277,71 @@ fn lint_accepts_standard_input() {
 }
 
 #[test]
-fn nokoru_is_a_forbidden_phrase() {
+fn literal_nokoru_does_not_trigger_a_default_warning() {
     let output = cargo_bin_cmd!("suiko")
-        .args(["lint", "-", "--json"])
-        .write_stdin("検証すべき仮説として残る。\n")
+        .args(["lint", "-", "--no-config", "--fail-on", "warn", "--json"])
+        .write_stdin("バックアップは七日間残る。\n")
         .output()
         .expect("run suiko lint with nokoru");
 
     assert!(output.status.success());
     let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
-    let finding = json["findings"]
-        .as_array()
-        .expect("findings array")
-        .iter()
-        .find(|finding| finding["category"] == "forbidden_phrase")
-        .expect("nokoru finding");
     assert!(
-        finding["detail"]
-            .as_str()
-            .expect("detail")
-            .contains("「残る」")
+        json["findings"]
+            .as_array()
+            .expect("findings array")
+            .iter()
+            .all(|finding| finding["category"] != "forbidden_phrase")
+    );
+}
+
+#[test]
+fn lexical_register_variation_ignores_masked_markdown() {
+    for hidden in [
+        "<!-- 施策を行う。 -->",
+        "`施策を行う`",
+        "```text\n施策を行う。\n```",
+        "# 参考文献\n\n施策を行う。",
+        "[資料](https://example.test/施策を行う)",
+    ] {
+        let output = cargo_bin_cmd!("suiko")
+            .args([
+                "lexical-audit",
+                "-",
+                "--reference",
+                "data/lexical-reference-v1.json",
+                "--json",
+            ])
+            .write_stdin(format!("施策を実施する。\n\n{hidden}\n"))
+            .output()
+            .expect("run lexical audit");
+        assert!(output.status.success());
+        let report: Value = serde_json::from_slice(&output.stdout).expect("valid JSON");
+        assert!(
+            report["findings"].as_array().expect("findings").is_empty(),
+            "masked text must not create register variation: {hidden}: {report}"
+        );
+    }
+}
+
+#[test]
+fn lexical_compound_definition_is_recognized_after_first_occurrence() {
+    let output = cargo_bin_cmd!("suiko")
+        .args([
+            "lexical-audit",
+            "-",
+            "--reference",
+            "data/lexical-reference-v1.json",
+            "--json",
+        ])
+        .write_stdin("説明候補を記録する。\n説明候補とは説明の仮案を指す。\n")
+        .output()
+        .expect("run lexical audit");
+    assert!(output.status.success());
+    let report: Value = serde_json::from_slice(&output.stdout).expect("valid JSON");
+    assert!(
+        report["findings"].as_array().expect("findings").is_empty(),
+        "an explicitly defined compound must not be reported as undefined: {report}"
     );
 }
 

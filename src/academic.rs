@@ -241,30 +241,28 @@ struct SyncInventory {
     duplicate_blocks: usize,
 }
 
+fn normalized_section_title(title: &str) -> String {
+    title
+        .trim_matches(|ch: char| {
+            ch.is_whitespace()
+                || matches!(
+                    ch,
+                    '-' | '―' | '—' | '–' | '━' | 'ー' | '_' | '=' | '~' | '＊' | '*' | '・'
+                )
+        })
+        .to_ascii_lowercase()
+}
+
 fn is_reference_heading(title: &str) -> bool {
-    let title = title.trim_matches(|ch: char| {
-        ch.is_whitespace()
-            || matches!(
-                ch,
-                '-' | '―' | '—' | '–' | '━' | 'ー' | '_' | '=' | '~' | '＊' | '*' | '・'
-            )
-    });
     matches!(
-        title.to_ascii_lowercase().as_str(),
+        normalized_section_title(title).as_str(),
         "参考文献" | "引用文献" | "references" | "bibliography"
     )
 }
 
 fn is_note_heading(title: &str) -> bool {
-    let title = title.trim_matches(|ch: char| {
-        ch.is_whitespace()
-            || matches!(
-                ch,
-                '-' | '―' | '—' | '–' | '━' | 'ー' | '_' | '=' | '~' | '＊' | '*' | '・'
-            )
-    });
     matches!(
-        title.to_ascii_lowercase().as_str(),
+        normalized_section_title(title).as_str(),
         "注" | "注記" | "notes" | "endnotes"
     )
 }
@@ -303,17 +301,21 @@ fn is_table_separator(line: &str) -> bool {
             .all(|ch| ch.is_whitespace() || matches!(ch, '|' | '-' | ':'))
 }
 
-fn plain_markdown(text: &str) -> String {
+fn markdown_content_lines(text: &str) -> impl Iterator<Item = String> + '_ {
     let image = Regex::new(r"!\[([^]]*)\]\([^)]+\)").expect("valid image regex");
     let link = Regex::new(r"\[([^]]+)\]\([^)]+\)").expect("valid link regex");
     let footnote = Regex::new(r"\[\^[^]]+\]").expect("valid footnote regex");
-    let html = Regex::new(r"</?[A-Za-z][^>]*>").expect("valid HTML regex");
     text.lines()
         .filter(|line| !is_table_separator(line))
         .map(|line| heading(line).map_or_else(|| line.to_owned(), |(_, title)| title))
-        .map(|line| image.replace_all(&line, "$1").into_owned())
-        .map(|line| link.replace_all(&line, "$1").into_owned())
-        .map(|line| footnote.replace_all(&line, "").into_owned())
+        .map(move |line| image.replace_all(&line, "$1").into_owned())
+        .map(move |line| link.replace_all(&line, "$1").into_owned())
+        .map(move |line| footnote.replace_all(&line, "").into_owned())
+}
+
+fn plain_markdown(text: &str) -> String {
+    let html = Regex::new(r"</?[A-Za-z][^>]*>").expect("valid HTML regex");
+    markdown_content_lines(text)
         .map(|line| html.replace_all(&line, "").into_owned())
         .map(|line| line.replace(['*', '`', '|'], " "))
         .collect::<Vec<_>>()
@@ -321,15 +323,7 @@ fn plain_markdown(text: &str) -> String {
 }
 
 fn citation_markdown(text: &str) -> String {
-    let image = Regex::new(r"!\[([^]]*)\]\([^)]+\)").expect("valid image regex");
-    let link = Regex::new(r"\[([^]]+)\]\([^)]+\)").expect("valid link regex");
-    let footnote = Regex::new(r"\[\^[^]]+\]").expect("valid footnote regex");
-    text.lines()
-        .filter(|line| !is_table_separator(line))
-        .map(|line| heading(line).map_or_else(|| line.to_owned(), |(_, title)| title))
-        .map(|line| image.replace_all(&line, "$1").into_owned())
-        .map(|line| link.replace_all(&line, "$1").into_owned())
-        .map(|line| footnote.replace_all(&line, "").into_owned())
+    markdown_content_lines(text)
         .map(|line| line.replace(['*', '`'], " "))
         .collect::<Vec<_>>()
         .join("\n")
@@ -764,7 +758,7 @@ fn citation_keys(source: &str) -> BTreeSet<String> {
     )
     .expect("valid narrative citation regex");
     let parenthetical = Regex::new(
-        r"(?:^|[|。！？、；：\s])(?P<author>[A-Za-zぁ-んァ-ヶー一-龠々ヶヵ・&.\s]{2,80})\s*[,，]\s*(?P<years>[12][0-9]{3}[a-z]?(?:\s*[、,]\s*[12][0-9]{3}[a-z]?)*?)",
+        r"(?:^|[|。！？、；：;（(\s])(?P<author>[A-Za-zぁ-んァ-ヶー一-龠々ヶヵ・&.\s]{2,80})\s*[,，]\s*(?P<years>[12][0-9]{3}[a-z]?(?:\s*[、,]\s*[12][0-9]{3}[a-z]?)*?)",
     )
     .expect("valid parenthetical citation regex");
     let years = Regex::new(r"[12][0-9]{3}[a-z]?").expect("valid citation year regex");
@@ -2359,6 +2353,39 @@ mod tests {
         assert!(
             keys.contains("内閣官房地域未来戦略本部事務局:2025"),
             "{keys:?}"
+        );
+    }
+
+    #[test]
+    fn parenthetical_citations_match_references_and_detect_missing_entries() {
+        for citation in [
+            "先行研究（佐野, 2021）を参照した。",
+            "先行研究(佐野, 2021)を参照した。",
+        ] {
+            let source = format!("{citation}\n\n# 参考文献\n\n佐野（2021）『研究』。\n");
+            let mut checks = Vec::new();
+            audit_citations(&mut checks, &source_view(&source, &[]), &BTreeMap::new());
+            assert!(
+                checks.iter().all(|item| item.status == "pass"),
+                "{checks:#?}"
+            );
+
+            let mut missing = Vec::new();
+            audit_citations(&mut missing, &source_view(citation, &[]), &BTreeMap::new());
+            assert!(
+                missing
+                    .iter()
+                    .any(|item| item.id == "citation_reference_match" && item.status == "fail"),
+                "a missing reference must be detected: {missing:#?}"
+            );
+        }
+
+        let source = "Evidence (Smith, 2021; Jones, 2022).\n\n# References\n\nSmith (2021).\nJones (2022).\n";
+        let mut checks = Vec::new();
+        audit_citations(&mut checks, &source_view(source, &[]), &BTreeMap::new());
+        assert!(
+            checks.iter().all(|item| item.status == "pass"),
+            "{checks:#?}"
         );
     }
 

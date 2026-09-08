@@ -154,7 +154,7 @@ fn extract_candidates(
                     let context = original.chars().take(160).collect::<String>();
                     let has_gloss = GLOSS_MARKERS
                         .iter()
-                        .any(|marker| original.contains(&format!("{term}{marker}")));
+                        .any(|marker| line.contains(&format!("{term}{marker}")));
                     let parts = tokens[index..end].iter().map(component).collect::<Vec<_>>();
                     let normalized = parts
                         .iter()
@@ -162,7 +162,10 @@ fn extract_candidates(
                         .collect::<String>();
                     candidates
                         .entry(term.to_owned())
-                        .and_modify(|candidate| candidate.count += 1)
+                        .and_modify(|candidate| {
+                            candidate.count += 1;
+                            candidate.has_gloss |= has_gloss;
+                        })
                         .or_insert(Candidate {
                             term: term.to_owned(),
                             components: parts,
@@ -268,11 +271,19 @@ pub fn audit(
         }
     }
 
+    let visible_inputs = inputs
+        .iter()
+        .map(|(file, text)| (file, mask_markdown_structure(&mask_html_comments(text))))
+        .collect::<Vec<_>>();
     for set in &reference.register_sets {
         let present = set
             .terms
             .iter()
-            .filter(|term| inputs.iter().any(|(_, text)| text.contains(term.as_str())))
+            .filter(|term| {
+                visible_inputs
+                    .iter()
+                    .any(|(_, text)| text.contains(term.as_str()))
+            })
             .collect::<Vec<_>>();
         if present.len() >= 2 {
             let detail = present
@@ -289,14 +300,17 @@ pub fn audit(
                         format!("参照資源のレジスター集合 {} で共起: {detail}", set.id),
                         reference.corpus_counts.get(&candidate.term).copied(),
                     ));
-                } else if let Some((file, text)) =
-                    inputs.iter().find(|(_, text)| text.contains(term.as_str()))
+                } else if let Some((input_index, (file, text))) = visible_inputs
+                    .iter()
+                    .enumerate()
+                    .find(|(_, (_, text))| text.contains(term.as_str()))
                 {
                     let line = text
                         .lines()
                         .position(|line| line.contains(term.as_str()))
                         .unwrap_or_default();
-                    let context = text
+                    let context = inputs[input_index]
+                        .1
                         .lines()
                         .nth(line)
                         .unwrap_or_default()
@@ -308,12 +322,12 @@ pub fn audit(
                     findings.push(LexicalFinding {
                         term: term.clone(),
                         components,
-                        file: file.clone(),
+                        file: (*file).clone(),
                         line: line + 1,
                         context,
                         category: "register_variation".to_owned(),
                         rationale: format!("参照資源のレジスター集合 {} で共起: {detail}", set.id),
-                        document_frequency: inputs
+                        document_frequency: visible_inputs
                             .iter()
                             .map(|(_, text)| text.matches(term.as_str()).count())
                             .sum(),
