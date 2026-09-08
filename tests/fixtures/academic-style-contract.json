@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "central_claim": "行政組織は政策問題を扱う。",
+  "explanandum": "政策問題",
+  "allow_formal_research_question": false,
+  "reject_defensive_caveats": true,
+  "required_order": ["行政組織は政策問題を扱う", "政策規範"],
+  "terms": [
+    {"term": "政策規範", "status": "ordinary"}
+  ],
+  "proper_nouns": ["佐野", "研究者A"],
+  "first_sentence_order": ["行政組織は政策問題を扱う", "政策規範", "行政組織は、計画の実施条件"],
+  "section_bridges": [
+    {"from": "導入", "to": "結論", "shared_terms": ["行政組織"]}
+  ],
+  "note_decisions": [],
+  "style_profile": {
+    "sentence_length_mean_min": 10.0,
+    "sentence_length_mean_max": 80.0,
+    "citation_led_paragraph_ratio_max": 0.34,
+    "connectives": ["そのため"],
+    "discovery_marker_at_paragraph_end": true
+  }
+}

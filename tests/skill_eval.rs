@@ -69,7 +69,7 @@ fn trigger_cases_have_a_stable_complete_shape() {
             .expect("valid trigger evaluation suite");
 
     assert_eq!(suite.version, 1);
-    assert_eq!(suite.cases.len(), 26);
+    assert_eq!(suite.cases.len(), 28);
     let mut ids = BTreeSet::new();
     let mut train = 0;
     let mut test = 0;
@@ -84,5 +84,5 @@ fn trigger_cases_have_a_stable_complete_shape() {
         assert!(!case.capability.trim().is_empty());
         assert!(!case.prompt.trim().is_empty());
     }
-    assert_eq!((train, test), (18, 8));
+    assert_eq!((train, test), (19, 9));
 }

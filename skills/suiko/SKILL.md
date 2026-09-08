@@ -1,6 +1,6 @@
 ---
 name: suiko
-description: 日本語文書のAI由来の均一さ、翻訳調、不自然さ、論旨、読解負荷を、決定的なRust CLIと目視で診断し、依頼に応じて書く・直す。Use when the user explicitly mentions suiko, asks whether Japanese text looks AI-generated, requests a naturalness score or final readability pass, wants a Japanese meeting note, report, guide, proposal, email, slide outline, blog, note, or essay made natural and readable, or asks to learn a reusable style profile from 3–5 past Japanese documents for a concrete writing task. Do not use for English text, image review, Markdown formatting alone, spelling or terminology normalization alone, or generic argument and author-voice review without a writing or revision task.
+description: 日本語文書のAI由来の均一さ、翻訳調、不自然さ、論旨、読解負荷を、決定的なRust CLIと目視で診断し、依頼に応じて書く・直す。日本語の学術論文・研究報告では、中心命題、用語、論証、DOCX/PDF納品を監査契約で確認する。Use when the user explicitly mentions suiko, asks whether Japanese text looks AI-generated, requests a naturalness score or final readability pass, wants a Japanese meeting note, report, guide, proposal, email, slide outline, blog, note, essay, academic article, or research report made natural and readable. Do not use for English text, image review, Markdown formatting alone, spelling or terminology normalization alone, or generic argument and author-voice review without a writing or revision task.
 license: MIT
 ---
 
@@ -13,6 +13,7 @@ license: MIT
 - `quick`（既定）: 日常の短い文書。該当する文書型を確認し、`suiko lint` と通読で仕上げる。
 - `full`: 対外文書、経営向け文書、約1万字を超える文書。`lint`、`outline`、`terms` と目視レビューをすべて使う。
 - `score`: 書き換えず自然度と理由だけを返す。最初に [diagnose.md](references/diagnose.md) を読む。
+- `academic`: 学術論文・研究報告・投稿用DOCX/PDF。最初に[academic-delivery.md](references/academic-delivery.md)を読み、中心命題、説明対象、順序、用語、節間接続、注、成果物を監査する。
 
 CLI が見つからない場合（`suiko --version` が失敗する場合）は、次の順で自分で導入する。
 
@@ -34,6 +35,8 @@ CLI が見つからない場合（`suiko --version` が失敗する場合）は�
 - スライド構成: [slide.md](references/doctypes/slide.md)
 
 主メッセージを見出しへ落とし、見出しだけで論旨が通るようにする。重要な節を厚く、軽い節を短くし、全節を同じ型と長さに揃えない。素材が乏しい場合は言い回しを作る前に、固有名詞、数値、実例、一次情報を集める。
+
+学術稿では、見出しを先に整えるより、`academic-delivery.md`の順に、説明対象、中心命題、ユーザーが示した論理順序、形式的RQの要否、用語のstatusを固定する。文章を整えるために章順、概念、結論を変えない。対象を説明してから名称を導入し、既存語は出典、造語は造語であることを本文へ示す。
 
 ## 2. 文体制約の下で書く
 
@@ -71,7 +74,19 @@ full では構造と用語も抽出する。
 ```sh
 suiko outline <file> --json
 suiko terms <file> --json
+suiko lexical-audit <file> --reference <lexical-reference.json> --json
 ```
+
+学術稿では、段落第一文と節間の橋を`outline`で確認した後、監査契約を作る。契約がある場合は、契約違反を直すか理由を記録し、提出前に`academic`を実行する。
+
+```sh
+suiko academic <paper.md> --contract <academic-contract.json> --json
+suiko academic <paper.md> --contract <academic-contract.json> \
+  --docx <submission.docx> --template <official-template.docx> \
+  --pdf <submission.pdf> --export-record <delivery-record.json> --json
+```
+
+`academic`は意味の自動採点ではない。防御的留保、未登録ラベル、引用と参考文献、節間の共有対象、注分類、Markdown/DOCX/PDF同期、OOXML不変条件を確認する。注の本文・注・不要の判断と、段落・節の意味上の修正は、全文脈を読んで行う。
 
 複数ファイルも指定できる。標準入力は `<command> -` で受け取る。CIで検出を失敗扱いにする必要がある場合だけ `--fail-on warn` などを使う。通常の finding は exit code 0、入力エラーは1、`--fail-on` 到達は2である。
 
@@ -103,7 +118,7 @@ finding は疑いであって命令ではない。該当行と周辺文脈を読
 - ジャンル差: [genre-notes.md](references/genre-notes.md)
 - Before/After: [examples.md](references/examples.md)
 
-`outline` では論旨、見出し、反復、節の濃淡、結論の位置を見る。`terms` の `has_gloss_hint` は説明済みという判定ではなく、初出付近に説明マーカーがあるという手掛かりとして扱う。
+`outline` では論旨、見出し、反復、節の濃淡、結論の位置を見る。`terms` の `has_gloss_hint` は説明済みという判定ではなく、初出付近に説明マーカーがあるという手掛かりとして扱う。一般名詞複合語や漢語・和語等の統制を確認するときは`lexical-audit`を使う。新奇複合語とレジスター共起はinfoの確認候補であり、参照資源にない意味上の同義性を推測せず、原稿を書き換えない。
 
 ## 既存の校正工程との境界
 
