@@ -50,12 +50,12 @@ sha2 = "0.11"
 sudachi = { package = "suiko-sudachi", version = "0.6.11", path = "crates/suiko-sudachi" }
 thiserror = "2"
 toml = "1.1"
-ureq = { version = "2", optional = true }
+ureq = { version = "3", optional = true }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [build-dependencies]
 sha2 = "0.11"
-ureq = "2"
+ureq = "3"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
