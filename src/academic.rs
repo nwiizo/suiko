@@ -1066,10 +1066,7 @@ fn word_xml_text(xml: &[u8]) -> Result<String, Error> {
     loop {
         match reader.read_event() {
             Ok(Event::Text(text)) => {
-                let decoded = text
-                    .decode()
-                    .map_err(|error| Error::Academic(error.to_string()))?;
-                output.push_str(&decoded);
+                output.push_str(&text);
             }
             Ok(Event::GeneralRef(reference)) => {
                 if let Some(character) = reference
@@ -1077,16 +1074,11 @@ fn word_xml_text(xml: &[u8]) -> Result<String, Error> {
                     .map_err(|error| Error::Academic(error.to_string()))?
                 {
                     output.push(character);
-                } else {
-                    let name = reference
-                        .decode()
-                        .map_err(|error| Error::Academic(error.to_string()))?;
-                    if let Some(value) = resolve_xml_entity(&name) {
-                        output.push_str(value);
-                    }
+                } else if let Some(value) = resolve_xml_entity(&reference) {
+                    output.push_str(value);
                 }
             }
-            Ok(Event::End(end)) if end.name().as_ref() == b"w:p" => output.push('\n'),
+            Ok(Event::End(end)) if end.name().as_ref() == "w:p" => output.push('\n'),
             Ok(Event::Eof) => break,
             Ok(_) => {}
             Err(error) => return Err(Error::Academic(error.to_string())),
@@ -1130,33 +1122,30 @@ fn docx_layout_items(path: &Path) -> Result<Vec<DocxLayoutItem>, Error> {
     loop {
         match reader.read_event() {
             Ok(Event::Start(start)) => match start.name().as_ref() {
-                b"w:tbl" => {
+                "w:tbl" => {
                     if table_depth == 0 {
                         items.push(DocxLayoutItem::Table);
                     }
                     table_depth += 1;
                 }
-                b"w:p" if table_depth == 0 => {
+                "w:p" if table_depth == 0 => {
                     in_paragraph = true;
                     paragraph_text.clear();
                     paragraph_has_figure = false;
                 }
-                b"w:drawing" if in_paragraph && table_depth == 0 => {
+                "w:drawing" if in_paragraph && table_depth == 0 => {
                     paragraph_has_figure = true;
                 }
                 _ => {}
             },
             Ok(Event::Empty(empty)) => match empty.name().as_ref() {
-                b"w:drawing" if in_paragraph && table_depth == 0 => {
+                "w:drawing" if in_paragraph && table_depth == 0 => {
                     paragraph_has_figure = true;
                 }
                 _ => {}
             },
             Ok(Event::Text(text)) if in_paragraph && table_depth == 0 => {
-                let decoded = text
-                    .decode()
-                    .map_err(|error| Error::Academic(error.to_string()))?;
-                paragraph_text.push_str(&decoded);
+                paragraph_text.push_str(&text);
             }
             Ok(Event::GeneralRef(reference)) if in_paragraph && table_depth == 0 => {
                 if let Some(character) = reference
@@ -1164,17 +1153,12 @@ fn docx_layout_items(path: &Path) -> Result<Vec<DocxLayoutItem>, Error> {
                     .map_err(|error| Error::Academic(error.to_string()))?
                 {
                     paragraph_text.push(character);
-                } else {
-                    let name = reference
-                        .decode()
-                        .map_err(|error| Error::Academic(error.to_string()))?;
-                    if let Some(value) = resolve_xml_entity(&name) {
-                        paragraph_text.push_str(value);
-                    }
+                } else if let Some(value) = resolve_xml_entity(&reference) {
+                    paragraph_text.push_str(value);
                 }
             }
             Ok(Event::End(end)) => match end.name().as_ref() {
-                b"w:p" if in_paragraph && table_depth == 0 => {
+                "w:p" if in_paragraph && table_depth == 0 => {
                     if paragraph_has_figure {
                         items.push(DocxLayoutItem::Figure);
                     }
@@ -1184,7 +1168,7 @@ fn docx_layout_items(path: &Path) -> Result<Vec<DocxLayoutItem>, Error> {
                     }
                     in_paragraph = false;
                 }
-                b"w:tbl" => table_depth = table_depth.saturating_sub(1),
+                "w:tbl" => table_depth = table_depth.saturating_sub(1),
                 _ => {}
             },
             Ok(Event::Eof) => break,
@@ -1887,6 +1871,32 @@ mod tests {
 
     fn write_docx(path: &std::path::Path, text: &str, style: &str, extra: Option<(&str, &str)>) {
         write_docx_with_layout(path, text, style, "", extra);
+    }
+
+    #[test]
+    fn docx_xml_preserves_japanese_references_and_paragraphs() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("references.docx");
+        write_docx_with_layout(
+            &path,
+            "日本語&amp;記号&#x3002;&#33;",
+            "<styles/>",
+            "<w:p><w:r><w:t>次の段落&lt;確認&gt;</w:t></w:r></w:p>",
+            None,
+        );
+        assert_eq!(
+            super::docx_text(&path).unwrap(),
+            "日本語&記号。!\n次の段落<確認>\n"
+        );
+        assert_eq!(
+            super::docx_layout_items(&path).unwrap(),
+            vec![
+                super::DocxLayoutItem::Paragraph("日本語&記号。!".to_owned()),
+                super::DocxLayoutItem::Paragraph("次の段落<確認>".to_owned()),
+            ]
+        );
+        assert!(super::word_xml_text(b"<w:p>\xff</w:p>").is_err());
+        assert!(super::word_xml_text(b"<w:p>text</wrong>").is_err());
     }
 
     fn write_docx_with_layout(

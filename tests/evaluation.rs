@@ -104,6 +104,96 @@ split = "dev"
 }
 
 #[test]
+fn fetch_follows_redirects_decodes_shift_jis_and_records_http_errors() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let (encoded, _, errors) =
+        encoding_rs::SHIFT_JIS.encode("<article><p>日本語の本文です。</p></article>");
+    assert!(!errors);
+    let encoded = encoded.into_owned();
+    let server = thread::spawn(move || {
+        for (path, status, headers, body) in [
+            ("/redirect", "302 Found", "Location: /body\r\n", Vec::new()),
+            (
+                "/body",
+                "200 OK",
+                "Content-Type: text/html; charset=Shift_JIS\r\n",
+                encoded,
+            ),
+            (
+                "/unavailable",
+                "503 Service Unavailable",
+                "Content-Type: text/html\r\n",
+                b"<article>unavailable</article>".to_vec(),
+            ),
+        ] {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+                .unwrap();
+            let mut request = [0_u8; 4096];
+            let len = stream.read(&mut request).unwrap();
+            assert!(
+                String::from_utf8_lossy(&request[..len])
+                    .starts_with(&format!("GET {path} HTTP/1.1"))
+            );
+            write!(
+                stream,
+                "HTTP/1.1 {status}\r\n{headers}Content-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            )
+            .unwrap();
+            stream.write_all(&body).unwrap();
+        }
+    });
+    let dir = tempdir().unwrap();
+    let sources = dir.path().join("sources.toml");
+    fs::write(
+        &sources,
+        format!(
+            r#"version = 1
+[[source]]
+id = "redirected"
+type = "web"
+url = "http://{address}/redirect"
+title = "文字コードの確認"
+author = "テスト著者"
+genre = "tech"
+split = "dev"
+[[source]]
+id = "unavailable"
+type = "web"
+url = "http://{address}/unavailable"
+title = "取得失敗"
+author = "テスト著者"
+genre = "tech"
+split = "dev"
+"#
+        ),
+    )
+    .unwrap();
+    eval_command()
+        .args(["fetch", sources.to_str().unwrap()])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("1 succeeded, 1 failed"));
+    server.join().unwrap();
+    let body = fs::read_to_string(dir.path().join("corpus/external/redirected.md")).unwrap();
+    assert!(body.contains("日本語の本文です。"));
+    assert!(!dir.path().join("corpus/external/unavailable.md").exists());
+    let lock: serde_json::Value =
+        serde_json::from_slice(&fs::read(dir.path().join("corpus/external-lock.json")).unwrap())
+            .unwrap();
+    assert!(lock["entries"]["redirected"]["sha256"].is_string());
+    assert!(
+        lock["entries"]["unavailable"]["error"]
+            .as_str()
+            .unwrap()
+            .contains("503")
+    );
+}
+
+#[test]
 fn fetch_preserves_completed_entries_when_a_later_document_cannot_be_written() {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind local HTTP server");
     let address = listener.local_addr().expect("local HTTP address");

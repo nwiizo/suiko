@@ -55,10 +55,10 @@ Rustを入れずに使う場合は、[GitHub Releases](https://github.com/nwiizo
 
 ```sh
 # 例: macOS (Apple Silicon)
-curl -LO https://github.com/nwiizo/suiko/releases/download/v0.3.5/suiko-v0.3.5-aarch64-apple-darwin.tar.gz
-shasum -a 256 -c suiko-v0.3.5-aarch64-apple-darwin.tar.gz.sha256   # 事前に.sha256も取得した場合
-tar xzf suiko-v0.3.5-aarch64-apple-darwin.tar.gz
-./suiko-v0.3.5-aarch64-apple-darwin/suiko --version
+curl -LO https://github.com/nwiizo/suiko/releases/download/v0.3.6/suiko-v0.3.6-aarch64-apple-darwin.tar.gz
+shasum -a 256 -c suiko-v0.3.6-aarch64-apple-darwin.tar.gz.sha256   # 事前に.sha256も取得した場合
+tar xzf suiko-v0.3.6-aarch64-apple-darwin.tar.gz
+./suiko-v0.3.6-aarch64-apple-darwin/suiko --version
 ```
 
 macOSでは、ダウンロードしたバイナリに検疫属性（quarantine）が付くため初回実行がGatekeeperに止められます。`xattr -d com.apple.quarantine <suikoのパス>` で解除するか、確認ダイアログを避けたい場合は `cargo install suiko` で自分のマシンでビルドしてください（署名の出所が自分になるため、以降の確認が出ません）。
@@ -154,7 +154,7 @@ suiko academic paper.md --contract academic-contract.json \
 
 `stats.rhythm.sentence_endings` には、文末を `assertive`（明示的な断定）、`tentative`（推量・保留）、`question`（疑問）、`nominal`（体言止め）、`other` に近似分類した件数と、空行をまたがない最長連続数が入ります。これは文章の良否を決める値ではなく、局所的なリズムを確認するための観測値です。6文以上の文書で `--experimental` を指定すると、30モーラ以上で同じ明示的文末が3文以上続き、文長の変動係数が0.15以下の箇所を `repeated_sentence_mode`、25モーラ以下の体言止めが3文以上続く箇所を `consecutive_nominal_endings` として指さします。
 
-`abstract_metaphor` は、地図、羅針盤、道標、土台、架け橋などの名詞が、抽象的な対象の役割を表す述語や「〜の〜」型で使われた箇所を `info` で指さします。候補語の出現だけでは発火せず、地理情報の表示や船具の点検など本来の意味での用例は対象外です。`--genre tech --experimental`では、`仕様は意図を実装へ運ぶ`のように抽象的な主語・目的語・移動先を`運ぶ`でつなぐ形と、`複雑さは知識量で効く`のように数量名詞の直後を`で効く`とする形も対象にします。比喩かどうかを断定せず、判断対象、判断基準、具体的な効果を明記できるか確認するためのfindingです。CIで必ず止める場合は `--fail-on info` を使い、必要な用例は `.suiko.toml` の `allow` へ理由付きで記録します。
+`abstract_metaphor` は、地図、羅針盤、道標、土台、架け橋などの名詞が、抽象的な対象の役割を表す述語や「〜の〜」型で使われた箇所を `info` で指さします。候補語の出現だけでは発火せず、地理情報の表示や船具の点検など本来の意味での用例は対象外です。`--genre tech --experimental`では、`仕様は意図を実装へ運ぶ`のように抽象的な主語・目的語・移動先を`運ぶ`でつなぐ形と、`複雑さは知識量で効く`のように数量名詞の直後を`で効く`とする形、抽象的な対象の役割を`入口`・`主役`で表す形も対象にします。比喩かどうかを断定せず、判断対象、判断基準、具体的な効果を明記できるか確認するためのfindingです。CIで必ず止める場合は `--fail-on info` を使い、必要な用例は `.suiko.toml` の `allow` へ理由付きで記録します。
 
 `--baseline` には前回の `lint --json` 出力（単一オブジェクトまたは配列）をそのまま渡せます。レコードは `file` 文字列の完全一致で対応づけ、改名は推測しません。baselineにないファイルは全findingを新規として `baseline.file_status = "added"` で示し、baselineにあって今回対象にないファイルはstderrへ警告します。genre、`--experimental`、Suikoバージョンが一致しない場合は実行エラーになります。`antithesis_repetition` や `low_burstiness` のような文書単位のfindingは、文章の言い換えで抜粋が変わっても同一カテゴリとして継続扱いします。
 
@@ -177,9 +177,24 @@ suiko academic paper.md --contract academic-contract.json \
 
 反復を扱う3カテゴリは文書内の該当箇所を1件へまとめ、対象行を`related_lines`で返します。`self_labeling_repetition`は「〜のは」型だけを扱い、書き手の立場を示す表現は混ぜません。`negative_listing`は意図的な対比にも使えるため、誤りではなく修辞を確認するきっかけとして示します。`uniform_bullet_structure`はMarkdownのコードフェンスと引用内を検査せず、明示的に`essay`を選んだ場合だけ出力します。文末品詞と内容語数の近さを測るもので、項目間の意味関係や構文上の並列性までは判定しません。
 
-技術文書向けの3カテゴリは、読者が複数の解釈で迷う可能性がある箇所のうち、形態素列で位置を示せる指示語、`それぞれ`の範囲、技術現場の比喩的な言い回しに絞っています。`technical_jargon_metaphor`は同じ節にある対象語と状態語の組み合わせだけを扱い、表示や物理配送を示す語が同じ文にあれば除外します。`abstract_metaphor`の技術文書向けパターンも、抽象語の格関係または数量名詞に隣接する`で効く`が確認できる場合だけ報告します。いずれも表現の誤りとは断定せず、AIまたは人が前後関係を確認する候補だけを返します。
+技術文書向けの3カテゴリは、読者が複数の解釈で迷う可能性がある箇所のうち、形態素列で位置を示せる指示語、`それぞれ`の範囲、技術現場の比喩的な言い回しに絞っています。`technical_jargon_metaphor`の色・出荷の検出では、同じ節にある対象語と状態語の組み合わせを扱い、表示や物理配送を示す語が同じ文にあれば除外します。`abstract_metaphor`も、抽象語の修飾や格関係などが確認できる場合だけ報告します。いずれも表現の誤りとは断定せず、AIまたは人が前後関係を確認する候補だけを返します。
 
 主語の省略、修飾先、照応先、節をまたぐ並列関係は、形態素列だけでは正誤を決められないためfindingにしません。
+
+### 技術文書の言い回しと反復を確認する
+
+技術文書を読み直すとき、近くに続く同じ文末や挿入表現をまとめて確認できます。次の2カテゴリは`--genre tech`だけで有効です。`info`として位置を示し、自動修正は付けません。
+
+| category | 追加した検出 |
+|---|---|
+| `repeated_distinction` | 同じ節の5文以内に`別物だ／です／である`で終わる文が3文以上。疑問・否定・引用への接続を除く |
+| `repeated_em_dash` | 同じ節の5文以内に文中の`—`・`―`を使う文が3文以上。数字同士の範囲や単独の罫線を除く |
+
+各カテゴリを文書単位の1件へまとめ、`related_lines`には近接した反復の行だけを返します。章ごとに一度ある説明を合算せず、太字の有無で判定を変えません。比較が必要な箇所や意図的な挿入は残せます。`--fail-on info`を使う場合は、これらの指摘も終了コードに影響します。
+
+`--genre tech --experimental`では、`technical_jargon_metaphor`に`静かに壊れる`、`黙って捨てる／無視する`、`地味に効く`、`安全側／保守側に倒す`、`時間を溶かす`を、`abstract_metaphor`に抽象的な`入口`・`主役`を追加します。説明済みの内容や体験談にも一致するため、この追加分は実験機能です。
+
+検出対象は散文で、コード・引用・見出し・箇条書き・表・参考文献等は除外します。[検出仕様と形態素解析の手順](eval/technical-wording.md)に、候補一覧、形態素の実測結果、採用理由、評価結果と限界を記録しています。
 
 終了コードは次のとおりです。
 

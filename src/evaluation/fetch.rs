@@ -114,10 +114,11 @@ pub fn fetch_corpus(
     let mut lock = load_lock(&lock_path)?;
     let entries = lock_entry_map(&mut lock)?;
 
-    let agent = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(60))
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_global(Some(Duration::from_secs(60)))
         .user_agent(USER_AGENT)
-        .build();
+        .build()
+        .into();
     let total = sources.len();
     let mut failed = 0;
     for (index, source) in sources.iter().enumerate() {
@@ -186,11 +187,14 @@ fn fetch_one(agent: &ureq::Agent, source: &SourceSpec) -> Result<Fetched, String
         .call()
         .map_err(|error| error.to_string())?;
     let content_type = response
-        .header("content-type")
+        .headers()
+        .get("content-type")
+        .and_then(|value| value.to_str().ok())
         .unwrap_or_default()
         .to_owned();
     let mut content = Vec::new();
     response
+        .into_body()
         .into_reader()
         .read_to_end(&mut content)
         .map_err(|error| error.to_string())?;

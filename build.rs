@@ -50,6 +50,7 @@ fn download_dictionary(out_dir: &Path) -> PathBuf {
         .unwrap_or_else(|error| panic!("{DICT_NAME} のzip取得に失敗しました: {error}"));
     let mut zip_bytes = Vec::with_capacity(80 * 1024 * 1024);
     response
+        .into_body()
         .into_reader()
         .read_to_end(&mut zip_bytes)
         .expect("read dictionary zip");

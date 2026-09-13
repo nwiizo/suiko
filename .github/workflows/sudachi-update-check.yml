@@ -14,7 +14,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Check upstream sudachi.rs / crates.io / SudachiDict
         id: check
         env:
@@ -30,6 +30,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           title="sudachi関連の更新を検出"
+          # Markdownのコードフェンスを展開せず、そのまま出力する。
+          # shellcheck disable=SC2016
           body="$(printf '週次チェックで更新を検出した。\n\n```\n%s\n```\n\n更新時はCHANGELOG、THIRD_PARTY_NOTICES、eval/calibration.mdの再測定を忘れない。' "$(cat report.txt)")"
           number="$(gh issue list --state open --search "in:title ${title}" --json number --jq '.[0].number // empty')"
           if [ -n "${number}" ]; then

@@ -25,6 +25,8 @@ pub struct BaselineReport {
 fn baseline_key(category: &str, excerpt: &str) -> (String, String) {
     const CATEGORY_ONLY: &[&str] = &[
         "antithesis_repetition",
+        "repeated_distinction",
+        "repeated_em_dash",
         "low_burstiness",
         "high_length_autocorrelation",
         "low_sentence_variance",

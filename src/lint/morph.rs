@@ -1,6 +1,8 @@
 //! 品詞列（Sudachi形態素）ベースの検出器と、文単位のtoken補助。
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+
+use regex::Regex;
 
 use crate::Error;
 use crate::morphology::{Morpheme, Morphology};
@@ -100,6 +102,23 @@ const ABSTRACT_TRANSPORT_OBJECTS: &[&str] = &["意図", "判断", "理解", "実
 const ABSTRACT_EFFECT_SUBJECTS: &[&str] = &["複雑", "品質", "生産性", "リスク"];
 
 const QUANTITY_NOUN_ENDINGS: &[&str] = &["量", "数"];
+
+const TECHNICAL_WORDING_NOUNS: &[&str] = &[
+    "コード",
+    "機能",
+    "実装",
+    "設定",
+    "データ",
+    "入力",
+    "出力",
+    "処理",
+    "ログ",
+    "API",
+    "テスト",
+    "ビルド",
+    "キャッシュ",
+    "クエリ",
+];
 
 #[derive(Clone, Debug)]
 pub(super) struct TokenizedSentence {
@@ -698,6 +717,16 @@ pub(super) fn technical_jargon_metaphor_findings(
 ) -> Vec<Finding> {
     let mut findings = Vec::new();
     for sentence in tokenized {
+        for index in 0..sentence.tokens.len() {
+            if let Some((start, detail)) = technical_wording_start(sentence, index) {
+                findings.push(sentence.info_finding(
+                    raw_lines,
+                    start..sentence.tokens[index].byte_end,
+                    "technical_jargon_metaphor",
+                    detail,
+                ));
+            }
+        }
         if !contains_any(&sentence.tokens, DISPLAY_NOUNS)
             && let Some((start, end)) = color_status_span(&sentence.tokens)
         {
@@ -721,6 +750,178 @@ pub(super) fn technical_jargon_metaphor_findings(
         }
     }
     findings
+}
+
+/// 活用は基本形で、短い修飾句は表層とtoken境界で照合する。
+/// 「静か/に」の「に」は助動詞なので、格助詞だけに絞ると見落とす。
+// nwiizo-coding-style: 対象名詞と隣接する修飾句を限定する;
+// 見落としの実例が集まったら、同じ形の反例を加えて対象を広げる。
+fn technical_wording_start(
+    sentence: &TokenizedSentence,
+    index: usize,
+) -> Option<(usize, &'static str)> {
+    let token = &sentence.tokens[index];
+    let (prefixes, needs_context, detail): (&[&str], bool, &str) = match token.dictionary_form() {
+        "壊れる" | "失敗" | "捨てる" | "無視" => {
+            if matches!(token.dictionary_form(), "失敗" | "無視")
+                && !sentence
+                    .tokens
+                    .get(index + 1)
+                    .is_some_and(|next| next.dictionary_form() == "する")
+            {
+                return None;
+            }
+            (
+                &["静かに", "黙って"],
+                true,
+                "技術的な失敗や破棄を「静かに／黙って」で表す言い回し。エラーが出ない、通知されないなど、利用者が気づけない理由を具体的に書けるか確認してください",
+            )
+        }
+        "効く" => (
+            &["地味に"],
+            true,
+            "技術的な効果を「地味に効く」で表す言い回し。何が改善するか、条件や観測した結果を書けるか確認してください",
+        ),
+        "溶かす" => (
+            &["時間を"],
+            false,
+            "時間の消費を物が溶ける動作で表す比喩。費やした作業や時間を具体的に書けるか確認してください",
+        ),
+        "倒す" => (
+            &["安全側に", "保守側に"],
+            true,
+            "判断を「側に倒す」で表す言い回し。何を優先し、どの設定や動作を選ぶか明記できるか確認してください",
+        ),
+        _ => return None,
+    };
+    let before = &sentence.text[..token.byte_start];
+    let prefix = prefixes.iter().find(|prefix| before.ends_with(**prefix))?;
+    let start = token.byte_start - prefix.len();
+    let prefix_index = sentence.tokens[..index]
+        .iter()
+        .position(|part| part.byte_start == start)?;
+    if needs_context {
+        // 直近の「名詞+は/が/を/も」を確認し、別の人物・対象へ文脈を持ち越さない。
+        let argument = sentence.tokens[..prefix_index]
+            .windows(2)
+            .rev()
+            .take(12)
+            .take_while(|pair| !matches!(pair[1].pos(0), "記号" | "補助記号" | "空白" | "動詞"))
+            .find(|pair| {
+                pair[1].pos(0) == "助詞"
+                    && matches!(pair[1].surface.as_str(), "は" | "が" | "を" | "も")
+            });
+        if !argument.is_some_and(|pair| {
+            pair[0].pos(0) == "名詞" && TECHNICAL_WORDING_NOUNS.contains(&pair[0].dictionary_form())
+        }) {
+            return None;
+        }
+    }
+    Some((start, detail))
+}
+
+/// 同じ節の5文以内に3回現れる型を集約し、離れた説明の累積を避ける。
+pub(super) fn technical_repetition_findings(
+    tokenized: &[TokenizedSentence],
+    raw_lines: &[&str],
+    raw: &str,
+) -> Vec<Finding> {
+    let dash = Regex::new(r"[—―]+").expect("valid em-dash regex");
+    let structural = crate::text::mask_markdown_structure_preserving_headings(raw);
+    let heading_lines = structural
+        .lines()
+        .enumerate()
+        .filter_map(|(index, line)| crate::text::is_heading(line).then_some(index + 1))
+        .collect::<Vec<_>>();
+    let mut distinctions = Vec::new();
+    let mut dashes = Vec::new();
+    for (index, sentence) in tokenized
+        .iter()
+        .filter(|sentence| sentence.text.chars().any(char::is_alphanumeric))
+        .enumerate()
+    {
+        if !matches!(sentence.end_mark, Some('?' | '？'))
+            && let Some(token) = sentence.tokens.iter().find(|token| {
+                token.pos(0) == "名詞"
+                    && token.dictionary_form() == "別物"
+                    && matches!(
+                        sentence.text[token.byte_end..].trim_matches(['*', '_']),
+                        "だ" | "です" | "である"
+                    )
+            })
+        {
+            distinctions.push((
+                index,
+                AggregateHit {
+                    line: sentence.line,
+                    excerpt: sentence.excerpt(token.byte_start, sentence.text.len()),
+                    span: sentence.span(raw_lines, token.byte_start, sentence.text.len()),
+                    related_lines: vec![sentence.line],
+                },
+            ));
+        }
+        if let Some(found) = dash.find_iter(&sentence.text).find(|found| {
+            let before = sentence.text[..found.start()]
+                .trim_end_matches(|ch: char| ch.is_whitespace() || matches!(ch, '*' | '_'))
+                .chars()
+                .next_back();
+            let after = sentence.text[found.end()..]
+                .trim_start_matches(|ch: char| ch.is_whitespace() || matches!(ch, '*' | '_'))
+                .chars()
+                .next();
+            before.zip(after).is_some_and(|(left, right)| {
+                left.is_alphanumeric()
+                    && right.is_alphanumeric()
+                    && !(left.is_numeric() && right.is_numeric())
+            })
+        }) {
+            dashes.push((
+                index,
+                AggregateHit {
+                    line: sentence.line,
+                    excerpt: sentence.excerpt(found.start(), found.end()),
+                    span: sentence.span(raw_lines, found.start(), found.end()),
+                    related_lines: vec![sentence.line],
+                },
+            ));
+        }
+    }
+    let mut findings = aggregate_pattern_finding(
+        clustered_repetition_hits(distinctions, &heading_lines),
+        3,
+        "repeated_distinction",
+        |count, related| {
+            format!(
+                "同じ節の5文以内に「別物だ／です／である」で締める文が3文以上ある。該当する反復は計{count}文。比較の説明や文末の続き方を確認してください。必要な比較は残せます。対応箇所: {related}"
+            )
+        },
+    );
+    findings.extend(aggregate_pattern_finding(clustered_repetition_hits(dashes, &heading_lines), 3, "repeated_em_dash", |count, related| {
+        format!("同じ節の5文以内に文中のダッシュ（—／―）を使う文が3文以上ある。該当する反復は計{count}文。挿入や言い換えが続く箇所を読み直し、句点や括弧で区切ると読みやすいか確認してください。対応箇所: {related}")
+    }));
+    findings
+}
+
+// nwiizo-coding-style: 近接を同じ節の5文以内で近似する;
+// 読み直し範囲が広すぎる実例が集まったら、反例とともに範囲を見直す。
+fn clustered_repetition_hits(
+    hits: Vec<(usize, AggregateHit)>,
+    heading_lines: &[usize],
+) -> Vec<AggregateHit> {
+    let mut retained = BTreeSet::new();
+    for window in hits.windows(3) {
+        let first = &window[0];
+        let last = &window[2];
+        if last.0 - first.0 < 5
+            && heading_lines.partition_point(|line| *line < first.1.line)
+                == heading_lines.partition_point(|line| *line < last.1.line)
+        {
+            retained.extend(window.iter().map(|(index, _)| *index));
+        }
+    }
+    hits.into_iter()
+        .filter_map(|(index, hit)| retained.contains(&index).then_some(hit))
+        .collect()
 }
 
 /// 抽象名詞を動作主にして移動や効果を表す、技術文書の翻訳調候補。
@@ -1019,10 +1220,15 @@ pub(super) fn redundant_light_verb_findings(
 pub(super) fn abstract_metaphor_findings(
     tokenized: &[TokenizedSentence],
     raw_lines: &[&str],
+    include_technical_roles: bool,
 ) -> Vec<Finding> {
     let mut findings = Vec::new();
     for (sentence, index, token) in token_positions(tokenized) {
-        if token.pos(0) != "名詞" || !ABSTRACT_METAPHOR_NOUNS.contains(&token.dictionary_form()) {
+        let technical_role =
+            include_technical_roles && matches!(token.dictionary_form(), "入口" | "主役");
+        if token.pos(0) != "名詞"
+            || (!ABSTRACT_METAPHOR_NOUNS.contains(&token.dictionary_form()) && !technical_role)
+        {
             continue;
         }
 
