@@ -1,0 +1,181 @@
+version = 1
+
+# 評価ローダーに必要な既存の参照文書。下のlabeled評価には含まれない。
+[[document]]
+id = "calibration-human-001"
+path = "../tests/fixtures/natural.md"
+label = "human"
+genre = "essay"
+source = "bundled calibration fixture"
+license = "MIT; see THIRD_PARTY_NOTICES.md"
+sha256 = "7ca4ea87c19d581755feee3051e48408f4ff71d899363f81b90c741c20f2b5a0"
+
+# 自作の確認前後の文を使う設計用サンプル。
+# 同じ文書を複数カテゴリで評価する。項目数は独立文書数や母集団の精度を表さない。
+[[sample]]
+id = "technical-wording-fire"
+path = "../tests/fixtures/technical-wording-before.md"
+category = "technical_jargon_metaphor"
+expect = "fire"
+genre = "tech"
+
+[[sample]]
+id = "technical-wording-silent"
+path = "../tests/fixtures/technical-wording-after.md"
+category = "technical_jargon_metaphor"
+expect = "silent"
+genre = "tech"
+
+[[sample]]
+id = "technical-role-fire"
+path = "../tests/fixtures/technical-wording-before.md"
+category = "abstract_metaphor"
+expect = "fire"
+genre = "tech"
+
+[[sample]]
+id = "technical-role-silent"
+path = "../tests/fixtures/technical-wording-after.md"
+category = "abstract_metaphor"
+expect = "silent"
+genre = "tech"
+
+[[sample]]
+id = "technical-distinction-fire"
+path = "../tests/fixtures/technical-wording-before.md"
+category = "repeated_distinction"
+expect = "fire"
+genre = "tech"
+
+[[sample]]
+id = "technical-distinction-silent"
+path = "../tests/fixtures/technical-wording-after.md"
+category = "repeated_distinction"
+expect = "silent"
+genre = "tech"
+
+[[sample]]
+id = "technical-dash-fire"
+path = "../tests/fixtures/technical-wording-before.md"
+category = "repeated_em_dash"
+expect = "fire"
+genre = "tech"
+
+[[sample]]
+id = "technical-dash-silent"
+path = "../tests/fixtures/technical-wording-after.md"
+category = "repeated_em_dash"
+expect = "silent"
+genre = "tech"
+
+[[sample]]
+id = "distinction-dense"
+path = "../tests/fixtures/repetition-dense.md"
+category = "repeated_distinction"
+expect = "fire"
+genre = "tech"
+
+[[sample]]
+id = "dash-dense"
+path = "../tests/fixtures/repetition-dense.md"
+category = "repeated_em_dash"
+expect = "fire"
+genre = "tech"
+
+[[sample]]
+id = "distinction-emphasis"
+path = "../tests/fixtures/repetition-emphasis.md"
+category = "repeated_distinction"
+expect = "fire"
+genre = "tech"
+
+[[sample]]
+id = "dash-emphasis"
+path = "../tests/fixtures/repetition-emphasis.md"
+category = "repeated_em_dash"
+expect = "fire"
+genre = "tech"
+
+[[sample]]
+id = "distinction-window"
+path = "../tests/fixtures/repetition-window.md"
+category = "repeated_distinction"
+expect = "fire"
+genre = "tech"
+
+[[sample]]
+id = "dash-window"
+path = "../tests/fixtures/repetition-window.md"
+category = "repeated_em_dash"
+expect = "fire"
+genre = "tech"
+
+[[sample]]
+id = "distinction-code-gap"
+path = "../tests/fixtures/repetition-code-gap.md"
+category = "repeated_distinction"
+expect = "fire"
+genre = "tech"
+
+[[sample]]
+id = "dash-code-gap"
+path = "../tests/fixtures/repetition-code-gap.md"
+category = "repeated_em_dash"
+expect = "fire"
+genre = "tech"
+
+[[sample]]
+id = "distinction-distant"
+path = "../tests/fixtures/repetition-distant.md"
+category = "repeated_distinction"
+expect = "silent"
+genre = "tech"
+
+[[sample]]
+id = "dash-distant"
+path = "../tests/fixtures/repetition-distant.md"
+category = "repeated_em_dash"
+expect = "silent"
+genre = "tech"
+
+[[sample]]
+id = "distinction-sections"
+path = "../tests/fixtures/repetition-sections.md"
+category = "repeated_distinction"
+expect = "silent"
+genre = "tech"
+
+[[sample]]
+id = "dash-sections"
+path = "../tests/fixtures/repetition-sections.md"
+category = "repeated_em_dash"
+expect = "silent"
+genre = "tech"
+
+[[sample]]
+id = "distinction-quoted"
+path = "../tests/fixtures/repetition-quoted.md"
+category = "repeated_distinction"
+expect = "silent"
+genre = "tech"
+
+[[sample]]
+id = "dash-quoted"
+path = "../tests/fixtures/repetition-quoted.md"
+category = "repeated_em_dash"
+expect = "silent"
+genre = "tech"
+
+[[sample]]
+id = "distinction-literal"
+path = "../tests/fixtures/repetition-literal.md"
+category = "repeated_distinction"
+expect = "silent"
+genre = "tech"
+
+[[sample]]
+id = "dash-literal"
+path = "../tests/fixtures/repetition-literal.md"
+category = "repeated_em_dash"
+expect = "silent"
+genre = "tech"

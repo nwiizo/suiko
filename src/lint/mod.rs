@@ -83,6 +83,8 @@ const RULE_CATEGORIES: &[&str] = &[
     "paragraph_lead_conjunction",
     "predicate_colon_lead",
     "redundant_light_verb",
+    "repeated_distinction",
+    "repeated_em_dash",
     "repeated_explanation_preview",
     "repeated_sentence_lead",
     "repeated_sentence_mode",
@@ -354,6 +356,11 @@ pub fn analyze_with_thresholds(
         &tokenized, &raw_lines,
     ));
     findings.extend(morph::negative_listing_findings(&tokenized, &raw_lines));
+    if genre == Some("tech") {
+        findings.extend(morph::technical_repetition_findings(
+            &tokenized, &raw_lines, raw,
+        ));
+    }
     if experimental && genre == Some("tech") {
         findings.extend(morph::explanation_preview_findings(&tokenized, raw));
         findings.extend(morph::technical_ambiguity_findings(&tokenized, &raw_lines));
@@ -365,7 +372,11 @@ pub fn analyze_with_thresholds(
         ));
     }
     findings.extend(morph::inanimate_morph_findings(&tokenized, &raw_lines));
-    findings.extend(morph::abstract_metaphor_findings(&tokenized, &raw_lines));
+    findings.extend(morph::abstract_metaphor_findings(
+        &tokenized,
+        &raw_lines,
+        experimental && genre == Some("tech"),
+    ));
     findings.extend(morph::redundant_light_verb_findings(&tokenized, &raw_lines));
     findings.extend(rhythm_findings);
     findings.extend(ngram_findings);
