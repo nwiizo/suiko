@@ -2,211 +2,173 @@
 
 [![crates.io](https://img.shields.io/crates/v/suiko.svg)](https://crates.io/crates/suiko)
 [![CI](https://github.com/nwiizo/suiko/actions/workflows/ci.yml/badge.svg)](https://github.com/nwiizo/suiko/actions/workflows/ci.yml)
-[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/nwiizo/suiko/blob/main/LICENSE)
 
-日本語文書の自然さと読みやすさを、再現可能なルールで診断するRust CLIです。[crates.io](https://crates.io/crates/suiko) から導入できます。
+日本語文書の翻訳調、近接した反復、単調なリズム、読解負荷を診断するRust CLIです。Markdownやテキストから、推敲で読み直す箇所とその理由を返します。
 
-```sh
-cargo install suiko
-```
+診断はローカルで実行します。形態素辞書はバイナリに埋め込み、実行時の辞書・モデル取得はありません。原稿を書き換えず、指摘を採用するかは書き手やエージェントが文脈から判断します。AIが書いた確率や、文章の品質を表す総合スコアは出しません。
 
-名前は、文章を練り直す日本語の「推敲」から取りました。バイナリ、crate、Agent Skillの名前を `suiko` に統一しています。形態素辞書はバイナリへ埋め込まれるため、実行時に辞書やモデルをダウンロードしません。
+## できること
 
-## 特徴
+| コマンド | 読み直す作業 |
+|---|---|
+| `lint` | 翻訳調、定型表現、反復、リズム、段落構造を確認する |
+| `outline` | 見出し・段落の先頭文・箇条書きから論旨を俯瞰する |
+| `terms` | 専門用語候補、初出時の説明、複数ファイルの表記揺れを確認する |
+| `lexical-audit` | 参照データを使って一般名詞複合語や語彙の揺れを確認する |
+| `academic` | 執筆者が記録した方針と論証・引用・提出用成果物を照合する |
 
-- `lint`: 禁止語、翻訳調、定型的な対比、リズム、段落構造、語彙、英語統語の疑いを検出
-- `outline`: 見出し、段落の先頭文、箇条書きを抽出して論旨を俯瞰
-- `terms`: 略語、カタカナ複合語、固有名詞候補と初出時の説明手掛かりを抽出
-- `lexical-audit`: 一般名詞複合語の新奇性、表記正規化、明示したレジスター集合を読み取り専用で監査
-- `academic`: 執筆者が記録した監査契約に照らして、論証と提出用成果物の不変条件を確認
-- Markdownのfront matter、コードフェンス、インラインコード、リンクURL、埋め込み引用行、表、HTMLタグとコメント、参考文献リスト行（`[1] …`、`[^1]: …`）、「参考文献」「引用文献」「References」「Bibliography」見出し以下の行、コード注釈行（`#A …`）をマスク（抑制した行数は`stats.masking`に出力）
-- `essay` / `tech` / `business` のジャンル別閾値
-- 修正前JSONとの `resolved` / `new` / `persisting` 比較
-- 自然度とは分離したopt-inの読解負荷レーン
-- 標準入力、複数ファイル、JSON、CI向けseverity gate
-- プロジェクト設定による既定値、ルール無効化、理由付きの個別許可
-- 執筆から収束までを扱うAgent Skill
+## インストール
 
-## ビルド
+### Cargo
 
-Rust 1.97以降が必要です。形態素解析は [sudachi.rs](https://github.com/WorksApplications/sudachi.rs) と SudachiDict core を使い、辞書はビルド時にSHA-256を検証してバイナリへ埋め込みます。
+Rust 1.97以降が必要です。
 
 ```sh
-cargo install suiko
+cargo install suiko --locked
+suiko --version
 ```
-
-ビルド時に一度だけ、SudachiDict 20260723 core のzip（約69MB）を公式配布元からSHA-256固定で取得して埋め込みます。**実行時のダウンロードやファイル参照はありません。** 検証済みの `resources/system.dic` を配置するか、環境変数 `SUIKO_SUDACHI_DICT` で辞書ファイルを指定すれば、ビルド時の取得も行いません（オフラインビルド時は必須）。埋め込む辞書が約207MBあるため、バイナリは200MB台になります。
-
-sudachi.rsはcrates.io未公開のため、Apache-2.0の条件に従った非公式再配布 [suiko-sudachi](https://crates.io/crates/suiko-sudachi)（v0.6.11そのまま、変更点はREADMEに明記）へ依存しています。上流が公式にcrates.ioへ公開した時点でそちらへ乗り換えます。
-
-ソースから導入する場合は次のとおりです。
-
-```sh
-git clone https://github.com/nwiizo/suiko
-cd suiko
-cargo install --path .
-```
-
-リポジトリから直接試す場合は、以降の `suiko` を `cargo run --release --` に置き換えられます。
 
 ### ビルド済みバイナリ
 
-Rustを入れずに使う場合は、[GitHub Releases](https://github.com/nwiizo/suiko/releases) の各リリースに添付されたビルド済みバイナリを使えます。対応ターゲットは macOS（Apple Silicon / Intel）、Linux（x86_64 / aarch64）、Windows（x86_64）で、各アーカイブに `SHA-256` ファイルが付きます。
+Rustを入れずに使う場合は、[GitHub Releases](https://github.com/nwiizo/suiko/releases)から取得できます。macOS（Apple Silicon / Intel）、Linux（x86_64 / aarch64）、Windows（x86_64）に対応し、各アーカイブにSHA-256ファイルが付きます。
 
 ```sh
-# 例: macOS (Apple Silicon)
-curl -LO https://github.com/nwiizo/suiko/releases/download/v0.3.6/suiko-v0.3.6-aarch64-apple-darwin.tar.gz
-shasum -a 256 -c suiko-v0.3.6-aarch64-apple-darwin.tar.gz.sha256   # 事前に.sha256も取得した場合
+# v0.3.6 / macOS（Apple Silicon）
+curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.3.6/suiko-v0.3.6-aarch64-apple-darwin.tar.gz
+curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.3.6/suiko-v0.3.6-aarch64-apple-darwin.tar.gz.sha256
+shasum -a 256 -c suiko-v0.3.6-aarch64-apple-darwin.tar.gz.sha256
 tar xzf suiko-v0.3.6-aarch64-apple-darwin.tar.gz
 ./suiko-v0.3.6-aarch64-apple-darwin/suiko --version
 ```
 
-macOSでは、ダウンロードしたバイナリに検疫属性（quarantine）が付くため初回実行がGatekeeperに止められます。`xattr -d com.apple.quarantine <suikoのパス>` で解除するか、確認ダイアログを避けたい場合は `cargo install suiko` で自分のマシンでビルドしてください（署名の出所が自分になるため、以降の確認が出ません）。
+以降の例で`suiko`として実行するには、展開した実行ファイルをPATHの通ったディレクトリへ配置してください。
 
-## 使い方
+### ソースからのビルドと辞書
 
 ```sh
-# 自然さを診断
+git clone https://github.com/nwiizo/suiko
+cd suiko
+cargo install --path . --locked
+```
+
+ビルド時にSudachiDict 20260723 coreのzip（約69MB）を取得し、zipと辞書本体のSHA-256を検証して埋め込みます。辞書が約207MBあるため、バイナリは200MB台になります。検証済みの辞書を`resources/system.dic`に置くか、環境変数`SUIKO_SUDACHI_DICT`で指定すれば、ビルド時の辞書取得も省けます。オフラインビルドでは、Rust依存のキャッシュに加えて、この辞書の配置が必要です。
+
+形態素解析には[sudachi.rs](https://github.com/WorksApplications/sudachi.rs) v0.6.11を非公式に再配布した[suiko-sudachi](https://crates.io/crates/suiko-sudachi)を使います。再配布に関する説明は[同crateのREADME](https://github.com/nwiizo/suiko/blob/main/crates/suiko-sudachi/README.md)にあります。
+
+## lintで原稿を確認する
+
+```sh
 suiko lint draft.md
 suiko lint draft.md --genre tech --json
+suiko lint docs/*.md --genre tech
 
-# 校正中の実験的な検出も加える
-suiko lint draft.md --genre essay --experimental --json
-
-# 読解負荷の指さしも追加
-suiko lint draft.md --reading-load --json
-
-# 前回結果との差分（複数ファイルも同じbaselineで比較できる）
-suiko lint docs/*.md --json > /tmp/suiko-before.json
-suiko lint docs/*.md --baseline /tmp/suiko-before.json --json
-
-# CIでwarn以上を終了コード2にする
-suiko lint docs/*.md --fail-on warn
-
-# GitHub ActionsのPR注釈として出力する
-suiko lint docs/*.md --format github --fail-on warn
-
-# エディタやコードスキャン向けのSARIF 2.1.0
-suiko lint docs/*.md --format sarif > suiko.sarif
-
-# 構造と用語を確認
-suiko outline draft.md --json
-suiko terms draft.md --json
-
-# 複数ファイルの用語集計と表記揺れの一覧（読み取り専用）
-suiko terms --audit docs/*.md --json
-
-# 固定参照資源に照らした一般語彙監査
-suiko lexical-audit draft.md --reference data/lexical-reference-v1.json --json
-
-# 標準入力
+# 標準入力は - で受け取る
 printf '重要なのは、結論です。\n' | suiko lint - --json
 ```
 
-### 学術稿の論証・納品監査
+`--genre`には`essay`、`tech`、`business`を指定でき、ジャンル別の閾値を使います。一部のルールはジャンルを明示した場合だけ有効です。各指摘（finding）にはカテゴリ、対象行、抜粋、理由、重要度が付きます。必要な比較や意図した反復は、そのまま残せます。
 
-`academic` は、学術論文の意味を自動採点する機能ではありません。中心命題、説明対象、用語の来歴、維持する論証順序、節間の橋、注の置き場所を、執筆者が先に記録した**監査契約**（Suiko内のローカルな機械可読作業記録）と照合します。契約があることで、推敲の都合だけで研究課題、章順、概念、結論を変えることを防ぎます。
+散文の検出では、コード、見出し、箇条書き、引用行、表、参考文献などを除外します。見出しや箇条書き自体を扱う構造ルールは、それぞれの対象を調べます。front matter、リンクURL、HTMLタグ・コメント、コード注釈行（`#A …`）も本文と区別します。参考文献行とコード注釈行の除外数は`stats.masking`で確認できます。
+
+### 技術文書の近接した反復
+
+次の2カテゴリは、`--genre tech`の通常検出です。近くに続く文末や挿入表現をまとめて読み直すために使います。
+
+| category | 検出する状態 |
+|---|---|
+| `repeated_distinction` | 同じ節の5文以内に、`別物だ／です／である`で終わる文が3文以上ある。疑問・否定・引用への接続は除く |
+| `repeated_em_dash` | 同じ節の5文以内に、文中の`—`・`―`を使う文が3文以上ある。数字同士の範囲や単独の罫線は除く |
+
+各カテゴリを文書内の1件へまとめ、近接した反復の対象行を`related_lines`で返します。章ごとに一度ある説明を合算せず、太字の有無で判定を変えません。重要度は`info`で、自動修正の候補は付きません。`--fail-on info`を指定すると、これらの指摘も終了コードに影響します。
+
+### 実験的な検出
 
 ```sh
-suiko academic paper.md --contract academic-contract.json --json
-
-# 提出用成果物まで確認する場合
-suiko academic paper.md --contract academic-contract.json \
-  --docx submission.docx --template official-template.docx \
-  --pdf submission.pdf --export-record delivery-record.json
+suiko lint draft.md --genre tech --experimental --json
 ```
 
-このレーンは、形式的なリサーチ・クエスチョンを置かない方針、用語の出典又は造語表示、防御的留保候補、本文引用と参考文献の著者・年又は`[@citation-key]`の双方向照合、段落第一文と節間の共有対象、本文・注・不要の注分類を確認します。引用符付きの分類名、公式値、短いラベルは`accepted_labels`へ登録できます。契約の論証順序、用語、第一文順、文体プロファイルは明示必須です。DOCXとPDFを片方でも指定した場合は、公式テンプレートと納品記録も必須になります。同期は本文・表・注・参考文献を双方向照合するため、旧文や余計な内容の残存も失敗になります。`delivery-record.json` のWord出力とPDF目視は自己申告であり、Suikoが実施事実を証明するものではありません。JSONの`passed`は指定された全チェックの合格、`delivery_ready`は提出可能な成果物監査まで通った状態を示します。
+`--experimental`は、校正途中のルールも有効にします。表現の一致が有用な指摘になるか、文脈を読んで確認するための機能です。主な確認候補は次のとおりです。
 
-契約の完全な項目と、最終PDFの目視確認を含む手順は[academic-delivery.md](skills/suiko/references/academic-delivery.md)を参照してください。
-
-複数ファイルのJSONは、単一ファイルと同じレコードを配列で返します。単一ファイルの `lint --json` は `file`、`suiko_version`、`stats`、`findings` を持つオブジェクトです。
-
-対象箇所を一意に指せるfindingは、`line` に加えて `span` を持ちます。
-
-```jsonc
-{
-  "line": 12,
-  "category": "forbidden_phrase",
-  "excerpt": "…重要なのは、この点…",
-  "severity": "warn",
-  "span": {
-    "start_line": 12, "start_column": 5,   // 列はUnicode scalar数え・1始まり(全角も1)
-    "end_line": 12,   "end_column": 10,    // 終端は半開区間(最後の文字の次)
-    "start_byte": 12, "end_byte": 27       // 各行内のUTF-8 byte offset・0始まり半開区間
-  }
-}
-```
-
-同じ表現が一行に複数ある場合も、findingごとに別の `span` が付きます。`low_burstiness` や語彙多様性のような文書全体の指標は特定の範囲を指さないため、`span` を省略します。列は結合文字も1と数えるUnicode scalar単位で、書記素クラスタではありません。
-
-機械的に安全と確認した縮約（現在は「〜することができる」→「〜できる」と、サ変名詞に隣接する「〜を行う」→「〜する」の2系統）には `suggestion`（`span`、`preimage`、`replacement`）が付きます。`preimage` が原文と一致する場合に限って適用できる条件で、Suiko自身はファイルを書き換えません。意味が変わりうるパターン（「することはできない」等）には候補を出しません。
-
-`translationese_morph`は、形態素列に一致した読み直し候補を列挙します。たとえば抽象的な内容と「持つ」の組み合わせは、`意味+を+持つ`、`疑問節末のか+を+持つ`、`持てる+未決`だけを対象にします。「傘を持つ」「停止権限を持つ」「疑問を持つこと」は対象外です。findingは修正の要否を決めず、AIまたは人が周辺の文脈を読んで判断します。
-
-`--format github` はfindingをGitHub Actionsのworkflowコマンド（`::warning file=...,line=...,col=...::`）として出力し、PRの該当行へ注釈を付けられます。severityは `critical→error` / `warn→warning` / `info→notice` に対応します。`--format sarif` はSARIF 2.1.0を出力し、`columnKind: unicodeCodePoints` を宣言して `span` の列をそのまま使います（severityは `error` / `warning` / `note`）。
-
-`terms --audit` は複数ファイルの用語候補を集計し、SudachiDictの正規化表記で表記揺れ（サーバー/サーバ等）をクラスタして返します。読み取り専用で、置換や辞書の書き込みは行いません。
-
-`lexical-audit`は既存`terms`のJSONを変更しない独立レーンです。固定フォーマットと小標本は`data/lexical-reference-v1.json`に収録しています。参照JSONは`version: 1`、`source`、`known_compounds`、`corpus_counts`、`register_sets`を持ちます。一般名詞・接尾辞・必要な形状詞の連続を候補化し、`forbidden_match`、`orthographic_variation`、`register_variation`、`novel_compound`を根拠別に返します。新奇複合語は本文5回以下、参照コーパス1回以下、定義手掛かりなし、登録なしをすべて満たし、参照資源にコーパス頻度が明記された場合だけinfoになります。参照資源にない語を頻度0とはみなしません。Sudachiだけでは意味的同義性を決められないため、漢語・和語等のレジスター比較は参照資源に明示した集合だけを扱います。自動置換や原稿の書き換えは行いません。
-
-`lint --json` の `stats.readability` には平均文長、動詞・助詞比率、文字種比率の観測値が入ります。読者別の難易度スコアは、正解ラベル付きコーパスで校正できるまで実装しません（観測値のみを提供します）。
-
-`stats.rhythm.sentence_endings` には、文末を `assertive`（明示的な断定）、`tentative`（推量・保留）、`question`（疑問）、`nominal`（体言止め）、`other` に近似分類した件数と、空行をまたがない最長連続数が入ります。これは文章の良否を決める値ではなく、局所的なリズムを確認するための観測値です。6文以上の文書で `--experimental` を指定すると、30モーラ以上で同じ明示的文末が3文以上続き、文長の変動係数が0.15以下の箇所を `repeated_sentence_mode`、25モーラ以下の体言止めが3文以上続く箇所を `consecutive_nominal_endings` として指さします。
-
-`abstract_metaphor` は、地図、羅針盤、道標、土台、架け橋などの名詞が、抽象的な対象の役割を表す述語や「〜の〜」型で使われた箇所を `info` で指さします。候補語の出現だけでは発火せず、地理情報の表示や船具の点検など本来の意味での用例は対象外です。`--genre tech --experimental`では、`仕様は意図を実装へ運ぶ`のように抽象的な主語・目的語・移動先を`運ぶ`でつなぐ形と、`複雑さは知識量で効く`のように数量名詞の直後を`で効く`とする形、抽象的な対象の役割を`入口`・`主役`で表す形も対象にします。比喩かどうかを断定せず、判断対象、判断基準、具体的な効果を明記できるか確認するためのfindingです。CIで必ず止める場合は `--fail-on info` を使い、必要な用例は `.suiko.toml` の `allow` へ理由付きで記録します。
-
-`--baseline` には前回の `lint --json` 出力（単一オブジェクトまたは配列）をそのまま渡せます。レコードは `file` 文字列の完全一致で対応づけ、改名は推測しません。baselineにないファイルは全findingを新規として `baseline.file_status = "added"` で示し、baselineにあって今回対象にないファイルはstderrへ警告します。genre、`--experimental`、Suikoバージョンが一致しない場合は実行エラーになります。`antithesis_repetition` や `low_burstiness` のような文書単位のfindingは、文章の言い換えで抜粋が変わっても同一カテゴリとして継続扱いします。
-
-`antithesis_repetition` と `repeated_sentence_lead` は文書単位の集約findingです。同じ反復キーは1件にまとめ、全対象行を `related_lines` で示します。finding件数は「一致した箇所の数」ではなく「反復状態の数」を意味します。文頭のラベル+コロン（用語集やFAQの定型フィールド）は、散文の無意識な反復と区別して `detail` に明記します。
-
-`--genre tech --experimental`の`repeated_explanation_preview`は、「本節では〜説明します」「ここでは〜紹介する」などの予告が、同じ節の段落頭で3回以上繰り返される場合に`info`を返します。形態素の基本形と文末の活用を使い、過去・否定・可能・義務の表現や、別の主語がある説明行為は対象外にします。章ごとに一度置く案内や単発の予告は残し、自動修正はしません。同じ文頭に既存の`repeated_syntax_template`も出る場合は、具体的な予告の指摘を優先します。
-
-### `--experimental`で反復・指示範囲・技術現場の言い回しを確認する
-
-次の6カテゴリは、形態素列から観測できる反復、指示範囲、技術現場の比喩的な言い回しを示す実験的なfindingです。文法的な誤りや文章の優劣を判定するものではありません。いずれもseverityは`info`で、通常の`lint`では出力されません。AIが書いたかどうかは判定せず、読み直す箇所を列挙するために使います。
-
-| category | 検出する状態 | 対象外になる例 |
-|---|---|---|
-| `self_labeling_repetition` | `必要なのは`、`面白いのは`、`避けたいのは`など、評価語を含む「〜のは」型の主題提示が文書内に3回以上ある | 1〜2回だけの使用、`正直に言うと`など書き手の立場を示す表現 |
-| `negative_listing` | 同じ段落で`Xではない。Yでもない。Zだ。`のように、否定が2文続いたあと形態素8個以下の肯定文へ焦点を移す | 空行をまたぐ3文、長い説明へ続く否定文 |
-| `uniform_bullet_structure` | `--genre essay`を指定し、4項目以上の連続した箇条書きで文末品詞がすべて同じになり、内容語数の変動係数が0.25以下になる | ジャンル未指定、`tech`、`business`、3項目以下、文末品詞や内容語数のばらつきが大きい箇条書き |
-| `demonstrative_reference` | `--genre tech`を指定し、同じ文の前方に動詞が2個以上ある位置で`このこと`、`そのこと`、`あのこと`を使う | 前方の動詞が1個以下、別の文で指示対象を受ける場合 |
-| `respectively_scope` | `--genre tech`を指定し、列挙の後に`それぞれ`があり、後方に対応する列挙がない | `R、G、Bは、それぞれRed、Green、Blueに対応する`のように両側の列挙が形態素上で見える場合 |
-| `technical_jargon_metaphor` | `--genre tech`を指定し、テストやCIの成功状態を`緑`で表すか、コードの公開を`出荷`で表す | アイコンや画面の実際の表示色、工場や製品の物理的な出荷 |
-
-反復を扱う3カテゴリは文書内の該当箇所を1件へまとめ、対象行を`related_lines`で返します。`self_labeling_repetition`は「〜のは」型だけを扱い、書き手の立場を示す表現は混ぜません。`negative_listing`は意図的な対比にも使えるため、誤りではなく修辞を確認するきっかけとして示します。`uniform_bullet_structure`はMarkdownのコードフェンスと引用内を検査せず、明示的に`essay`を選んだ場合だけ出力します。文末品詞と内容語数の近さを測るもので、項目間の意味関係や構文上の並列性までは判定しません。
-
-技術文書向けの3カテゴリは、読者が複数の解釈で迷う可能性がある箇所のうち、形態素列で位置を示せる指示語、`それぞれ`の範囲、技術現場の比喩的な言い回しに絞っています。`technical_jargon_metaphor`の色・出荷の検出では、同じ節にある対象語と状態語の組み合わせを扱い、表示や物理配送を示す語が同じ文にあれば除外します。`abstract_metaphor`も、抽象語の修飾や格関係などが確認できる場合だけ報告します。いずれも表現の誤りとは断定せず、AIまたは人が前後関係を確認する候補だけを返します。
-
-主語の省略、修飾先、照応先、節をまたぐ並列関係は、形態素列だけでは正誤を決められないためfindingにしません。
-
-### 技術文書の言い回しと反復を確認する
-
-技術文書を読み直すとき、近くに続く同じ文末や挿入表現をまとめて確認できます。次の2カテゴリは`--genre tech`だけで有効です。`info`として位置を示し、自動修正は付けません。
-
-| category | 追加した検出 |
+| category | 検出する状態・対象ジャンル |
 |---|---|
-| `repeated_distinction` | 同じ節の5文以内に`別物だ／です／である`で終わる文が3文以上。疑問・否定・引用への接続を除く |
-| `repeated_em_dash` | 同じ節の5文以内に文中の`—`・`―`を使う文が3文以上。数字同士の範囲や単独の罫線を除く |
+| `self_labeling_repetition` | 評価語を含む「〜のは」型の主題提示が文書内に3回以上ある |
+| `negative_listing` | 同じ段落で否定文が2文続き、形態素8個以下の肯定文へ続く |
+| `uniform_bullet_structure` | `essay`で、4項目以上の箇条書きの文末品詞がそろい、内容語数のばらつきが小さい |
+| `demonstrative_reference` | `tech`で、同じ文の前方に動詞が2個以上ある位置に「このこと」等がある |
+| `respectively_scope` | `tech`で、列挙の後に「それぞれ」があり、後方に対応する列挙が見えない |
+| `repeated_explanation_preview` | `tech`で、同じ節の段落頭に「本節では〜説明します」等の予告が3回以上ある |
+| `technical_jargon_metaphor` | `tech`で、CIの成功を「緑」、コードの公開を「出荷」と表すなど、技術現場の比喩的な言い回しがある |
+| `repeated_sentence_mode` / `consecutive_nominal_endings` | 長さの近い明示的な文末や、短い体言止めが局所的に続く |
 
-各カテゴリを文書単位の1件へまとめ、`related_lines`には近接した反復の行だけを返します。章ごとに一度ある説明を合算せず、太字の有無で判定を変えません。比較が必要な箇所や意図的な挿入は残せます。`--fail-on info`を使う場合は、これらの指摘も終了コードに影響します。
+`technical_jargon_metaphor`は、技術対象に続く「静かに壊れる」「黙って捨てる／無視する」「地味に効く」「安全側／保守側に倒す」と、「時間を溶かす」も対象にします。活用と近くの名詞・助詞を確認し、候補語の出現だけでは判定しません。
 
-`--genre tech --experimental`では、`technical_jargon_metaphor`に`静かに壊れる`、`黙って捨てる／無視する`、`地味に効く`、`安全側／保守側に倒す`、`時間を溶かす`を、`abstract_metaphor`に抽象的な`入口`・`主役`を追加します。説明済みの内容や体験談にも一致するため、この追加分は実験機能です。
+通常の`abstract_metaphor`は、抽象的な対象を「地図」「土台」等の役割で表す用例を扱います。`--genre tech --experimental`では、「仕様は意図を実装へ運ぶ」のような抽象語の関係や、抽象的な「入口」「主役」等も加えます。比喩の追加分は、説明済みの内容や体験談にも一致するため、実験機能に留めています。
 
-検出対象は散文で、コード・引用・見出し・箇条書き・表・参考文献等は除外します。[検出仕様と形態素解析の手順](eval/technical-wording.md)に、候補一覧、形態素の実測結果、採用理由、評価結果と限界を記録しています。
+これらは`info`の読み直し候補です。形態素解析だけでは主語の省略、指示先、修飾先の正誤を決められません。[検出仕様と形態素解析の手順](https://github.com/nwiizo/suiko/blob/main/eval/technical-wording.md)に、候補一覧、採用理由、実測した分割、評価結果を記録しています。
 
-終了コードは次のとおりです。
+### 読解負荷を追加する
+
+```sh
+suiko lint draft.md --genre tech --reading-load --json
+```
+
+長すぎる一文、読点のない60字以上の一文、埋もれた列挙、長い連続漢字、二重否定、格助詞「の」の近接した連鎖を確認します。結果は`findings`と分けた`reading_load`へ出力し、`--baseline`比較と`--fail-on`判定には含めません。
+
+## 診断結果とCI連携
+
+`lint --json`は、単一ファイルなら`file`、`suiko_version`、`stats`、`findings`を持つオブジェクト、複数ファイルなら同じレコードの配列を返します。
+
+| findingのフィールド | 内容 |
+|---|---|
+| `category` / `severity` | ルール名と重要度（`info` / `warn` / `critical`） |
+| `line` / `excerpt` / `detail` | 対象行、抜粋、確認する理由 |
+| `span` | 一意に示せる原文の範囲。文書全体の指標では省略 |
+| `related_lines` | 集約した反復などの対象行 |
+| `suggestion` | 対応する縮約に付く`span`、`preimage`、`replacement` |
+
+`span`の行・列は1始まりで、終端は最後の文字の次を指します。列はUnicode scalar単位で、全角文字も結合文字も各1と数えます。`start_byte`と`end_byte`は各行内のUTF-8 byte offsetで、0始まりです。同じ表現が一行に複数あっても別の範囲を返します。
+
+「〜することができる」→「〜できる」、サ変名詞に隣接する「〜を行う」→「〜する」には、条件を満たした場合に`suggestion`が付きます。適用前に`preimage`と原文の一致を確認してください。Suiko自身は変更を適用しません。
+
+反復を集約するfindingの件数は、一致箇所の総数とは異なります。`related_lines`と併せて確認してください。`stats.readability`の平均文長や品詞・文字種比率、`stats.rhythm.sentence_endings`の文末分類と連続数は、文章の特徴を知る観測値です。
+
+```sh
+# warn以上があれば終了コード2を返す
+suiko lint docs/*.md --genre tech --fail-on warn
+
+# GitHub Actionsのworkflowコマンドとして注釈を出す
+suiko lint docs/*.md --genre tech --format github --fail-on warn
+
+# SARIF 2.1.0に対応するエディタやコードスキャンへ渡す
+suiko lint docs/*.md --genre tech --format sarif > suiko.sarif
+```
+
+`--format github`では`critical` / `warn` / `info`を`error` / `warning` / `notice`へ対応づけます。SARIFでは`error` / `warning` / `note`を使い、列の単位は`unicodeCodePoints`です。
+
+`lint`の終了コードは次のとおりです。`--fail-on`は、実験機能を含む`findings`内の指摘を判定します。
 
 | code | 意味 |
 |---:|---|
-| 0 | 実行成功。findingの有無は問わない |
+| 0 | 実行成功。設定した閾値以上の指摘がない。閾値未設定なら指摘の有無は問わない |
 | 1 | 入力、形態素解析、JSONなどの実行エラー |
-| 2 | `--fail-on` で指定したseverity以上を検出 |
+| 2 | 設定した閾値以上の指摘を検出 |
+
+## 前回の診断と比較する
+
+```sh
+suiko lint docs/*.md --genre tech --json > /tmp/suiko-before.json
+# 原稿を推敲した後、同じファイル群を再検査する
+suiko lint docs/*.md --genre tech --baseline /tmp/suiko-before.json --json
+```
+
+前回のJSONを渡すと、指摘を`resolved`（解消）、`new`（新規）、`persisting`（継続）へ分類します。`file`文字列の完全一致で対応づけるため、ファイルの指定方法をそろえてください。改名は推測しません。前回になかったファイルは`baseline.file_status = "added"`となり、今回の対象から外れたファイルはstderrへ警告します。
+
+ジャンル、`--experimental`、Suikoのバージョンが一致しない比較は実行エラーになります。設定による除外も比較に影響するため、同じ設定で実行してください。文書単位の反復は、抜粋が変わっても同じ反復状態が続けば継続扱いします。`--fail-on`は新規分だけでなく、今回の`findings`全体を判定します。
 
 ## プロジェクト設定
 
-`lint` はカレントディレクトリの `.suiko.toml` を自動的に読み込みます。
+`lint`はカレントディレクトリの`.suiko.toml`を自動的に読み込みます。親ディレクトリは探索しません。
 
 ```toml
 version = 1
@@ -217,97 +179,95 @@ disabled_rules = ["low_specificity"]
 [[allow]]
 category = "forbidden_phrase"
 text = "重要なのは"
-reason = "連載固有の見出し"
+reason = "連載で意図的に使う表現"
 ```
 
-- `genre` と `fail_on` は省略可能な既定値です。同名のCLI引数が常に優先されます。
-- `disabled_rules` は通常のfindingと読解負荷レーンの該当カテゴリを無効にします。
-- `allow` は同じ `category` のfindingについて、`excerpt` に `text` を含むものだけを除外します。意図を残すため `reason` は必須です。
-- `--config <path>` は自動検出の代わりに指定ファイルを読み、`--no-config` は設定を読み込みません。
-- 未知のキー、未知のルール、空の `text` / `reason`、`version = 1` 以外は実行エラーです。
+- `genre`と`fail_on`は省略可能な既定値で、CLI引数が優先されます。
+- `disabled_rules`は`findings`と読解負荷の該当カテゴリを無効にします。
+- `allow`は同じ`category`で、`excerpt`に`text`を含む指摘を除外します。`reason`は必須です。
+- `--config <path>`で設定を指定でき、`--no-config`で読み込みを無効にできます。
+- 未知のキーやルール、空の`text`・`reason`、`version = 1`以外は実行エラーです。
 
-設定による除外は、統計、baseline比較、`--fail-on` 判定より前に適用されます。`outline` と `terms` は設定の影響を受けません。
+設定による除外は、指摘件数の集計、前回比較、終了コードの判定より前に適用します。この設定は`lint`用です。
 
-## 読解負荷レーン
+## 構成と用語を確認する
 
-`--reading-load` は、次の観点を `info` の指さしとして追加します。
+```sh
+suiko outline draft.md --json
+suiko terms draft.md --json
+suiko terms --audit docs/*.md --json
+```
 
-- 長すぎる一文
-- 読点が1つもない60字以上の一文
-- 文中に埋もれた列挙
-- 長い連続漢字
-- 読解時に符号計算を要する二重否定
-- 格助詞「の」の近接した連鎖
+`terms --audit`は用語候補を複数ファイルで集計し、Sudachiの正規化表記を使って「サーバー／サーバ」等の表記揺れをまとめます。置換や辞書への書き込みは行いません。
 
-これはAIらしさの推定ではありません。通常の `findings`、自然度スコア、`--baseline` 比較から分離した `reading_load` セクションへ出力します。
+`lexical-audit`は、一般名詞複合語の頻度や語彙の揺れを、明示した参照JSONと照合します。[参照データの例](https://github.com/nwiizo/suiko/blob/main/data/lexical-reference-v1.json)は動作確認用の小標本です。次の例はリポジトリ直下で実行します。
+
+```sh
+suiko lexical-audit draft.md --reference data/lexical-reference-v1.json --json
+```
+
+参照JSONは`version: 1`、`source`、`known_compounds`、`corpus_counts`、`register_sets`を持ちます。未知の語を頻度0とはみなさず、新奇複合語は本文5回以下、参照コーパス1回以下、定義手掛かりなし、登録なしの条件がそろった場合だけ報告します。漢語・和語などの比較は、参照データに明示した集合に限ります。[語彙監査の設計](https://github.com/nwiizo/suiko/blob/main/docs/adr/0002-offline-lexical-audit.md)も参照してください。
+
+## 学術稿と提出用成果物を確認する
+
+`academic`は、執筆者が先に記録した監査方針と原稿を照合します。中心命題、説明対象、論証順序、用語の来歴、節間のつながり、引用と参考文献、注の分類を確認し、推敲で維持すべき事項の変更を見つけます。
+
+```sh
+suiko academic paper.md --contract academic-contract.json --json
+
+# 提出用成果物まで確認する場合
+suiko academic paper.md --contract academic-contract.json \
+  --docx submission.docx --template official-template.docx \
+  --pdf submission.pdf --export-record delivery-record.json --json
+```
+
+監査方針のJSONでは、論証順序、用語、段落第一文の順序、文体プロファイルを明示します。成果物の監査ではDOCX、PDF、公式テンプレート、出力記録をそろえ、本文・表・注・参考文献の同期も検査します。JSONの`passed`は指定した検査の合格、`delivery_ready`は提出用成果物まで検査が通った状態です。Wordからの出力とPDF目視の記録は自己申告であり、その実施事実をSuikoが証明するものではありません。
+
+JSONの例と提出前の手順は[学術稿と提出用文書の監査](https://github.com/nwiizo/suiko/blob/main/skills/suiko/references/academic-delivery.md)にあります。
 
 ## Agent Skill
 
-[`skills/suiko/SKILL.md`](skills/suiko/SKILL.md) は、診断だけでなく文書設計、執筆、findingの採否、再検査までを扱います。Skill対応エージェントでは `$suiko` として利用できます。
+[`skills/suiko/SKILL.md`](https://github.com/nwiizo/suiko/blob/main/skills/suiko/SKILL.md)は、文書設計、執筆、診断結果の採否、再検査を扱います。各指摘を「直した」または「残す（理由）」へ分類しながら推敲を進めます。
 
-基本原則は「検出は機械、判断は文脈」です。findingを一律に消すのではなく、各項目を「直した」または「残す（理由）」へ分類します。
-
-CLIとAgent Skillは別々に導入します。上記のビルド手順はCLIだけを、次のコマンドは`suiko` Skillだけを導入します。
+CLIとSkillは別々に導入します。次のコマンドでSkillを導入できます。
 
 ```sh
 npx skills add https://github.com/nwiizo/suiko --skill suiko
 ```
 
-GitHub CLI（`gh skill`、preview）でも導入できます。既定では最新のリリースタグが導入され、スコープは`project`（現在のリポジトリ内）です。ユーザー全体で使う場合は`--scope user`を付けます。
+GitHub CLIの`gh skill`（preview）も利用できます。既定では最新のリリースタグから現在のプロジェクトへ導入し、`--scope user`を付けるとユーザー全体で使えます。
 
 ```sh
 gh skill install nwiizo/suiko suiko --agent claude-code
 ```
 
-導入後は`suiko --version`でCLIを確認し、Skill対応エージェントでは`$suiko`を指定します。Skillを先に導入した環境でCLIがない場合、Skillは`cargo install suiko`でCLIの導入を試み、`cargo`がない環境では導入手順の案内と同梱の手動チェックリストによる診断へ切り替えます。
+導入後は、Skill対応エージェントで`$suiko`を指定します。CLIがなければSkillが`cargo install suiko`を試み、`cargo`もない場合は導入案内と手動チェックリストへ切り替えます。
 
-Node.js 20.18以降とnpmが使える環境では、Agent Skillから[@textlint-ja/textlint-rule-preset-ai-writing](https://github.com/textlint-ja/textlint-rule-preset-ai-writing)による補助検査も実行できます。同梱スクリプトが固定バージョンをnpmの一時環境で実行するため、対象プロジェクトの依存関係や設定ファイルは変更しません。結果はSuikoのfinding、自然度スコア、baselineへ加算せず、自動修正も行いません。利用できない環境ではSuikoだけで診断を続けます。
+Node.js 20.18以降とnpmがある環境では、Skillから[@textlint-ja/textlint-rule-preset-ai-writing](https://github.com/textlint-ja/textlint-rule-preset-ai-writing)による補助検査も実行できます。固定バージョンをnpmの一時環境で実行し、対象プロジェクトの依存関係や設定は変更しません。結果はSuikoのfindingや前回比較へ加算せず、自動修正も行いません。
 
-## 対象範囲
+## 検証と開発
 
-Suikoは一般校正の網羅ではなく、均一なリズムや翻訳調、日本語文書の構造と読解負荷を再現可能に指さすことへ集中します。既存プロジェクトの表記規約や用語辞書は置き換えず、そのまま尊重します。誤字脱字、製品名の正規化、組織固有の表記統一は既存の工程へ残します。
+検出位置、除外条件、JSON、前回比較、終了コードを回帰テストで確認します。技術文書の追加ルールは、自作10文書・24項目の評価で期待どおりの検出を確認しました。これは仕様の確認であり、一般的な誤検出率や文章の改善効果を実証した結果ではありません。編集時間の短縮や文章の改善率は未測定です。
 
-## 品質基準
+評価の対象と限界は[技術文書の検出検証](https://github.com/nwiizo/suiko/blob/main/eval/technical-wording.md)、既存ルールの評価は[校正記録](https://github.com/nwiizo/suiko/blob/main/eval/calibration.md)に記録しています。誤字脱字や組織固有の表記統一は、既存の校正工程と組み合わせてください。
 
-校正用フィクスチャを回帰テストに含めています。現時点の期待値は次のとおりです。
-
-| fixture | 通常 | `--experimental` |
-|---|---:|---:|
-| AI的な文書 | 19 | 28 |
-| 自然な文書 | 0 | 0 |
-
-形態素解析にはsudachi.rsとSudachiDict core（版とSHA-256を`build.rs`で固定）を使います。形態素の分割結果そのものではなく、公開するJSON形状と校正フィクスチャに対するカテゴリ別の検出結果を回帰テストで固定します。
-
-開発用評価集合には、出典と利用条件を記録した長い人間文書も含めています。現在の発火率、閾値を変更しなかった理由、評価集合が支えない結論は [eval/calibration.md](eval/calibration.md) に記録しています。
-
-## 設計上の境界
-
-初版には、パイプライン連携用の標準入力、複数ファイル入力、`--fail-on`、baseline比較、読解負荷レーン、プロジェクト設定を含めました。
-
-一方、次の機能は意図的に含めません。
-
-- 文埋め込みモデル: 構成した平板文と深掘り文で追加価値を実測したが、判別根拠が弱い一方で257 MiBのモデルキャッシュと初回取得が必要だったため採用しない。意味の進展は目視で確認する
-- 自動修正: 事実、意図した反復、固有の文体を壊しうる判断は人間またはエージェントへ残す
-- MCPサーバー・LSP: 連携3経路の実測（14ファイル約30万字をwarm 0.34秒で`--format github`/`--format sarif`、標準入力+JSONは1章0.05秒）で、常駐プロセスなしでもCI・エディタ・Agent利用が成立することを確認した。不足が実証されるまで採用しない
-- 一般校正の網羅: 自然さと構造の診断へ集中し、表記統一などは既存の校正工程と組み合わせる
-- コーパス評価・閾値校正CLI: 通常のバイナリには含めず、開発用`evaluation` featureへ分離する
-
-## 開発
+リポジトリのCIと同じ確認コマンドです。
 
 ```sh
-cargo fmt --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test --all-features --all-targets
+cargo +1.97 fmt --check
+cargo +1.97 clippy --locked --all-targets --all-features -- -D warnings
+cargo +1.97 test --locked --all-features --all-targets
 ```
 
-検出器の校正用CLIは通常の`suiko`へ含めません。開発時だけ`evaluation` featureを有効にして実行します。
+評価用CLIは`evaluation` featureを有効にした開発ビルドで使います。通常の配布バイナリには含めません。
 
 ```sh
-cargo run --features evaluation --bin suiko-eval -- report eval/corpus.toml
-cargo run --features evaluation --bin suiko-eval -- sweep eval/corpus.toml --rule repeated-sentence-lead --values 3,5,7
-cargo run --features evaluation --bin suiko-eval -- length-analysis eval/corpus.toml
+cargo +1.97 run --locked --features evaluation --bin suiko-eval -- labeled eval/technical-wording.toml
+cargo +1.97 run --locked --features evaluation --bin suiko-eval -- report eval/corpus.toml
 ```
+
+評価データの準備と閾値の比較は[評価手順](https://github.com/nwiizo/suiko/blob/main/eval/README.md)、リリースごとの変更は[CHANGELOG](https://github.com/nwiizo/suiko/blob/main/CHANGELOG.md)を参照してください。
 
 ## ライセンス
 
-MIT。第三者由来の資料とフィクスチャに必要な表示は [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) に収録しています。
+MIT。第三者由来の資料とフィクスチャに必要な表示は[THIRD_PARTY_NOTICES.md](https://github.com/nwiizo/suiko/blob/main/THIRD_PARTY_NOTICES.md)に収録しています。
