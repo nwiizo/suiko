@@ -7,6 +7,7 @@ mod metrics;
 mod morph;
 mod patterns;
 mod reading_load;
+mod word_rules;
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -22,6 +23,7 @@ pub(crate) use patterns::forbidden_phrase_list;
 #[cfg(feature = "evaluation")]
 pub(crate) use patterns::hype_expression_list;
 pub use reading_load::{analyze_reading_load, analyze_reading_load_with_thresholds};
+pub(crate) use word_rules::{WordRule, validate_word_rules, word_rule_findings};
 
 const EXPERIMENTAL_CATEGORIES: &[&str] = &[
     "consecutive_nominal_endings",
@@ -40,6 +42,7 @@ const EXPERIMENTAL_CATEGORIES: &[&str] = &[
     "repeated_sentence_mode",
     "respectively_scope",
     "self_labeling_repetition",
+    "short_topic_comma",
     "technical_jargon_metaphor",
     "uniform_bullet_structure",
     // 2026-08-19の実測(現代人間dev 75文書)で既定ONを支えられず降格した3件。
@@ -58,6 +61,7 @@ const RULE_CATEGORIES: &[&str] = &[
     "bullet_emoji",
     "buried_list",
     "consecutive_nominal_endings",
+    "custom_wording",
     "demonstrative_reference",
     "double_negative",
     "english_syntax_cleft_because",
@@ -92,6 +96,7 @@ const RULE_CATEGORIES: &[&str] = &[
     "respectively_scope",
     "self_labeling_repetition",
     "sentence_too_long",
+    "short_topic_comma",
     "technical_jargon_metaphor",
     "translationese",
     "translationese_morph",
@@ -356,6 +361,9 @@ pub fn analyze_with_thresholds(
         &tokenized, &raw_lines,
     ));
     findings.extend(morph::negative_listing_findings(&tokenized, &raw_lines));
+    if experimental {
+        findings.extend(morph::short_topic_comma_findings(&tokenized, &raw_lines));
+    }
     if genre == Some("tech") {
         findings.extend(morph::technical_repetition_findings(
             &tokenized, &raw_lines, raw,

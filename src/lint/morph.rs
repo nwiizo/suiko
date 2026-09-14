@@ -201,6 +201,55 @@ pub(super) fn significant_tokens(tokens: &[Morpheme]) -> &[Morpheme] {
     &tokens[start..]
 }
 
+pub(super) fn short_topic_comma_findings(
+    tokenized: &[TokenizedSentence],
+    raw_lines: &[&str],
+) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    for sentence in tokenized {
+        let tokens = &sentence.tokens;
+        let Some(comma_index) = tokens.iter().position(|token| token.surface == "、") else {
+            continue;
+        };
+        // nwiizo-coding-style: 5文字以内の名詞句＋係助詞「は」に限定する;
+        // 節やほかの読点へ広げる場合は、必要な区切りを残す評価例を先に追加する。
+        if comma_index < 2 {
+            continue;
+        }
+        let comma = &tokens[comma_index];
+        let topic = &tokens[comma_index - 1];
+        let prefix = &sentence.text[..comma.byte_start];
+        if topic.surface != "は"
+            || topic.pos(0) != "助詞"
+            || topic.pos(1) != "係助詞"
+            || prefix.chars().count() > 5
+            || !tokens[..comma_index - 1].iter().all(|token| {
+                matches!(
+                    token.pos(0),
+                    "名詞" | "代名詞" | "連体詞" | "接頭辞" | "接尾辞"
+                )
+            })
+            || !tokens[comma_index + 1..]
+                .iter()
+                .any(|token| CONTENT_POS.contains(&token.pos(0)))
+            || !sentence
+                .raw_text
+                .starts_with(&sentence.text[..comma.byte_end])
+        {
+            continue;
+        }
+        let mut finding = sentence.info_finding(
+            raw_lines,
+            comma.byte_start..comma.byte_end,
+            "short_topic_comma",
+            "短い主題の直後に読点があります。区切りが読みやすさや意図した間に必要か確認してください。必要な読点は残せます。",
+        );
+        finding.excerpt = sentence.excerpt(0, comma.byte_end);
+        findings.push(finding);
+    }
+    findings
+}
+
 pub(super) fn punctuation_between(tokens: &[Morpheme], first: usize, second: usize) -> bool {
     tokens[first + 1..second]
         .iter()

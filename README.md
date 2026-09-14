@@ -34,12 +34,12 @@ suiko --version
 Rustを入れずに使う場合は、[GitHub Releases](https://github.com/nwiizo/suiko/releases)から取得できます。macOS（Apple Silicon / Intel）、Linux（x86_64 / aarch64）、Windows（x86_64）に対応し、各アーカイブにSHA-256ファイルが付きます。
 
 ```sh
-# v0.3.6 / macOS（Apple Silicon）
-curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.3.6/suiko-v0.3.6-aarch64-apple-darwin.tar.gz
-curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.3.6/suiko-v0.3.6-aarch64-apple-darwin.tar.gz.sha256
-shasum -a 256 -c suiko-v0.3.6-aarch64-apple-darwin.tar.gz.sha256
-tar xzf suiko-v0.3.6-aarch64-apple-darwin.tar.gz
-./suiko-v0.3.6-aarch64-apple-darwin/suiko --version
+# v0.3.7 / macOS（Apple Silicon）
+curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.3.7/suiko-v0.3.7-aarch64-apple-darwin.tar.gz
+curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.3.7/suiko-v0.3.7-aarch64-apple-darwin.tar.gz.sha256
+shasum -a 256 -c suiko-v0.3.7-aarch64-apple-darwin.tar.gz.sha256
+tar xzf suiko-v0.3.7-aarch64-apple-darwin.tar.gz
+./suiko-v0.3.7-aarch64-apple-darwin/suiko --version
 ```
 
 以降の例で`suiko`として実行するには、展開した実行ファイルをPATHの通ったディレクトリへ配置してください。
@@ -93,6 +93,7 @@ suiko lint draft.md --genre tech --experimental --json
 | category | 検出する状態・対象ジャンル |
 |---|---|
 | `self_labeling_repetition` | 評価語を含む「〜のは」型の主題提示が文書内に3回以上ある |
+| `short_topic_comma` | 文頭の5文字以内の名詞句＋「は」の直後に読点「、」がある。長い主題や動詞を含む節は除く |
 | `negative_listing` | 同じ段落で否定文が2文続き、形態素8個以下の肯定文へ続く |
 | `uniform_bullet_structure` | `essay`で、4項目以上の箇条書きの文末品詞がそろい、内容語数のばらつきが小さい |
 | `demonstrative_reference` | `tech`で、同じ文の前方に動詞が2個以上ある位置に「このこと」等がある |
@@ -189,6 +190,35 @@ reason = "連載で意図的に使う表現"
 - 未知のキーやルール、空の`text`・`reason`、`version = 1`以外は実行エラーです。
 
 設定による除外は、指摘件数の集計、前回比較、終了コードの判定より前に適用します。この設定は`lint`用です。
+
+### プロジェクト独自の形態素ルール
+
+プロジェクトで読み直したい言い回しを、`.suiko.toml`の`word_rules`に追加できます。たとえば、値の「変更」と「移動」を使い分けたい場合は次のように記録します。
+
+```toml
+version = 1
+
+[[word_rules]]
+id = "value-change"
+message = "増減・変更・移動のどれを指すか確認してください。"
+severity = "info"
+tokens = [
+    { surface = "値", pos = "名詞" },
+    { surface = "を", pos = "助詞" },
+    { dictionary_form = "動かす", pos = "動詞" },
+]
+```
+
+既存の設定へ追記する場合、`version = 1`は重ねて書きません。設定したルールは通常の`lint`で有効です。「値を動かしました」「値を動かさない」にも一致し、`category: "custom_wording/value-change"`、原文の範囲、指定したメッセージを返します。指摘は読み直し候補で、自動修正は付きません。
+
+- `surface`は表層、`dictionary_form`は活用前の基本形、`pos`はSudachiの品詞大分類です。各トークンで指定した条件をすべて満たす、隣接した形態素列に一致します。
+- 文・改行・空白・コード等の除外箇所をまたぎません。文字列の部分一致や正規表現は使わず、外部プリセットの辞書ファイルは直接読み込みません。
+- `id`は英小文字・数字・ハイフン・アンダースコアで一意に付けます。`message`と1件以上の`tokens`は必須で、空の条件や未知のキー・品詞はエラーです。
+- `severity`は`info`（省略時）、`warn`、`critical`から選べます。`--fail-on`、`allow`、`disabled_rules = ["custom_wording"]`にも対応します。個別ルールを止める場合はその定義を取り除きます。
+- `allow`には`category = "custom_wording"`を指定します。`rule_id = "value-change"`も加えると、そのルールだけを個別許可できます。IDを省略すると、指定の抜粋に一致したすべての独自ルールが許可されます。
+- 結果の`category`は`custom_wording/<id>`です。件数の集計、前回比較、GitHub注釈、SARIFもID別に扱い、同じ抜粋に一致した別ルールを混同しません。ルールを変更して比較する場合は、その変更も結果に含まれます。
+
+独自ルールと短い主題の読点はv0.3.7で追加しました。既存の設定と通常ルールのJSONはそのまま使えます。[比較調査と検証記録](https://github.com/nwiizo/suiko/blob/v0.3.7/eval/word-rules.md)に、採用した機能と検証の限界をまとめています。
 
 ## 構成と用語を確認する
 
