@@ -133,3 +133,35 @@ Works and cards:
 - `kishida-haha-no-hanashi.txt`: 母の話 by 岸田國士 — https://www.aozora.gr.jp/cards/000338/card46819.html
 
 Terms: https://www.aozora.gr.jp/guide/kijyunn.html
+
+## textlint-rule-preset-ai-words-ja (rule design reference)
+
+The configurable morphological rules and the experimental short-topic comma
+check were informed by [p1ass/textlint-rule-preset-ai-words-ja](https://github.com/p1ass/textlint-rule-preset-ai-words-ja)
+v1.2.0, commit `4de09b3467c48519595e941cf460ed4820a7be75`. Suiko implements
+its own Sudachi matching and validation; it does not bundle the upstream word
+list or execute the textlint package at runtime. The upstream license follows.
+
+```text
+MIT License
+
+Copyright (c) 2026 p1ass
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```

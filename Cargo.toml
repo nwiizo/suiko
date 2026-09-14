@@ -1,6 +1,6 @@
 [package]
 name = "suiko"
-version = "0.3.6"
+version = "0.3.7"
 default-run = "suiko"
 edition = "2024"
 rust-version = "1.97"

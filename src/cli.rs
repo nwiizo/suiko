@@ -188,12 +188,15 @@ struct Config {
     disabled_rules: Vec<String>,
     #[serde(default)]
     allow: Vec<Allowance>,
+    #[serde(default)]
+    word_rules: Vec<lint::WordRule>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Allowance {
     category: String,
+    rule_id: Option<String>,
     text: String,
     reason: String,
 }
@@ -227,16 +230,38 @@ impl Config {
             if allowance.reason.trim().is_empty() {
                 return Err(config_error(path, "allow.reason は空にできません"));
             }
+            if let Some(rule_id) = &allowance.rule_id
+                && (allowance.category != "custom_wording"
+                    || !self.word_rules.iter().any(|rule| rule.id == *rule_id))
+            {
+                return Err(config_error(
+                    path,
+                    format!(
+                        "allow.rule_id は custom_wording の登録済みIDを指定してください: {rule_id}"
+                    ),
+                ));
+            }
         }
+        lint::validate_word_rules(&self.word_rules)
+            .map_err(|message| config_error(path, message))?;
         Ok(())
     }
 
     fn suppresses(&self, finding: &Finding) -> bool {
-        self.disabled_rules
-            .iter()
-            .any(|rule| rule == &finding.category)
+        let (category, rule_id) = finding
+            .category
+            .strip_prefix("custom_wording/")
+            .map_or((finding.category.as_str(), None), |id| {
+                ("custom_wording", Some(id))
+            });
+        self.disabled_rules.iter().any(|rule| rule == category)
             || self.allow.iter().any(|allowance| {
-                allowance.category == finding.category && finding.excerpt.contains(&allowance.text)
+                allowance.category == category
+                    && allowance
+                        .rule_id
+                        .as_deref()
+                        .is_none_or(|id| rule_id == Some(id))
+                    && finding.excerpt.contains(&allowance.text)
             })
     }
 }
@@ -800,6 +825,14 @@ fn execute(cli: Cli) -> Result<ExitCode, Error> {
             for file in &args.files {
                 let text = read_input(file)?;
                 let mut report = lint::analyze(&text, &morphology, genre, args.experimental)?;
+                if let Some(config) = &config {
+                    report.findings.extend(lint::word_rule_findings(
+                        &text,
+                        &morphology,
+                        &config.word_rules,
+                    )?);
+                    report.findings.sort_by_key(|finding| finding.line);
+                }
                 apply_config(&mut report, config.as_ref());
                 let baseline = match (&baseline_data, &baseline_map) {
                     (Some((baseline_file, _)), Some(records)) => {

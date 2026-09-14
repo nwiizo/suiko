@@ -1,6 +1,32 @@
 use assert_cmd::cargo::cargo_bin_cmd;
 use serde_json::Value;
 
+#[test]
+fn finding_keeps_its_existing_public_fields_and_json_shape() {
+    let finding = suiko::lint::Finding {
+        line: 1,
+        category: "translationese".to_owned(),
+        excerpt: "対象の文".to_owned(),
+        severity: "info".to_owned(),
+        detail: "表現を確認する".to_owned(),
+        related_lines: None,
+        status: None,
+        span: None,
+        suggestion: None,
+    };
+    assert_eq!(
+        serde_json::to_value(finding).unwrap(),
+        serde_json::json!({
+            "line": 1,
+            "category": "translationese",
+            "excerpt": "対象の文",
+            "severity": "info",
+            "detail": "表現を確認する",
+            "related_lines": null,
+        })
+    );
+}
+
 fn lint_fixture(name: &str, experimental: bool) -> Value {
     let path = format!("tests/fixtures/{name}");
     let mut command = cargo_bin_cmd!("suiko");
@@ -22,7 +48,12 @@ fn calibrated_fixtures_keep_their_finding_counts() {
 
     // 同一範囲の表層・形態素検出2件を形態素側の1件へまとめるため、従来より2件減る。
     assert_eq!(smelly["stats"]["total_findings"], 19);
-    assert_eq!(smelly_experimental["stats"]["total_findings"], 28);
+    // L12「この事実は、」の読点を実験的な確認候補として1件追加する。
+    assert_eq!(smelly_experimental["stats"]["total_findings"], 29);
+    assert_eq!(
+        smelly_experimental["stats"]["by_category"]["short_topic_comma"],
+        1
+    );
     assert_eq!(natural["stats"]["total_findings"], 0);
     assert_eq!(natural_experimental["stats"]["total_findings"], 0);
 }
