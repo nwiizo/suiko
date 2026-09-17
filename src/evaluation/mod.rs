@@ -57,6 +57,7 @@ pub enum SweepRule {
     LowSpecificity,
     NominalEnding,
     SentenceTooLong,
+    LongAttributiveSpan,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -74,12 +75,13 @@ impl SweepRule {
             Self::LowSpecificity => "low_specificity",
             Self::NominalEnding => "nominal_ending",
             Self::SentenceTooLong => "sentence_too_long",
+            Self::LongAttributiveSpan => "long_attributive_span",
         }
     }
 
     fn lane(self) -> Lane {
         match self {
-            Self::SentenceTooLong => Lane::ReadingLoad,
+            Self::SentenceTooLong | Self::LongAttributiveSpan => Lane::ReadingLoad,
             _ => Lane::Naturalness,
         }
     }
@@ -139,6 +141,14 @@ impl SweepRule {
                     ));
                 }
                 thresholds.reading_load.sentence_max = Some(value as usize);
+            }
+            Self::LongAttributiveSpan => {
+                if value < 1.0 || value.fract() != 0.0 || value > usize::MAX as f64 {
+                    return Err(EvaluationError::Invalid(
+                        "long-attributive-spanのsweep値は1以上の整数です".to_owned(),
+                    ));
+                }
+                thresholds.reading_load.attributive_span_min = Some(value as usize);
             }
         }
         Ok(thresholds)

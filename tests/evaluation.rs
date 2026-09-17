@@ -341,7 +341,7 @@ fn labeled_reports_detection_and_fpr_per_category() {
         .args(["labeled", "eval/corpus.toml"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("samples: total=116 categories=20"))
+        .stdout(predicate::str::contains("samples: total=136 categories=21"))
         .stdout(predicate::str::contains("ci=wilson95 low_n<5"))
         .stdout(predicate::str::contains("corpus: sha256="))
         .stdout(predicate::str::contains(

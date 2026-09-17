@@ -126,6 +126,60 @@ fn double_negative_ignores_independent_predicates_and_parallel_modifiers() {
     }
 }
 
+// long_attributive_span契約: 述語を2つ以上含む30字以上の連体修飾節が一つの実質名詞に
+// 係り、その名詞句が主節の項になる文だけを指さす。形式名詞・枕の名詞、述語名詞、
+// 短い修飾節、主節の連用中止の手前、述語が一つだけの長い修飾節は対象にしない。
+#[test]
+fn long_attributive_span_points_at_one_noun_carrying_a_long_multi_predicate_modifier() {
+    let morphology = Morphology::new().expect("initialize morphology");
+    for (text, head) in [
+        (
+            "導入の例なら、担当者から、既存の作業を減らさずに追加されると考えている、障害が起きたときの連絡だけが現場へ集まると考えている、対象の範囲を想定より広く受け取っている、といった懸念が返るかもしれない。",
+            "懸念",
+        ),
+        (
+            "利用者の要望と問い合わせの記録を受けて担当者が改善案を繰り返し作る運用が、外部の提案より支持された。",
+            "運用",
+        ),
+        (
+            "対人の対立を修復しようとする意図を下げ、自分が正しいという確信を強めた対話が報告されている。",
+            "対話",
+        ),
+    ] {
+        let report =
+            lint::analyze_reading_load(text, &morphology, Some("essay")).expect("analyze text");
+        let findings = report
+            .findings
+            .iter()
+            .filter(|finding| finding.category == "long_attributive_span")
+            .collect::<Vec<_>>();
+        assert_eq!(findings.len(), 1, "{text}");
+        assert_eq!(findings[0].severity, "info");
+        assert!(
+            findings[0].detail.contains(&format!("「{head}」")),
+            "{text}: {}",
+            findings[0].detail
+        );
+        assert!(findings[0].span.is_some(), "{text}");
+    }
+    for text in [
+        "任される判断に沿って確かめる。",
+        "予定が変わったときに何を確かめ直すかを選べる。",
+        "変更前の予想と変更後の操作が食い違い、利用者が次へ進めなくなる、という関係である。",
+        "私は昨日届いた顧客からの問い合わせを一つずつ読み、部長が示した手順に従う。",
+        "手順書を読んで疑問が残った点は、翌日の朝会で確かめる必要がある。",
+        "二〇二六年度に全社の営業部門と管理部門と技術部門で同時に始まる新しい経費精算の手順を、来月の説明会で案内する。",
+    ] {
+        let report =
+            lint::analyze_reading_load(text, &morphology, Some("tech")).expect("analyze text");
+        assert_eq!(
+            report.stats.by_category.get("long_attributive_span"),
+            None,
+            "{text}"
+        );
+    }
+}
+
 #[test]
 fn help_describes_the_analysis_commands() {
     cargo_bin_cmd!("suiko")

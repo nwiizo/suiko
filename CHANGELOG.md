@@ -2,6 +2,14 @@
 
 Suikoの公開リリースを記録する。日付はJSTで、各項目は実測とテストに対応づける。
 
+## [0.3.8] - 2026-09-17
+
+### 追加
+
+- 読解負荷レーン（`--reading-load`）に`long_attributive_span`を追加した。述語を2つ以上含む30字以上の連体修飾節が一つの実質名詞に係り、その名詞句が主節の項になる文を`info`で指さす。形式名詞や「〜する必要がある」の枕の名詞、「〜という関係である」の述語名詞は対象外にする。読点は引用の終止形の並列なら越え、連用中止は両側の節に述語が2つ以上あり手前の節に「が」の主語がないときに一度だけ越える。削除済みの`nested_attributive`（連体形の個数）とは異なり、一つの名詞が背負う修飾節の長さと述語数を測る。ラベル付きサンプル fire 10/10・silent 0/10（Wilson上限0.278）で事前登録条件を満たし、`suiko-eval sweep --rule long-attributive-span`で閾値を校正できる（eval/calibration.md）
+
+互換性: JSONの形式、既存の設定、Rust公開型`Finding`のフィールドは不変。`--reading-load`を使う場合に`reading_load`へ新しいカテゴリが返ることがあり、`disabled_rules = ["long_attributive_span"]`で無効にできる。`findings`、`--fail-on`判定、`--baseline`比較の内容には影響しないが、旧版のbaselineはバージョンの照合で拒否されるため、v0.3.8で作り直す必要がある。採用の経緯と実測は[校正記録](https://github.com/nwiizo/suiko/blob/v0.3.8/eval/calibration.md)に記録する。
+
 ## [0.3.7] - 2026-09-14
 
 ### 追加
