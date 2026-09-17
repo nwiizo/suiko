@@ -1031,3 +1031,147 @@ category = "repeated_explanation_preview"
 expect = "silent"
 genre = "tech"
 note = "予告文型について述べる引用"
+
+# long_attributive_span: 一つの実質名詞に、述語を2つ以上含む長い連体修飾節が前置され、
+# その名詞句が主節の項になる文。原稿レビューで目視修正した文と同じ構造で内容を差し替えた。
+
+[[sample]]
+id = "long-attributive-span-fire-001"
+path = "labeled/long_attributive_span/fire-001.md"
+category = "long_attributive_span"
+expect = "fire"
+note = "「〜と考えている、〜と考えている、といった候補」の引用並列が一つの名詞に係る"
+
+[[sample]]
+id = "long-attributive-span-fire-002"
+path = "labeled/long_attributive_span/fire-002.md"
+category = "long_attributive_span"
+expect = "fire"
+note = "「〜を受けて〜が〜を繰り返し作る運用が」の埋め込み主語を含む修飾節"
+
+[[sample]]
+id = "long-attributive-span-fire-003"
+path = "labeled/long_attributive_span/fire-003.md"
+category = "long_attributive_span"
+expect = "fire"
+note = "「〜ず、〜かを学ぶ機会を失った担当者が」の連用中止を越える修飾節"
+
+[[sample]]
+id = "long-attributive-span-fire-004"
+path = "labeled/long_attributive_span/fire-004.md"
+category = "long_attributive_span"
+expect = "fire"
+note = "「〜を下げ、〜という確信を強めた対話が」の二つの節が一つの名詞に係る"
+
+[[sample]]
+id = "long-attributive-span-fire-005"
+path = "labeled/long_attributive_span/fire-005.md"
+category = "long_attributive_span"
+expect = "fire"
+note = "「〜を選び、〜を先に作る技術から」の連用中止と格助詞「から」"
+
+[[sample]]
+id = "long-attributive-span-fire-006"
+path = "labeled/long_attributive_span/fire-006.md"
+category = "long_attributive_span"
+expect = "fire"
+note = "読点なしで述語が重なる「〜を混同したまま書かれた案内文を」"
+
+[[sample]]
+id = "long-attributive-span-fire-007"
+path = "labeled/long_attributive_span/fire-007.md"
+category = "long_attributive_span"
+expect = "fire"
+note = "主題「〜担当者は」の手前に二つの節が並ぶ"
+
+[[sample]]
+id = "long-attributive-span-fire-008"
+path = "labeled/long_attributive_span/fire-008.md"
+category = "long_attributive_span"
+expect = "fire"
+note = "「〜取り直さず、〜と考えて発注を進めた案件が」の否定の連用中止"
+
+[[sample]]
+id = "long-attributive-span-fire-009"
+path = "labeled/long_attributive_span/fire-009.md"
+category = "long_attributive_span"
+expect = "fire"
+note = "名詞句の並列「〜提案書と、〜案内を」をまとめて修飾する「〜している組織は」"
+
+[[sample]]
+id = "long-attributive-span-fire-010"
+path = "labeled/long_attributive_span/fire-010.md"
+category = "long_attributive_span"
+expect = "fire"
+genre = "business"
+note = "「〜実施された〜を踏まえて策定された〜施策を」の重ねた連体修飾"
+
+[[sample]]
+id = "long-attributive-span-silent-001"
+path = "labeled/long_attributive_span/silent-001.md"
+category = "long_attributive_span"
+expect = "silent"
+note = "修飾節が短い"
+
+[[sample]]
+id = "long-attributive-span-silent-002"
+path = "labeled/long_attributive_span/silent-002.md"
+category = "long_attributive_span"
+expect = "silent"
+note = "被修飾語が形式名詞「とき」で、疑問節は「か」で閉じる"
+
+[[sample]]
+id = "long-attributive-span-silent-003"
+path = "labeled/long_attributive_span/silent-003.md"
+category = "long_attributive_span"
+expect = "silent"
+note = "被修飾名詞が述語（〜という関係である）で、項にならない"
+
+[[sample]]
+id = "long-attributive-span-silent-004"
+path = "labeled/long_attributive_span/silent-004.md"
+category = "long_attributive_span"
+expect = "silent"
+note = "連体形が3つあるが、各修飾節は短い（nested_attributiveが全発火した型）"
+
+[[sample]]
+id = "long-attributive-span-silent-005"
+path = "labeled/long_attributive_span/silent-005.md"
+category = "long_attributive_span"
+expect = "silent"
+note = "fire-001を「次のような候補」と先に置いて三文に分けた対照"
+
+[[sample]]
+id = "long-attributive-span-silent-006"
+path = "labeled/long_attributive_span/silent-006.md"
+category = "long_attributive_span"
+expect = "silent"
+note = "被修飾名詞と述語を先に出し、修飾節を独立した文にした対照"
+
+[[sample]]
+id = "long-attributive-span-silent-007"
+path = "labeled/long_attributive_span/silent-007.md"
+category = "long_attributive_span"
+expect = "silent"
+note = "主節の連用中止「〜を読み、」の手前を、短い修飾節「部長が示した」に含めない"
+
+[[sample]]
+id = "long-attributive-span-silent-008"
+path = "labeled/long_attributive_span/silent-008.md"
+category = "long_attributive_span"
+expect = "silent"
+note = "連用中止が連なるが被修飾名詞は枕の名詞「余地」"
+
+[[sample]]
+id = "long-attributive-span-silent-009"
+path = "labeled/long_attributive_span/silent-009.md"
+category = "long_attributive_span"
+expect = "silent"
+note = "被修飾名詞が「点」「必要」で、項にならない"
+
+[[sample]]
+id = "long-attributive-span-silent-010"
+path = "labeled/long_attributive_span/silent-010.md"
+category = "long_attributive_span"
+expect = "silent"
+note = "修飾節は長いが述語が一つだけ"

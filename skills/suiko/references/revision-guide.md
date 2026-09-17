@@ -56,7 +56,8 @@ Web検索が使えない環境（Claude.aiなど）では、この往復を自�
 | `repeated_sentence_lead` | 文頭の型の使い回し（**2026-08-19にEXPERIMENTALへ降格、デフォルト無効**。絶対回数の閾値が文書長に依存し、現代人間75文書でfpr 0.613。長さ正規化で再設計するまで`--experimental`のみ） | 冒頭の言い回しを変えるか、その文自体を別の構造（疑問形・体言止め・引用から始める等）に組み替える。ただし強く直すべき指摘ではない |
 | `repeated_syntax_template` | 構文テンプレートの使い回し（EXPERIMENTAL、デフォルト無効） | 同上 |
 | `low_lexical_diversity_ttr` / `_mtld` | 語彙の使い回し（**2026-08-19にEXPERIMENTALへ降格、デフォルト無効**。文書単位TTRは文書長に構造依存し（50k語の白書でTTR=0.094）、MTLDは全候補閾値でAI検出0。長さ頑健な再設計まで`--experimental`のみ） | 類語辞典的な言い換えでなく、より具体的な語（固有名詞・数値・感覚的な描写）に置き換えられないか探す |
-| ~~`nested_attributive`~~ | **削除済み**（連体修飾の入れ子）。コーパス校正で全文書型に近い発火（人間85%以上、AIも同水準）を示し、閾値調整では救えない弁別力ゼロの検出器と判明したため検出器ごと廃止した。経緯は `translationese.md` 参照 | 機械検出は不可。`translationese.md` の連体修飾節の Before/After、または `readability-antipatterns.md` の「係り受けの曖昧さ」を参考に、人手で判断する |
+| ~~`nested_attributive`~~ | **削除済み**（連体修飾の入れ子）。コーパス校正で全文書型に近い発火（人間85%以上、AIも同水準）を示し、閾値調整では救えない弁別力ゼロの検出器と判明したため検出器ごと廃止した。経緯は `translationese.md` 参照 | 連体形の個数による機械検出は不可。一つの名詞に係る長い修飾節だけは `--reading-load` の `long_attributive_span` が指さす。それ以外は `translationese.md` の連体修飾節の Before/After、または `readability-antipatterns.md` の「係り受けの曖昧さ」を参考に、人手で判断する |
+| `long_attributive_span` | `--reading-load` の指さし（info）。述語を2つ以上含む30字以上の連体修飾節が一つの実質名詞に係り、その名詞句が「が」「を」「は」などで主節の項になっている文。形式名詞・枕の名詞（こと、とき、必要、可能性）と述語名詞は対象外 | 被修飾名詞か述語を先に出す（「次のような候補が返る。〜と考えている。〜」）か、修飾節を独立した文に分ける。並列の手順や引用を意図して一つの名詞に束ねている場合は、読者が名詞まで保留できる長さかを確かめて残してよい |
 | `english_syntax_inanimate_subject` / `inanimate_subject_morph` | 無生物主語+他動詞 | 主語を人や状況に戻すか、述語を状態描写に変える |
 | `english_syntax_cleft_because` | 「それは〜。なぜなら〜」型（EXPERIMENTAL、デフォルト無効） | 理由を先に書くか、1文にまとめる |
 | `high_bold_density` / `high_bullet_ratio` / `boilerplate_heading` / `numbered_phase_structure` / `high_emoji_symbol_density` | Markdown構造レベルの教科書的AI癖（太字多用・箇条書き偏重・「まとめ」等の定型見出し・番号付きフェーズ構造・絵文字/装飾記号の多用）。すべて EXPERIMENTAL、デフォルト無効 | `--experimental` で出力させたうえで、構成を見直す（太字を減らす、箇条書きの一部を地の文に戻す、定型見出しをやめて内容そのもので締める） |

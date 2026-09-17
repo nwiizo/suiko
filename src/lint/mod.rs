@@ -74,6 +74,7 @@ const RULE_CATEGORIES: &[&str] = &[
     "hype_expression",
     "inanimate_subject_morph",
     "kanji_run",
+    "long_attributive_span",
     "low_burstiness",
     "low_lexical_diversity_mtld",
     "low_lexical_diversity_ttr",
@@ -108,6 +109,7 @@ const READING_LOAD_CATEGORIES: &[&str] = &[
     "buried_list",
     "double_negative",
     "kanji_run",
+    "long_attributive_span",
     "no_chain",
     "no_comma_sentence",
     "sentence_too_long",
@@ -276,6 +278,8 @@ impl Default for AnalysisThresholds {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ReadingLoadThresholds {
     pub sentence_max: Option<usize>,
+    /// `long_attributive_span`が指さす、被修飾名詞に前置された修飾節の最小字数。
+    pub attributive_span_min: Option<usize>,
 }
 
 #[derive(Clone, Debug, Serialize)]

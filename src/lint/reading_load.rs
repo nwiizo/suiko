@@ -8,7 +8,7 @@ use crate::Error;
 use crate::morphology::Morphology;
 use crate::text::{mask_markdown_structure, sentences_with_raw};
 
-use super::morph::{buried_list, punctuation_between, tokenize};
+use super::morph::{buried_list, long_attributive_span, punctuation_between, tokenize};
 use super::{Finding, ReadingLoadReport, ReadingLoadStats, ReadingLoadThresholds};
 
 fn reading_length(text: &str) -> usize {
@@ -70,6 +70,9 @@ pub fn analyze_reading_load_with_thresholds(
     let sentence_max = thresholds
         .sentence_max
         .unwrap_or(if genre == Some("essay") { 110 } else { 90 });
+    // 校正時、原稿で目視修正した文の修飾節は31〜76字に分布し、35字では31〜34字の
+    // 文を取り逃した。随筆(青空文庫)でも30字で文の1.5%程度に収まる(eval/calibration.md)。
+    let attributive_span_min = thresholds.attributive_span_min.unwrap_or(30);
     let kanji = Regex::new(r"[一-龿々]{7,}").expect("valid kanji-run regex");
     let conditional_negative =
         Regex::new(r"^(ない|なけれ|なく)(と|ば|ければ)").expect("valid conditional-negation regex");
@@ -163,6 +166,48 @@ pub fn analyze_reading_load_with_thresholds(
                 );
                 findings.push(finding);
             }
+        }
+
+        // 一つの実質名詞に、述語を2つ以上含む長い修飾節が前置され、その名詞句が主節の
+        // 項になる文(カタログ B2/B5)。読み手は名詞が出るまで修飾節全体を保留する。
+        // 削除済みの nested_attributive は連体形の個数で全発火したため、ここでは
+        // 個数ではなく一つの名詞が背負う修飾節の長さと述語数を測る。
+        if let Some(span) =
+            long_attributive_span(&sentence.text, &sentence.tokens, attributive_span_min)
+        {
+            let surface = |range: std::ops::Range<usize>| {
+                sentence.tokens[range]
+                    .iter()
+                    .map(|token| token.surface.as_str())
+                    .collect::<String>()
+            };
+            let head = surface(span.head..span.head_end);
+            let phrase = surface(span.start..span.head_end);
+            let phrase_chars = phrase.chars().count();
+            let excerpt = if phrase_chars > 40 {
+                format!(
+                    "…{}",
+                    phrase.chars().skip(phrase_chars - 39).collect::<String>()
+                )
+            } else {
+                phrase
+            };
+            let mut finding = Finding::new(
+                sentence.line,
+                "long_attributive_span",
+                excerpt,
+                "info",
+                format!(
+                    "名詞「{head}」に{}字・述語{}個の修飾節が前置されている（目安{attributive_span_min}字）。カタログ B2/B5。被修飾名詞か述語を先に出すか、修飾節を独立した文に分ける",
+                    span.chars, span.predicates
+                ),
+            );
+            finding.span = sentence.span(
+                &raw_lines,
+                sentence.tokens[span.start].byte_start,
+                sentence.tokens[span.head_end - 1].byte_end,
+            );
+            findings.push(finding);
         }
 
         let negative_indices = sentence

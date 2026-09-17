@@ -67,7 +67,7 @@ suiko lint <file> --genre tech --json
 suiko lint <file> --genre tech --reading-load --json
 ```
 
-`reading_load` は一文長、埋もれた列挙、連続漢字、二重否定、「の」連鎖を見るための指さしであり、自然度 finding やベースラインには含まれない。
+`reading_load` は一文長、埋もれた列挙、連続漢字、二重否定、「の」連鎖、一つの名詞に前置された長い修飾節（`long_attributive_span`）を見るための指さしであり、自然度 finding やベースラインには含まれない。
 
 full では構造と用語も抽出する。
 

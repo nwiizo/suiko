@@ -34,12 +34,12 @@ suiko --version
 Rustを入れずに使う場合は、[GitHub Releases](https://github.com/nwiizo/suiko/releases)から取得できます。macOS（Apple Silicon / Intel）、Linux（x86_64 / aarch64）、Windows（x86_64）に対応し、各アーカイブにSHA-256ファイルが付きます。
 
 ```sh
-# v0.3.7 / macOS（Apple Silicon）
-curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.3.7/suiko-v0.3.7-aarch64-apple-darwin.tar.gz
-curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.3.7/suiko-v0.3.7-aarch64-apple-darwin.tar.gz.sha256
-shasum -a 256 -c suiko-v0.3.7-aarch64-apple-darwin.tar.gz.sha256
-tar xzf suiko-v0.3.7-aarch64-apple-darwin.tar.gz
-./suiko-v0.3.7-aarch64-apple-darwin/suiko --version
+# v0.3.8 / macOS（Apple Silicon）
+curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.3.8/suiko-v0.3.8-aarch64-apple-darwin.tar.gz
+curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.3.8/suiko-v0.3.8-aarch64-apple-darwin.tar.gz.sha256
+shasum -a 256 -c suiko-v0.3.8-aarch64-apple-darwin.tar.gz.sha256
+tar xzf suiko-v0.3.8-aarch64-apple-darwin.tar.gz
+./suiko-v0.3.8-aarch64-apple-darwin/suiko --version
 ```
 
 以降の例で`suiko`として実行するには、展開した実行ファイルをPATHの通ったディレクトリへ配置してください。
@@ -114,7 +114,9 @@ suiko lint draft.md --genre tech --experimental --json
 suiko lint draft.md --genre tech --reading-load --json
 ```
 
-長すぎる一文、読点のない60字以上の一文、埋もれた列挙、長い連続漢字、二重否定、格助詞「の」の近接した連鎖を確認します。結果は`findings`と分けた`reading_load`へ出力し、`--baseline`比較と`--fail-on`判定には含めません。
+長すぎる一文、読点のない60字以上の一文、埋もれた列挙、長い連続漢字、二重否定、格助詞「の」の近接した連鎖、一つの名詞に前置された長い修飾節を確認します。結果は`findings`と分けた`reading_load`へ出力し、`--baseline`比較と`--fail-on`判定には含めません。
+
+`long_attributive_span`は、述語を2つ以上含む30字以上の連体修飾節が一つの実質名詞に係り、その名詞句が「が」「を」「は」などで主節の項になっている文を指さします。読み手は名詞が出るまで修飾節全体を保留するため、被修飾名詞か述語を先に出すか、修飾節を独立した文に分けると読みやすくなります。「〜すること」「〜したとき」「〜する必要がある」のような形式名詞・枕の名詞と、「〜という関係である」の述語名詞は対象外です。連体形の個数で判定して人間文書で全発火した旧`nested_attributive`とは異なり、一つの名詞が背負う修飾節の長さと述語数を測ります。v0.3.8で追加し、採用の経緯と実測は[校正記録](https://github.com/nwiizo/suiko/blob/v0.3.8/eval/calibration.md)にまとめています。
 
 ## 診断結果とCI連携
 

@@ -292,6 +292,332 @@ pub(super) fn buried_list(tokens: &[Morpheme]) -> Option<(usize, usize, usize)> 
     best
 }
 
+/// 一つの被修飾名詞に前置された連体修飾節。`start..head`が修飾節、
+/// `head..head_end`が被修飾名詞句のtoken範囲。
+#[derive(Clone, Copy, Debug)]
+pub(super) struct AttributiveSpan {
+    pub(super) start: usize,
+    pub(super) head: usize,
+    pub(super) head_end: usize,
+    pub(super) chars: usize,
+    pub(super) predicates: usize,
+}
+
+// 連体修飾を受けても、読み手が保留する項にならない名詞。形式名詞・非自立の名詞と、
+// 「〜する必要がある」「〜する可能性がある」のように述語の枕になる名詞を含む。
+// 削除済みの nested_attributive（連体形の個数）が人間文書で全発火した主因は
+// 「〜すること」「〜したとき」のような結びなので、被修飾名詞を実質名詞に限る。
+const FORMAL_NOUNS: &[&str] = &[
+    "こと",
+    "もの",
+    "ため",
+    "とき",
+    "時",
+    "場合",
+    "ところ",
+    "はず",
+    "わけ",
+    "つもり",
+    "まま",
+    "うち",
+    "際",
+    "たび",
+    "ほう",
+    "方",
+    "かぎり",
+    "限り",
+    "以上",
+    "以外",
+    "前",
+    "後",
+    "よう",
+    "上",
+    "中",
+    "間",
+    "度",
+    "ごと",
+    "くらい",
+    "ぐらい",
+    "ほど",
+    "せい",
+    "おかげ",
+    "かわり",
+    "代わり",
+    "つど",
+    "ゆえ",
+    "点",
+    "面",
+    "形",
+    "意味",
+    "必要",
+    "余地",
+    "可能性",
+    "恐れ",
+    "おそれ",
+    "危険",
+    "傾向",
+    "予定",
+    "見込み",
+    "機会",
+    "状態",
+    "程度",
+    "気",
+    "事",
+    "感じ",
+    "始末",
+    "場面",
+    "所",
+    "ためし",
+    "よし",
+];
+
+fn is_noun(token: &Morpheme) -> bool {
+    token.pos(0) == "名詞" && matches!(token.pos(1), "普通名詞" | "固有名詞")
+}
+
+fn is_argument_head(token: &Morpheme) -> bool {
+    is_noun(token) && token.pos(2) != "副詞可能" && !FORMAL_NOUNS.contains(&token.surface.as_str())
+}
+
+// 格助詞に続いて複合助詞として働く動詞（によって、について、に関する、における）。
+// 形態素としては動詞だが、読み手が節として保留する述語ではないので数えない。
+const COMPOUND_PARTICLE_VERBS: &[&str] = &[
+    "よる",
+    "つく",
+    "対する",
+    "関する",
+    "基づく",
+    "伴う",
+    "おく",
+    "わたる",
+    "通じる",
+    "沿う",
+    "応じる",
+    "際する",
+    "めぐる",
+    "つれる",
+    "従う",
+    "比べる",
+    "加える",
+    "向ける",
+    "限る",
+    "当たる",
+    "至る",
+    "関わる",
+    "即する",
+];
+
+fn is_compound_particle_verb(tokens: &[Morpheme], index: usize) -> bool {
+    let token = &tokens[index];
+    token.pos(0) == "動詞"
+        && COMPOUND_PARTICLE_VERBS.contains(&token.dictionary_form())
+        && index > 0
+        && tokens[index - 1].pos(1) == "格助詞"
+}
+
+/// 節の述語として数える語。複合助詞の動詞は数えない。Sudachiが非自立可能と品詞づける
+/// 動詞（する、かける、始める、いる）は、「〜している」「〜し始める」のように「て」や
+/// 別の動詞へ直接続くときだけ補助動詞として除き、「電話をかけた」「対応を始め」の
+/// ように名詞句へ続くときは述語に数える。
+fn is_predicate(tokens: &[Morpheme], index: usize) -> bool {
+    let token = &tokens[index];
+    match token.pos(0) {
+        "形容詞" => token.pos(1) != "非自立可能",
+        "動詞" => {
+            if is_compound_particle_verb(tokens, index) {
+                return false;
+            }
+            if token.pos(1) != "非自立可能" {
+                return true;
+            }
+            let Some(previous) = index.checked_sub(1).map(|index| &tokens[index]) else {
+                return true;
+            };
+            previous.pos(1) != "接続助詞" && !matches!(previous.pos(0), "動詞" | "助動詞")
+        }
+        _ => false,
+    }
+}
+
+fn count_predicates(tokens: &[Morpheme], range: std::ops::Range<usize>) -> usize {
+    range.filter(|&index| is_predicate(tokens, index)).count()
+}
+
+/// 読点の直前の語が、引用される終止形の並列（考えている、）か。
+fn ends_terminal_clause(token: &Morpheme) -> bool {
+    matches!(token.pos(0), "動詞" | "形容詞" | "助動詞") && token.pos(5).starts_with("終止形")
+}
+
+/// 読点の直前の語が、連用中止（選び、置き、触れず）か。「て」「が」などの接続助詞、
+/// 「であり」「している」の補助動詞、「により」の複合助詞、手段や状態を表す
+/// 「〜ことで、」「〜のままで、」の助動詞「だ」は含めない。
+fn ends_conjunctive_clause(tokens: &[Morpheme], index: usize) -> bool {
+    let token = &tokens[index];
+    token.pos(5).starts_with("連用形")
+        && match token.pos(0) {
+            "助動詞" => token.dictionary_form() != "だ",
+            "動詞" | "形容詞" => is_predicate(tokens, index),
+            _ => false,
+        }
+}
+
+/// 節の中に格助詞「が」で示した主語があるか。
+fn has_subject_marker(tokens: &[Morpheme], range: std::ops::Range<usize>) -> bool {
+    tokens[range]
+        .iter()
+        .any(|token| token.pos(1) == "格助詞" && token.surface == "が")
+}
+
+/// 係助詞「は」が主題を示すか。名詞に直接付くか、格助詞を挟んで付く「では」「には」
+/// 「ことは」は主題として止める。「ときには」のように副詞可能の名詞に付くものは節の
+/// 中の副詞句なので止めない。
+fn is_topic_marker(tokens: &[Morpheme], index: usize) -> bool {
+    let token = &tokens[index];
+    if token.pos(0) != "助詞" || token.pos(1) != "係助詞" || token.surface != "は" {
+        return false;
+    }
+    let mut cursor = index;
+    while cursor > 0 && tokens[cursor - 1].pos(0) == "空白" {
+        cursor -= 1;
+    }
+    if cursor > 0 && tokens[cursor - 1].pos(1) == "格助詞" {
+        cursor -= 1;
+    }
+    let Some(noun) = cursor.checked_sub(1).map(|index| &tokens[index]) else {
+        return false;
+    };
+    match noun.pos(0) {
+        "代名詞" | "接尾辞" => true,
+        "名詞" => noun.pos(2) != "副詞可能",
+        _ => false,
+    }
+}
+
+/// `end`の直前から前へたどり、読点・主題・括弧・文頭で区切られる節の始点を返す。
+fn segment_start(tokens: &[Morpheme], end: usize) -> usize {
+    let mut start = end;
+    while start > 0 {
+        let prev = &tokens[start - 1];
+        if matches!(prev.pos(1), "読点" | "句点" | "括弧開" | "括弧閉")
+            || is_topic_marker(tokens, start - 1)
+        {
+            break;
+        }
+        start -= 1;
+    }
+    start
+}
+
+/// 被修飾名詞から前へたどり、修飾節の始点を返す。文頭、主題の係助詞「は」、括弧、
+/// 越えられない読点で止める。
+///
+/// 読点は、引用される終止形の並列なら越える。連用中止は一度だけ、読点の両側の節に
+/// それぞれ述語が2つ以上あり、手前の節が「が」で示す主語を持たないときに越える。
+/// 単独の述語しかない節や主語を持つ節は主節の連用中止であることが多く、含めると
+/// 修飾節でない部分まで指してしまう。
+fn attributive_clause_start(tokens: &[Morpheme], head: usize) -> usize {
+    let mut start = head - 1;
+    let mut crossed_conjunctive = false;
+    while start > 0 {
+        let prev = &tokens[start - 1];
+        if is_topic_marker(tokens, start - 1) || matches!(prev.pos(1), "句点" | "括弧開" | "括弧閉")
+        {
+            break;
+        }
+        if prev.pos(1) == "読点" {
+            let Some(before) = start.checked_sub(2) else {
+                break;
+            };
+            if ends_terminal_clause(&tokens[before]) {
+                start -= 2;
+                continue;
+            }
+            // nwiizo-coding-style: 連用中止の読点越えは1回に限る; 三つ以上の連体節が
+            // 並列する文を拾う必要が出たら、主節の連用中止と区別できる評価例を先に足す。
+            let outer = segment_start(tokens, before)..start - 1;
+            if !crossed_conjunctive
+                && ends_conjunctive_clause(tokens, before)
+                && count_predicates(tokens, start..head) >= 2
+                && count_predicates(tokens, outer.clone()) >= 2
+                && !has_subject_marker(tokens, outer)
+            {
+                crossed_conjunctive = true;
+                start -= 2;
+                continue;
+            }
+            break;
+        }
+        start -= 1;
+    }
+    start
+}
+
+/// 述語を2つ以上含み、`min_chars`字以上の連体修飾節が一つの実質名詞に前置され、
+/// その名詞句が格助詞・係助詞で主節の項になっている箇所を返す。
+/// 複数あれば修飾節が最も長いものを返す。
+pub(super) fn long_attributive_span(
+    text: &str,
+    tokens: &[Morpheme],
+    min_chars: usize,
+) -> Option<AttributiveSpan> {
+    let mut best: Option<AttributiveSpan> = None;
+    for head in 1..tokens.len() {
+        let marker = &tokens[head - 1];
+        // 形状詞の「〜な」は句であって節ではないので、連体形でも対象にしない。
+        if !marker.pos(5).starts_with("連体形")
+            || (marker.pos(0) == "助動詞" && marker.dictionary_form() == "だ")
+            || !is_argument_head(&tokens[head])
+        {
+            continue;
+        }
+        let mut head_end = head + 1;
+        while head_end < tokens.len()
+            && (is_noun(&tokens[head_end]) || tokens[head_end].pos(0) == "接尾辞")
+        {
+            head_end += 1;
+        }
+        let Some(particle) = tokens.get(head_end) else {
+            continue;
+        };
+        // 「〜人でもある」の述語名詞や「〜関わりと〜関わり」の並列を除くため、
+        // 「と」と単独の「で」は項の印に数えない。「〜研究では」の「では」は主題として数える。
+        let marks_argument = particle.pos(0) == "助詞"
+            && matches!(particle.pos(1), "格助詞" | "係助詞")
+            && match particle.surface.as_str() {
+                "が" | "は" | "を" | "も" | "に" | "へ" | "から" | "より" => true,
+                "で" => tokens
+                    .get(head_end + 1)
+                    .is_some_and(|next| next.pos(1) == "係助詞" && next.surface == "は"),
+                _ => false,
+            };
+        if !marks_argument {
+            continue;
+        }
+        let start = attributive_clause_start(tokens, head);
+        let predicates = count_predicates(tokens, start..head);
+        if predicates < 2 {
+            continue;
+        }
+        let chars = text[tokens[start].byte_start..tokens[head].byte_start]
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .count();
+        if chars < min_chars {
+            continue;
+        }
+        if best.is_none_or(|best| chars > best.chars) {
+            best = Some(AttributiveSpan {
+                start,
+                head,
+                head_end,
+                chars,
+                predicates,
+            });
+        }
+    }
+    best
+}
+
 pub(super) fn mora_length(tokens: &[Morpheme]) -> usize {
     tokens
         .iter()
