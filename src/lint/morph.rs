@@ -292,6 +292,102 @@ pub(super) fn buried_list(tokens: &[Morpheme]) -> Option<(usize, usize, usize)> 
     best
 }
 
+/// 読点で並べた疑問節「〜か、〜か」が、末尾の「か」に続く格助詞・係助詞で
+/// 一つの述語へ係る範囲。`start..end`は最初の節から末尾の助詞までのtoken範囲。
+#[derive(Clone, Copy, Debug)]
+pub(super) struct BuriedQuestionList {
+    pub(super) start: usize,
+    pub(super) end: usize,
+    pub(super) clauses: usize,
+}
+
+fn question_ka(token: &Morpheme) -> bool {
+    token.surface == "か" && token.pos(0) == "助詞" && matches!(token.pos(1), "副助詞" | "終助詞")
+}
+
+/// 疑問節の同格列挙（カタログ F1の節版）。読み手は最初の「〜か、」で節が
+/// 終わったと受け取り、末尾の「〜かを」で全体が一つの項だったと分かる。
+/// 「はいか、いいえかを」のような短い選択肢は、節の字数と述語の有無で外す。
+pub(super) fn buried_question_list(
+    tokens: &[Morpheme],
+    clause_min_chars: usize,
+) -> Option<BuriedQuestionList> {
+    // 「〜かどうか」「〜か否か」は一つの節の中にある「か」なので区切りに数えない。
+    let whether_inner = |index: usize| {
+        tokens
+            .get(index + 1)
+            .is_some_and(|token| matches!(token.surface.as_str(), "どう" | "否"))
+            && tokens.get(index + 2).is_some_and(question_ka)
+    };
+    let whether_end = |index: usize| {
+        index >= 2
+            && matches!(tokens[index - 1].surface.as_str(), "どう" | "否")
+            && question_ka(&tokens[index - 2])
+    };
+    let clause_ok = |start: usize, ka: usize| {
+        tokens[start..=ka]
+            .iter()
+            .map(|token| token.surface.chars().count())
+            .sum::<usize>()
+            >= clause_min_chars
+            && tokens[start..ka]
+                .iter()
+                .any(|token| matches!(token.pos(0), "動詞" | "形容詞" | "助動詞" | "形状詞"))
+    };
+
+    let mut clause_start = 0;
+    let mut run = Vec::<usize>::new();
+    let mut best: Option<BuriedQuestionList> = None;
+    for (index, token) in tokens.iter().enumerate() {
+        if token.surface == "、" {
+            let closes_question = index > 0
+                && question_ka(&tokens[index - 1])
+                && !whether_end(index - 1)
+                && clause_ok(clause_start, index - 1);
+            if closes_question {
+                run.push(clause_start);
+            } else {
+                run.clear();
+            }
+            clause_start = index + 1;
+            continue;
+        }
+        if run.is_empty()
+            || !question_ka(token)
+            || whether_inner(index)
+            || tokens
+                .get(index + 1)
+                .is_some_and(|next| next.surface == "、")
+        {
+            continue;
+        }
+        let Some(particle) = tokens.get(index + 1).filter(|next| {
+            next.pos(0) == "助詞" && matches!(next.surface.as_str(), "を" | "が" | "は" | "も")
+        }) else {
+            // 「〜か、〜かで」のように別の形で続く並びは、項の列挙として数えない。
+            run.clear();
+            continue;
+        };
+        // 「〜かもしれない」は推量で、疑問節を項にしない。
+        let conjecture = particle.surface == "も"
+            && tokens
+                .get(index + 2)
+                .is_some_and(|next| matches!(next.dictionary_form(), "しれる" | "知れる"));
+        if !conjecture && clause_ok(clause_start, index) {
+            let clauses = run.len() + 1;
+            if best.is_none_or(|best| clauses > best.clauses) {
+                best = Some(BuriedQuestionList {
+                    start: run[0],
+                    end: index + 2,
+                    clauses,
+                });
+            }
+        }
+        run.clear();
+    }
+    best
+}
+
 /// 一つの被修飾名詞に前置された連体修飾節。`start..head`が修飾節、
 /// `head..head_end`が被修飾名詞句のtoken範囲。
 #[derive(Clone, Copy, Debug)]

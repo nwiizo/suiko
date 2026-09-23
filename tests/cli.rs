@@ -180,6 +180,79 @@ fn long_attributive_span_points_at_one_noun_carrying_a_long_multi_predicate_modi
     }
 }
 
+// buried_question_list契約: 述語を含む疑問節「〜か、」を並べ、末尾の「か」＋を/が/は/も
+// で一つの述語へ係らせる45字以上の文を指さす。「かどうか」、推量の「かもしれない」、
+// 述語のない選択肢、「かで」、節ごとに分けた文は対象にしない。
+#[test]
+fn buried_question_list_points_at_parallel_question_clauses_sharing_one_particle() {
+    let morphology = Morphology::new().expect("initialize morphology");
+    for (text, clauses) in [
+        (
+            "実際の職場では、早く提出した後に次の依頼が増えたか、確認を終えて利用者へ届くまでの時間も短くなったかを追います。",
+            2,
+        ),
+        (
+            "結果が次の条件へ戻るか、入力と出力の変化が比例するか、影響が届くまで時間差があるかは、別の問いです。",
+            3,
+        ),
+        (
+            "受け方を変えても待ちが減らなければ、同じ期間の流入量、つまり新たに受けた件数が本当に減ったか、確認できる量や手順が変わっていないかを調べます。",
+            2,
+        ),
+    ] {
+        let report =
+            lint::analyze_reading_load(text, &morphology, Some("essay")).expect("analyze text");
+        let findings = report
+            .findings
+            .iter()
+            .filter(|finding| finding.category == "buried_question_list")
+            .collect::<Vec<_>>();
+        assert_eq!(findings.len(), 1, "{text}");
+        assert_eq!(findings[0].severity, "info");
+        assert!(
+            findings[0].detail.contains(&format!("読点で{clauses}個")),
+            "{text}: {}",
+            findings[0].detail
+        );
+        assert!(findings[0].span.is_some(), "{text}");
+    }
+    for text in [
+        "はいか、いいえかを選んでから、次の画面へ進み、表示された内容を最後まで確認してください。",
+        "導入後の一か月で問い合わせの件数が減ったかどうか、担当者の作業時間が短くなったかどうかを確認します。",
+        "明日の午後には雨がやむか、それとも夜まで降り続くかもしれないと、朝の天気予報は伝えていました。",
+        "導入後の一か月で問い合わせの件数が減ったか、担当者の作業時間が短くなったかで、次の年度の予算の配分を決めます。",
+        "実際の職場では、早く提出した後に次の依頼が増えたかを追います。あわせて、確認を終えて利用者へ届くまでの時間も短くなったかを見ます。",
+        "何を選ぶのか、誰が決めるのかが問題だ。",
+    ] {
+        let report =
+            lint::analyze_reading_load(text, &morphology, Some("essay")).expect("analyze text");
+        assert_eq!(
+            report.stats.by_category.get("buried_question_list"),
+            None,
+            "{text}"
+        );
+    }
+}
+
+// no_chain契約: 数えるのは格助詞の「の」だけで、「〜するのは」「〜なの」の準体助詞は含めない。
+#[test]
+fn no_chain_counts_only_case_marking_no() {
+    let morphology = Morphology::new().expect("initialize morphology");
+    for (text, expected) in [
+        ("上限の設定の検討の結果を報告する。", Some(1)),
+        ("私が見ているのは世相の上皮だけのことだ。", None),
+        ("それは結局のところ好みの問題なのだ。", None),
+    ] {
+        let report =
+            lint::analyze_reading_load(text, &morphology, Some("essay")).expect("analyze text");
+        assert_eq!(
+            report.stats.by_category.get("no_chain").copied(),
+            expected,
+            "{text}"
+        );
+    }
+}
+
 #[test]
 fn help_describes_the_analysis_commands() {
     cargo_bin_cmd!("suiko")
@@ -1311,6 +1384,42 @@ fn antithesis_matches_aggregate_into_a_single_document_finding() {
     assert!(detail.contains("100%を超える"));
 }
 
+// 主題名詞の反復は題材そのものなので報告せず、接続詞・副詞・指示語と
+// 副詞可能の名詞で始まる反復だけを残す。
+#[test]
+fn repeated_leads_skip_noun_topics_but_keep_connective_leads() {
+    let (_dir, path) = draft(concat!(
+        "確認待ちが増えると、許容量を超えた分が増えます。確認待ちの数字を仕事を割り当てる人へ届けます。",
+        "確認待ちが少ない間は、提出の実績を見て割り当てが増えます。確認待ちの記録を更新した日を並べます。",
+        "確認待ちが残っている職場へ戻ります。ただ、これは仮説です。ただ、依頼は減りません。",
+        "ただ、確認は残ります。ただ、結果は遅れます。ただ、記録は残せます。\n",
+        "今回は晴れた。今回は歩いた。今回は迷った。今回は休んだ。今回は戻った。\n",
+    ));
+
+    let output = cargo_bin_cmd!("suiko")
+        .args([
+            "lint",
+            path.to_str().expect("UTF-8 path"),
+            "--genre",
+            "essay",
+            "--experimental",
+            "--json",
+        ])
+        .output()
+        .expect("run suiko lint");
+
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    let leads = json["findings"]
+        .as_array()
+        .expect("findings array")
+        .iter()
+        .filter(|finding| finding["category"] == "repeated_sentence_lead")
+        .map(|finding| finding["excerpt"].as_str().expect("excerpt"))
+        .collect::<Vec<_>>();
+    assert_eq!(leads, vec!["ただ、", "今回は"]);
+}
+
 #[test]
 fn repeated_leads_aggregate_per_key_and_flag_label_fields() {
     let glossary = (1..=6)
@@ -1425,6 +1534,50 @@ fn terms_ignore_tokenizer_noise_and_trim_middle_dots() {
         .map(|term| term["term"].as_str().expect("term"))
         .collect::<Vec<_>>();
     assert_eq!(terms, vec!["Rust", "API", "ルール"]);
+}
+
+#[test]
+fn terms_gloss_hint_accepts_conjugated_naming_verbs() {
+    for (text, term, expected) in [
+        (
+            "ある行動が結果を生み、その結果が次の行動の条件を変える循環を、**フィードバックループ**と呼びます。\n",
+            "フィードバックループ",
+            true,
+        ),
+        (
+            "ある時点でたまっている量を**ストック**と呼びます。ここでは未確認の資料の件数です。\n",
+            "ストック",
+            true,
+        ),
+        (
+            "ある時点でたまっている量をストックと呼ぶ。\n",
+            "ストック",
+            true,
+        ),
+        (
+            "入力と出力の比率をスループットと言います。\n",
+            "スループット",
+            true,
+        ),
+        (
+            "この値をスループットと名づけました。\n",
+            "スループット",
+            true,
+        ),
+        ("スループットを計測します。\n", "スループット", false),
+    ] {
+        let (_dir, path) = draft(text);
+
+        let output = cargo_bin_cmd!("suiko")
+            .args(["terms", path.to_str().expect("UTF-8 path"), "--json"])
+            .output()
+            .expect("run suiko terms");
+
+        assert!(output.status.success());
+        let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+        assert_eq!(json["terms"][0]["term"], term, "{text}");
+        assert_eq!(json["terms"][0]["has_gloss_hint"], expected, "{text}");
+    }
 }
 
 #[test]

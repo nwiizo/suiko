@@ -7,7 +7,10 @@ use crate::Error;
 use crate::morphology::{Morpheme, Morphology};
 use crate::text::{mask_html_comments, mask_markdown_structure_preserving_headings};
 
-const GLOSS_MARKERS: &[&str] = &["とは", "と呼ぶ", "という", "、つまり"];
+// 「と呼ぶ」「という」のような動詞を含む手掛かりは、「と呼びます」「と言いました」の
+// 活用形・丁寧体も一致するよう、助詞「と」＋正規化表記の動詞として形態素で照合する。
+const SURFACE_GLOSS_MARKERS: &[&str] = &["とは", "、つまり"];
+const NAMING_VERBS: &[&str] = &["呼ぶ", "言う", "称する", "名付ける"];
 
 #[derive(Clone, Debug, Serialize)]
 pub struct Term {
@@ -98,7 +101,27 @@ fn register(seen: &mut HashMap<String, SeenTerm>, term: &str, line: usize, offse
     });
 }
 
-fn context_and_gloss(term: &str, line_no: usize, text: &str) -> (String, bool) {
+fn has_gloss_marker(text: &str, morphology: &Morphology) -> Result<bool, Error> {
+    if SURFACE_GLOSS_MARKERS
+        .iter()
+        .any(|marker| text.contains(marker))
+    {
+        return Ok(true);
+    }
+    Ok(morphology.tokenize(text)?.windows(2).any(|pair| {
+        pair[0].surface == "と"
+            && pair[0].pos(0) == "助詞"
+            && pair[1].pos(0) == "動詞"
+            && NAMING_VERBS.contains(&pair[1].normalized())
+    }))
+}
+
+fn context_and_gloss(
+    term: &str,
+    line_no: usize,
+    text: &str,
+    morphology: &Morphology,
+) -> Result<(String, bool), Error> {
     const CONTEXT_CHARS: usize = 80;
 
     let mut line_start = 0;
@@ -111,10 +134,7 @@ fn context_and_gloss(term: &str, line_no: usize, text: &str) -> (String, bool) {
         line_start += candidate.len() + 1;
     }
     let Some(byte_start) = line.find(term) else {
-        return (
-            line.trim().to_owned(),
-            GLOSS_MARKERS.iter().any(|marker| line.contains(marker)),
-        );
+        return Ok((line.trim().to_owned(), has_gloss_marker(line, morphology)?));
     };
     let absolute_start = line_start + byte_start;
     let absolute_end = absolute_start + term.len();
@@ -129,10 +149,9 @@ fn context_and_gloss(term: &str, line_no: usize, text: &str) -> (String, bool) {
         .map_or(text.len(), |(byte, _)| absolute_end + byte);
     let context = &text[context_start..context_end];
     let after = &text[absolute_end..context_end];
-    let hint = after.starts_with('(')
-        || after.starts_with('（')
-        || GLOSS_MARKERS.iter().any(|marker| context.contains(marker));
-    (context.trim().to_owned(), hint)
+    let hint =
+        after.starts_with('(') || after.starts_with('（') || has_gloss_marker(context, morphology)?;
+    Ok((context.trim().to_owned(), hint))
 }
 
 /// 用語文字列をSudachiDictの正規化表記へ写し、表記揺れのクラスタキーにする。
@@ -287,15 +306,15 @@ pub fn analyze(raw_text: &str, morphology: &Morphology) -> Result<TermsReport, E
         .into_iter()
         .map(|seen| {
             let (context, has_gloss_hint) =
-                context_and_gloss(&seen.term, seen.line, &comments_masked);
-            Term {
+                context_and_gloss(&seen.term, seen.line, &comments_masked, morphology)?;
+            Ok(Term {
                 count: comments_masked.match_indices(&seen.term).count(),
                 term: seen.term,
                 first_line: seen.line,
                 has_gloss_hint,
                 context,
-            }
+            })
         })
-        .collect();
+        .collect::<Result<_, Error>>()?;
     Ok(TermsReport { terms })
 }

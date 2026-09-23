@@ -8,8 +8,16 @@ use crate::Error;
 use crate::morphology::Morphology;
 use crate::text::{mask_markdown_structure, sentences_with_raw};
 
-use super::morph::{buried_list, long_attributive_span, punctuation_between, tokenize};
+use super::morph::{
+    buried_list, buried_question_list, long_attributive_span, punctuation_between, tokenize,
+};
 use super::{Finding, ReadingLoadReport, ReadingLoadStats, ReadingLoadThresholds};
+
+// Issue #34 で著者が読みづらいと判断した文は句点を除いて49〜70字（2節・55字を含む）。
+// 30字まで下げても実文書99件で10件しか出ず、45字で3文をすべて残す(eval/calibration.md)。
+// 節の下限は「はいか、」のような選択肢を外し、「〜へ戻るか」(11字)を残す。
+const QUESTION_LIST_SENTENCE_MIN: usize = 45;
+const QUESTION_CLAUSE_MIN: usize = 6;
 
 fn reading_length(text: &str) -> usize {
     let whitespace = Regex::new(r"\s{2,}").expect("valid whitespace regex");
@@ -168,6 +176,34 @@ pub fn analyze_reading_load_with_thresholds(
             }
         }
 
+        // 疑問節「〜か、」を読点で並べ、末尾の「〜かを」で一つの述語へ係らせる文
+        // (カタログ F1の節版)。短い選択肢の列挙は節の字数と述語の有無で外す。
+        if length >= QUESTION_LIST_SENTENCE_MIN
+            && let Some(list) = buried_question_list(&sentence.tokens, QUESTION_CLAUSE_MIN)
+        {
+            let phrase = sentence.tokens[list.start..list.end]
+                .iter()
+                .map(|token| token.surface.as_str())
+                .collect::<String>();
+            let particle = &sentence.tokens[list.end - 1].surface;
+            let mut finding = Finding::new(
+                sentence.line,
+                "buried_question_list",
+                phrase.chars().take(40).collect::<String>(),
+                "info",
+                format!(
+                    "疑問節「〜か」が読点で{}個並び、末尾の「か{particle}」で一つの述語に係っている（一文{length}字）。カタログ F1。係り先の述語を先に出すか、節ごとに文を切る",
+                    list.clauses
+                ),
+            );
+            finding.span = sentence.span(
+                &raw_lines,
+                sentence.tokens[list.start].byte_start,
+                sentence.tokens[list.end - 1].byte_end,
+            );
+            findings.push(finding);
+        }
+
         // 一つの実質名詞に、述語を2つ以上含む長い修飾節が前置され、その名詞句が主節の
         // 項になる文(カタログ B2/B5)。読み手は名詞が出るまで修飾節全体を保留する。
         // 削除済みの nested_attributive は連体形の個数で全発火したため、ここでは
@@ -277,7 +313,10 @@ pub fn analyze_reading_load_with_thresholds(
             .tokens
             .iter()
             .enumerate()
-            .filter(|(_, token)| token.surface == "の" && token.pos(0) == "助詞")
+            // 「〜するのは」「〜なの」の準体助詞は名詞句の連鎖ではないので数えない。
+            .filter(|(_, token)| {
+                token.surface == "の" && token.pos(0) == "助詞" && token.pos(1) == "格助詞"
+            })
             .map(|(index, _)| index)
             .collect::<Vec<_>>();
         for window in no_indices.windows(3) {
