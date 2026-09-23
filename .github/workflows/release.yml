@@ -60,7 +60,13 @@ jobs:
           EXTENSION: ${{ runner.os == 'Windows' && 'zip' || 'tar.gz' }}
         run: |
           name="suiko-${RELEASE_TAG}-${TARGET}.${EXTENSION}"
-          release_id=$(gh release view "${RELEASE_TAG}" --json databaseId --jq .databaseId)
+          # タグのpush直後はReleaseがまだないことがある。未公開として扱い、
+          # 作成を待つ余裕をアップロードまでのビルド時間に残す。
+          if ! release_id=$(gh release view "${RELEASE_TAG}" --json databaseId --jq .databaseId 2>/dev/null); then
+            echo "complete=false" >> "$GITHUB_OUTPUT"
+            echo "Release ${RELEASE_TAG} is not created yet"
+            exit 0
+          fi
           complete=$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/releases/${release_id}/assets" |
             jq --arg name "$name" '[.[][] | select((.name == $name or .name == ($name + ".sha256")) and .state == "uploaded" and .size > 0)] | length == 2')
           echo "complete=$complete" >> "$GITHUB_OUTPUT"
