@@ -264,7 +264,10 @@ pub(super) fn noun_ended(tokens: &[Morpheme]) -> bool {
         .is_some_and(|token| matches!(token.pos(0), "名詞" | "代名詞"))
 }
 
-pub(super) fn buried_list(tokens: &[Morpheme]) -> Option<(usize, usize, usize)> {
+/// 名詞で終わる区画が読点で並ぶ最長の列挙。戻り値は(開始, 終了, 項目数, 最後の項目より
+/// 前に並んだ区画の字数)。最後の項目は述語に溶けるので、読み手が抱える並びの長さは
+/// それより前の区画で測る。
+pub(super) fn buried_list(tokens: &[Morpheme]) -> Option<(usize, usize, usize, usize)> {
     let mut bounds = Vec::new();
     let mut start = 0;
     for (index, token) in tokens.iter().enumerate() {
@@ -274,18 +277,69 @@ pub(super) fn buried_list(tokens: &[Morpheme]) -> Option<(usize, usize, usize)> 
         }
     }
     bounds.push((start, tokens.len()));
+    // 「〜を試したところ」「〜したとき」は形式名詞で終わる副詞的な節で、名詞句の項目ではない。
+    // 「〜したこと、〜したこと」のように「こと」で名詞化した節は項目として数える。
+    let clause_end = |segment: &[Morpheme]| {
+        let content = segment
+            .iter()
+            .rposition(|token| !matches!(token.pos(0), "記号" | "補助記号" | "空白"));
+        content.is_some_and(|last| {
+            last > 0
+                && matches!(
+                    segment[last].surface.as_str(),
+                    "ところ"
+                        | "とき"
+                        | "ため"
+                        | "場合"
+                        | "まま"
+                        | "うち"
+                        | "際"
+                        | "たび"
+                        | "とおり"
+                        | "通り"
+                )
+                && matches!(segment[last - 1].pos(0), "動詞" | "助動詞" | "形容詞")
+        })
+    };
     let mut run = Vec::new();
     let mut best = None;
     for (index, (start, end)) in bounds.iter().copied().enumerate() {
-        if end > start && noun_ended(&tokens[start..end]) {
+        if end > start && noun_ended(&tokens[start..end]) && !clause_end(&tokens[start..end]) {
             run.push((start, end));
         } else {
             run.clear();
         }
         if run.len() >= 2 && index + 1 < bounds.len() {
             let items = run.len() + 1;
-            if best.is_none_or(|(_, _, best_items)| items > best_items) {
-                best = Some((run[0].0, bounds[index + 1].1, items));
+            if best.is_none_or(|(_, _, best_items, _)| items > best_items) {
+                // 1つ目の項目は、「エンジニアが向けてきた観察」の「観察」のように、並び全体に
+                // 掛かる修飾を除いた最後の名詞句から数える。
+                let (first_start, first_end) = run[0];
+                let head_start = tokens[first_start..first_end - 1]
+                    .iter()
+                    .rposition(|token| {
+                        // 「業務プロセス運用の見直し」の「の」は項目の内側の名詞句をつなぐ。
+                        (token.pos(0) == "助詞" && token.surface != "の")
+                            || matches!(
+                                token.pos(0),
+                                "助動詞" | "動詞" | "形容詞" | "補助記号" | "記号" | "空白"
+                            )
+                    })
+                    .map_or(first_start, |offset| first_start + offset + 1);
+                // 「〜が進んだこと」のように名詞化した節は、節全体が一つの項目になる。
+                let head_start = if tokens[head_start..first_end]
+                    .iter()
+                    .all(|token| matches!(token.surface.as_str(), "こと" | "もの" | "の"))
+                {
+                    first_start
+                } else {
+                    head_start
+                };
+                let held = tokens[head_start..run[run.len() - 1].1]
+                    .iter()
+                    .map(|token| token.surface.chars().count())
+                    .sum::<usize>();
+                best = Some((run[0].0, bounds[index + 1].1, items, held));
             }
         }
     }
@@ -299,6 +353,61 @@ pub(super) struct BuriedQuestionList {
     pub(super) start: usize,
     pub(super) end: usize,
     pub(super) clauses: usize,
+    pub(super) chars: usize,
+}
+
+// 選択肢を受けて選ぶ・決める・比べる・見分ける述語。サ変名詞は名詞の辞書形で照合する。
+const ALTERNATIVE_PREDICATES: &[&str] = &[
+    "分ける",
+    "見分ける",
+    "切り分ける",
+    "見極める",
+    "区別",
+    "判別",
+    "識別",
+    "選ぶ",
+    "選択",
+    "決める",
+    "決まる",
+    "比べる",
+    "比較",
+    "判断",
+    "判定",
+    "確定",
+];
+
+// 疑問詞を含む節は、選択肢ではなく別々に答える問いになる。
+const INTERROGATIVES: &[&str] = &[
+    "何",
+    "なに",
+    "誰",
+    "だれ",
+    "どこ",
+    "どう",
+    "なぜ",
+    "いつ",
+    "どの",
+    "どれ",
+    "どちら",
+    "どんな",
+    "いくつ",
+    "いくら",
+    "どれほど",
+    "どれだけ",
+    "どうして",
+];
+
+/// 疑問節を受ける助詞の後、次の読点・句点までで最初の述語が選択肢を受ける動作か。
+/// 「〜のかを、〜と選ぶ」のように助詞の直後に置いた読点は一つだけ越える。
+fn governs_alternatives(tokens: &[Morpheme]) -> bool {
+    let skip = usize::from(tokens.first().is_some_and(|token| token.surface == "、"));
+    tokens[skip..]
+        .iter()
+        .take_while(|token| !matches!(token.pos(0), "補助記号" | "記号"))
+        .find(|token| {
+            token.pos(0) == "動詞" || (token.pos(0) == "名詞" && token.pos(2) == "サ変可能")
+        })
+        .is_some_and(|token| ALTERNATIVE_PREDICATES.contains(&token.dictionary_form()))
 }
 
 fn question_ka(token: &Morpheme) -> bool {
@@ -311,6 +420,7 @@ fn question_ka(token: &Morpheme) -> bool {
 pub(super) fn buried_question_list(
     tokens: &[Morpheme],
     clause_min_chars: usize,
+    list_min_chars: usize,
 ) -> Option<BuriedQuestionList> {
     // 「〜かどうか」「〜か否か」は一つの節の中にある「か」なので区切りに数えない。
     let whether_inner = |index: usize| {
@@ -335,7 +445,14 @@ pub(super) fn buried_question_list(
                 .any(|token| matches!(token.pos(0), "動詞" | "形容詞" | "助動詞" | "形状詞"))
     };
 
-    let mut clause_start = 0;
+    // 節の始点は、直前の文を閉じる太字記号や空白を読み飛ばした位置にする。
+    let content_start = |start: usize| {
+        tokens[start..]
+            .iter()
+            .position(|token| !matches!(token.pos(0), "記号" | "補助記号" | "空白"))
+            .map_or(tokens.len(), |offset| start + offset)
+    };
+    let mut clause_start = content_start(0);
     let mut run = Vec::<usize>::new();
     let mut best: Option<BuriedQuestionList> = None;
     for (index, token) in tokens.iter().enumerate() {
@@ -349,7 +466,7 @@ pub(super) fn buried_question_list(
             } else {
                 run.clear();
             }
-            clause_start = index + 1;
+            clause_start = content_start(index + 1);
             continue;
         }
         if run.is_empty()
@@ -373,15 +490,52 @@ pub(super) fn buried_question_list(
             && tokens
                 .get(index + 2)
                 .is_some_and(|next| matches!(next.dictionary_form(), "しれる" | "知れる"));
-        if !conjecture && clause_ok(clause_start, index) {
-            let clauses = run.len() + 1;
-            if best.is_none_or(|best| clauses > best.clauses) {
-                best = Some(BuriedQuestionList {
-                    start: run[0],
-                    end: index + 2,
-                    clauses,
-                });
-            }
+        // 「〜場なのか、〜場なのか、誰が〜かを決める場なのか」のように、後ろに別の疑問の
+        // 「か」が続くなら、この「かを」は最後の項目の内側にある。
+        let embedded = tokens[index + 2..]
+            .iter()
+            .take_while(|token| token.surface != "、")
+            .any(question_ka);
+        let clauses = run.len() + 1;
+        // 「Aなのか、Bなのかを分ける」「〜するか、〜するかを選ぶ」「〜のか、それとも〜のかを」の
+        // 2節は、一つの選択疑問の選択肢になる。節ごとに切ると問いが崩れるため数えない。
+        // 疑問詞を含む節（「何を〜か、誰が〜かを決める」）は別々の問いなので残す。
+        // Sudachiは「それとも」を「それ／と／も」に分けるため、表層をつないで照合する。
+        let lead = tokens[clause_start..index]
+            .iter()
+            .take(3)
+            .map(|token| token.surface.as_str())
+            .collect::<String>();
+        // 「何も」「誰か」のように「も」「か」が続く形は疑問詞ではない。
+        let yes_no_clauses = !(run[0]..index).any(|position| {
+            INTERROGATIVES.contains(&tokens[position].surface.as_str())
+                && !tokens
+                    .get(position + 1)
+                    .is_some_and(|next| matches!(next.surface.as_str(), "も" | "か"))
+        });
+        let alternative = clauses == 2
+            && (["それとも", "あるいは", "または", "もしくは"]
+                .iter()
+                .any(|marker| lead.starts_with(marker))
+                || (yes_no_clauses && governs_alternatives(&tokens[index + 2..])));
+        // 読み手が係り先まで抱えるのは並んだ節の全体なので、その字数で負担を測る。
+        let list_chars = tokens[run[0]..=index]
+            .iter()
+            .map(|token| token.surface.chars().count())
+            .sum::<usize>();
+        if !conjecture
+            && !embedded
+            && !alternative
+            && list_chars >= list_min_chars
+            && clause_ok(clause_start, index)
+            && best.is_none_or(|best| clauses > best.clauses)
+        {
+            best = Some(BuriedQuestionList {
+                start: run[0],
+                end: index + 2,
+                clauses,
+                chars: list_chars,
+            });
         }
         run.clear();
     }

@@ -17,8 +17,16 @@ use super::{Finding, ReadingLoadReport, ReadingLoadStats, ReadingLoadThresholds}
 // Issue #34 で著者が読みづらいと判断した文は句点を除いて49〜70字（2節・55字を含む）。
 // 30字まで下げても実文書99件で10件しか出ず、45字で3文をすべて残す(eval/calibration.md)。
 // 節の下限は「はいか、」のような選択肢を外し、「〜へ戻るか」(11字)を残す。
+// 並びの下限は、Issue #34 の3文の並び(38〜42字)より少し短く取る。書籍原稿の点検で、
+// 20〜34字の並びは述語がすぐ続き、節ごとに切ると冗長になった(eval/calibration.md)。
 const QUESTION_LIST_SENTENCE_MIN: usize = 45;
 const QUESTION_CLAUSE_MIN: usize = 6;
+const QUESTION_LIST_MIN: usize = 35;
+// 名詞の列挙は、最後の項目より前に並んだ区画が20字以上か、6項目以上のときだけ指す。
+// 書籍原稿2冊と評価コーパスの点検で、20字未満は「仕事、睡眠、食事」のような一語の
+// 並びだった(eval/calibration.md)。
+const BURIED_LIST_HELD_MIN: usize = 20;
+const BURIED_LIST_MANY_ITEMS: usize = 6;
 
 // 文ごとに呼ばれるため、正規表現は一度だけコンパイルする。
 static WHITESPACE_RUN: LazyLock<Regex> =
@@ -57,8 +65,66 @@ fn first_negation_modifies_noun(
         && particle.pos(0) == "助詞"
         && matches!(
             particle.surface.as_str(),
-            "は" | "が" | "を" | "も" | "や" | "に"
+            "は" | "が" | "を" | "も" | "や" | "に" | "へ"
         )
+}
+
+/// 形の上では否定が二つ並ぶが、別々の述語や語彙化した表現で、読み手が
+/// 符号の反転を計算しない並び。二つの否定が同じ命題に掛かる
+/// 「ないわけではない」「なくはない」「ずにはいられない」は候補に残す。
+fn negations_are_independent(
+    tokens: &[crate::morphology::Morpheme],
+    first: usize,
+    second: usize,
+) -> bool {
+    // 「〜ないかもしれない（しれません）」の「しれない」は推量の定型で、命題を否定しない。
+    // 「〜ていないかは分からない」「〜なくなるかを試せない」のように、最初の否定が
+    // 疑問の「か」の節の中にあるなら、二つの否定は同じ命題に掛からない。
+    if tokens[first + 1..second].iter().any(|token| {
+        matches!(token.dictionary_form(), "しれる" | "知れる")
+            || (token.surface == "か"
+                && token.pos(0) == "助詞"
+                && matches!(token.pos(1), "副助詞" | "終助詞"))
+    }) {
+        return true;
+    }
+    // 「際限なく」「例外なく」のように、助詞を挟まず名詞に付く「なく」は副詞。
+    if tokens[first].surface == "なく" && first > 0 && tokens[first - 1].pos(0) == "名詞" {
+        return true;
+    }
+    // 「〜ないから進まない」のように、理由・逆接の接続助詞で節が切れている。
+    if tokens[first + 1..second].iter().any(|token| {
+        token.pos(1) == "接続助詞"
+            && matches!(
+                token.surface.as_str(),
+                "から" | "ので" | "のに" | "けど" | "けれど" | "けれども" | "が" | "し"
+            )
+    }) {
+        return true;
+    }
+    // 「聞こえず話せない」「足りず区別できない」「確かめずに推測していない」は別の述語。
+    if tokens[first].surface == "ず" {
+        let next =
+            first + 1 + usize::from(tokens.get(first + 1).is_some_and(|t| t.surface == "に"));
+        return tokens.get(next).is_some_and(|token| {
+            matches!(token.pos(0), "動詞" | "名詞") && token.dictionary_form() != "いる"
+        });
+    }
+    false
+}
+
+/// 括弧の外にある「＝」を式の印とみなす。「（＝ほぼ個人）」のような括弧内の
+/// 言い換えは散文の一部として扱う。
+fn equals_outside_parentheses(text: &str) -> bool {
+    let mut depth = 0_usize;
+    text.chars().any(|ch| {
+        match ch {
+            '(' | '（' => depth += 1,
+            ')' | '）' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        depth == 0 && matches!(ch, '＝' | '=')
+    })
 }
 
 pub fn analyze_reading_load(
@@ -102,9 +168,15 @@ pub fn analyze_reading_load_with_thresholds(
             .chars()
             .filter(|c| matches!(c, 'ぁ'..='ん' | 'ァ'..='ヶ' | 'ー' | '一'..='鿿' | '々'))
             .count();
+        // 「A → B → C」のループの図式や「X ＝ A AND B」の式は散文ではない。
+        // 読点の打ち方や修飾節の長さを問わない。
+        let arrow_chain = sentence.text.matches(['→', '⇒']).count() >= 2;
+        let formula = equals_outside_parentheses(&sentence.text);
         if length >= 60
             && japanese_chars * 2 >= length
             && !sentence.text.contains(['、', '，', ','])
+            && !arrow_chain
+            && !formula
         {
             let mut finding = Finding::new(
                 sentence.line,
@@ -155,9 +227,17 @@ pub fn analyze_reading_load_with_thresholds(
             findings.push(finding);
         }
 
-        if let Some((start, end, items)) = buried_list(&sentence.tokens) {
+        if let Some((start, end, items, held)) = buried_list(&sentence.tokens) {
             let min_chars = if items <= 3 { 80 } else { 50 };
-            if length >= min_chars {
+            // 「観察、仮説、介入」のような一語ずつの短い並びは、箇条書きに開くと一語だけの
+            // 項目が並んで読みにくくなる。書誌の「（著）、（訳）」も本文の列挙ではない。
+            let bibliographic = ["（著）", "（訳）", "（監訳）", "（監修）", "（編）"]
+                .iter()
+                .any(|role| sentence.text.contains(role));
+            if length >= min_chars
+                && (held >= BURIED_LIST_HELD_MIN || items >= BURIED_LIST_MANY_ITEMS)
+                && !bibliographic
+            {
                 let phrase = sentence.tokens[start..end]
                     .iter()
                     .map(|token| token.surface.as_str())
@@ -168,7 +248,7 @@ pub fn analyze_reading_load_with_thresholds(
                     phrase.chars().take(40).collect::<String>(),
                     "info",
                     format!(
-                        "同格の名詞句が読点で{items}個並んでいる（一文{length}字）。カタログ F1。箇条書きに開くと並列関係を読み手が再構成せずに済む"
+                        "同格の名詞句が読点で{items}個並んでいる（並び{held}字・一文{length}字）。カタログ F1。箇条書きに開くと並列関係を読み手が再構成せずに済む"
                     ),
                 );
                 finding.span = sentence.span(
@@ -183,7 +263,8 @@ pub fn analyze_reading_load_with_thresholds(
         // 疑問節「〜か、」を読点で並べ、末尾の「〜かを」で一つの述語へ係らせる文
         // (カタログ F1の節版)。短い選択肢の列挙は節の字数と述語の有無で外す。
         if length >= QUESTION_LIST_SENTENCE_MIN
-            && let Some(list) = buried_question_list(&sentence.tokens, QUESTION_CLAUSE_MIN)
+            && let Some(list) =
+                buried_question_list(&sentence.tokens, QUESTION_CLAUSE_MIN, QUESTION_LIST_MIN)
         {
             let phrase = sentence.tokens[list.start..list.end]
                 .iter()
@@ -196,8 +277,8 @@ pub fn analyze_reading_load_with_thresholds(
                 phrase.chars().take(40).collect::<String>(),
                 "info",
                 format!(
-                    "疑問節「〜か」が読点で{}個並び、末尾の「か{particle}」で一つの述語に係っている（一文{length}字）。カタログ F1。係り先の述語を先に出すか、節ごとに文を切る",
-                    list.clauses
+                    "疑問節「〜か」が読点で{}個並び、末尾の「か{particle}」で一つの述語に係っている（並び{}字・一文{length}字）。カタログ F1。係り先の述語を先に出すか、節ごとに文を切る",
+                    list.clauses, list.chars
                 ),
             );
             finding.span = sentence.span(
@@ -212,8 +293,9 @@ pub fn analyze_reading_load_with_thresholds(
         // 項になる文(カタログ B2/B5)。読み手は名詞が出るまで修飾節全体を保留する。
         // 削除済みの nested_attributive は連体形の個数で全発火したため、ここでは
         // 個数ではなく一つの名詞が背負う修飾節の長さと述語数を測る。
-        if let Some(span) =
-            long_attributive_span(&sentence.text, &sentence.tokens, attributive_span_min)
+        if !arrow_chain
+            && let Some(span) =
+                long_attributive_span(&sentence.text, &sentence.tokens, attributive_span_min)
         {
             let surface = |range: std::ops::Range<usize>| {
                 sentence.tokens[range]
@@ -290,11 +372,7 @@ pub fn analyze_reading_load_with_thresholds(
                 && !obligation
                 && !conditional_negative.is_match(&phrase)
                 && !first_negation_modifies_noun(&sentence.tokens, first, second)
-                // 「聞こえず話せない」は別述語。「見ずにはいられない」は残す。
-                && !(sentence.tokens[first].surface == "ず"
-                    && sentence.tokens.get(first + 1).is_some_and(|token| {
-                        token.pos(0) == "動詞" && token.dictionary_form() != "いる"
-                    }))
+                && !negations_are_independent(&sentence.tokens, first, second)
             {
                 let mut finding = Finding::new(
                     sentence.line,

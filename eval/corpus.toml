@@ -1384,7 +1384,7 @@ id = "buried-question-list-fire-006"
 path = "labeled/buried_question_list/fire-006.md"
 category = "buried_question_list"
 expect = "fire"
-note = "「それとも」で始まる2節目と「のか」"
+note = "2節目も独立した疑問で、述語「読み取る」は選択肢を見分ける動作ではない"
 
 [[sample]]
 id = "buried-question-list-fire-007"
@@ -1483,3 +1483,122 @@ path = "labeled/buried_question_list/silent-010.md"
 category = "buried_question_list"
 expect = "silent"
 note = "後方に疑問節を受ける「か」がない"
+
+[[sample]]
+id = "buried-question-list-silent-011"
+path = "labeled/buried_question_list/silent-011.md"
+category = "buried_question_list"
+expect = "silent"
+note = "「それとも」で始まる2節目は一つの選択疑問の選択肢。節ごとに切ると問いが崩れる"
+
+[[sample]]
+id = "buried-question-list-silent-012"
+path = "labeled/buried_question_list/silent-012.md"
+category = "buried_question_list"
+expect = "silent"
+note = "「〜なのか、〜なのかを分ける」の2節は見分ける選択肢で、49字でも指摘しない"
+
+[[sample]]
+id = "buried-list-fire-001"
+path = "labeled/buried_list/fire-001.md"
+category = "buried_list"
+expect = "fire"
+note = "修飾を持つ4項目の列挙（カタログ F1の例）"
+
+[[sample]]
+id = "buried-list-fire-002"
+path = "labeled/buried_list/fire-002.md"
+category = "buried_list"
+expect = "fire"
+note = "長い名詞句4項目"
+
+[[sample]]
+id = "buried-list-fire-003"
+path = "labeled/buried_list/fire-003.md"
+category = "buried_list"
+expect = "fire"
+note = "連体修飾を含む4項目"
+
+[[sample]]
+id = "buried-list-fire-004"
+path = "labeled/buried_list/fire-004.md"
+category = "buried_list"
+expect = "fire"
+note = "動詞の連体修飾を持つ4項目"
+
+[[sample]]
+id = "buried-list-fire-005"
+path = "labeled/buried_list/fire-005.md"
+category = "buried_list"
+expect = "fire"
+note = "数と内容を並べた4項目"
+
+[[sample]]
+id = "buried-list-silent-001"
+path = "labeled/buried_list/silent-001.md"
+category = "buried_list"
+expect = "silent"
+note = "一語ずつの短い並びは箇条書きに開くと読みにくくなる"
+
+[[sample]]
+id = "buried-list-silent-002"
+path = "labeled/buried_list/silent-002.md"
+category = "buried_list"
+expect = "silent"
+note = "書誌の「（著）、（訳）」は本文の列挙ではない"
+
+[[sample]]
+id = "buried-list-silent-003"
+path = "labeled/buried_list/silent-003.md"
+category = "buried_list"
+expect = "silent"
+note = "3項目で80字未満"
+
+[[sample]]
+id = "buried-list-silent-004"
+path = "labeled/buried_list/silent-004.md"
+category = "buried_list"
+expect = "silent"
+note = "短い名詞4項目"
+
+[[sample]]
+id = "buried-list-silent-005"
+path = "labeled/buried_list/silent-005.md"
+category = "buried_list"
+expect = "silent"
+note = "一語の工程名4項目"
+
+[[sample]]
+id = "buried-list-silent-006"
+path = "labeled/buried_list/silent-006.md"
+category = "buried_list"
+expect = "silent"
+note = "修飾のある3項目でも80字未満"
+
+[[sample]]
+id = "buried-list-silent-007"
+path = "labeled/buried_list/silent-007.md"
+category = "buried_list"
+expect = "silent"
+note = "時間帯を表す一語の並び"
+
+[[sample]]
+id = "buried-list-silent-008"
+path = "labeled/buried_list/silent-008.md"
+category = "buried_list"
+expect = "silent"
+note = "曜日の一語の並び"
+
+[[sample]]
+id = "buried-list-silent-009"
+path = "labeled/buried_list/silent-009.md"
+category = "buried_list"
+expect = "silent"
+note = "書誌の「（編）、（訳）、（監修）」"
+
+[[sample]]
+id = "buried-list-silent-010"
+path = "labeled/buried_list/silent-010.md"
+category = "buried_list"
+expect = "silent"
+note = "地名の一語の並び"

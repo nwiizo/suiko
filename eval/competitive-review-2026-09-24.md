@@ -41,7 +41,7 @@
 | `no_chain` | v0.3.9: 50/0・161件、v0.3.10: 47/0・142件 | 47/0・142件 |
 | `sentence_too_long` | 86/1・1,218件 | 86/1・1,223件 |
 
-`forbidden_phrase`、`low_burstiness`、`kanji_run`、`inanimate_subject_morph`、`nominal_ending`は文書数・件数とも一致した。`redundant_light_verb`、`hype_expression`、`long_attributive_span`、`no_comma_sentence`、`buried_question_list`などはSuikoだけにある。
+この表はv0.3.10の候補版での測定で、その後、書籍原稿2冊の点検から`buried_list`、`double_negative`、`no_comma_sentence`の誤検知を直した（評価コーパスで236件→149件、126件→106件、155件→153件。`calibration.md`の「書籍原稿2冊での点検」）。`forbidden_phrase`、`low_burstiness`、`kanji_run`、`inanimate_subject_morph`、`nominal_ending`は文書数・件数とも一致した。`redundant_light_verb`、`hype_expression`、`long_attributive_span`、`no_comma_sentence`、`buried_question_list`などはSuikoだけにある。
 
 Natural Japaneseが既定で出す文頭反復と文書単位TTRは、人間文書の過半で発火する。Suikoは2026-08-19の実測でこの2件を実験機能へ下げており（`calibration.md`）、今回の結果もその判断と矛盾しない。`antithesis_repetition`の件数差は、Suikoが文書単位で1件に集約するためで、発火した文書数はほぼ同じである。
 

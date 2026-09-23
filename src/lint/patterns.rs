@@ -163,6 +163,10 @@ pub(super) fn forbidden_findings(masked: &str, raw: &str) -> Vec<Finding> {
     for (line_no, line) in numbered_lines(masked) {
         for phrase in FORBIDDEN_PHRASES {
             for (byte_start, _) in line.match_indices(phrase) {
+                // 「要望をまとめるときも」の「まとめると」は、話をまとめる前置きではない。
+                if phrase.ends_with('と') && line[byte_start + phrase.len()..].starts_with('き') {
+                    continue;
+                }
                 let weak = WEAK_FORBIDDEN_PHRASES.contains(phrase);
                 let mut detail = format!("禁止語/LLM常套句ヒット: 「{phrase}」");
                 if weak {
@@ -338,6 +342,16 @@ pub(super) fn english_syntax_findings(masked: &str, raw: &str, split: &[Sentence
         let raw_line = raw_lines.get(line_no - 1).copied().unwrap_or(line);
         for pattern in &patterns {
             for found in pattern.find_iter(line) {
+                // 「それは、〜を証明することとは別です」「これが示すのは」のように「こと」「の」で
+                // 名詞化された動詞は主節の述語ではない。説明の「のである」は述語のまま扱う。
+                let rest = &line[found.end()..];
+                if rest.starts_with("こと")
+                    || ["のは", "のが", "のを", "のも"]
+                        .iter()
+                        .any(|nominal| rest.starts_with(nominal))
+                {
+                    continue;
+                }
                 let mut finding = Finding::new(
                     line_no,
                     "english_syntax_inanimate_subject",
