@@ -1175,3 +1175,163 @@ path = "labeled/long_attributive_span/silent-010.md"
 category = "long_attributive_span"
 expect = "silent"
 note = "修飾節は長いが述語が一つだけ"
+
+[[sample]]
+id = "declared-item-count-mismatch-fire-001"
+path = "labeled/declared_item_count_mismatch/fire-001.md"
+category = "declared_item_count_mismatch"
+expect = "fire"
+genre = "tech"
+note = "3点と予告し、箇条書きが2項目で終わる"
+
+[[sample]]
+id = "declared-item-count-mismatch-fire-002"
+path = "labeled/declared_item_count_mismatch/fire-002.md"
+category = "declared_item_count_mismatch"
+expect = "fire"
+genre = "tech"
+note = "番号付きリストで4つの予告に3項目"
+
+[[sample]]
+id = "declared-item-count-mismatch-fire-003"
+path = "labeled/declared_item_count_mismatch/fire-003.md"
+category = "declared_item_count_mismatch"
+expect = "fire"
+genre = "business"
+note = "漢数字の三つとコロンで始まる、空行のないリストが4項目"
+
+[[sample]]
+id = "declared-item-count-mismatch-fire-004"
+path = "labeled/declared_item_count_mismatch/fire-004.md"
+category = "declared_item_count_mismatch"
+expect = "fire"
+genre = "business"
+note = "下記の2点に対し、リストが3項目"
+
+[[sample]]
+id = "declared-item-count-mismatch-fire-005"
+path = "labeled/declared_item_count_mismatch/fire-005.md"
+category = "declared_item_count_mismatch"
+expect = "fire"
+genre = "tech"
+note = "空行を挟むゆるいリストの4項目を5項目と予告"
+
+[[sample]]
+id = "declared-item-count-mismatch-fire-006"
+path = "labeled/declared_item_count_mismatch/fire-006.md"
+category = "declared_item_count_mismatch"
+expect = "fire"
+genre = "tech"
+note = "見出しの下の段落で2点と予告し、リストが3項目"
+
+[[sample]]
+id = "declared-item-count-mismatch-fire-007"
+path = "labeled/declared_item_count_mismatch/fire-007.md"
+category = "declared_item_count_mismatch"
+expect = "fire"
+genre = "business"
+note = "入れ子の子項目を数えず、親2項目を3つと予告"
+
+[[sample]]
+id = "declared-item-count-mismatch-fire-008"
+path = "labeled/declared_item_count_mismatch/fire-008.md"
+category = "declared_item_count_mismatch"
+expect = "fire"
+genre = "essay"
+note = "全角数字の４点に3項目"
+
+[[sample]]
+id = "declared-item-count-mismatch-fire-009"
+path = "labeled/declared_item_count_mismatch/fire-009.md"
+category = "declared_item_count_mismatch"
+expect = "fire"
+genre = "tech"
+note = "項目内のコードブロックを数えず、2項目を3項目と予告"
+
+[[sample]]
+id = "declared-item-count-mismatch-fire-010"
+path = "labeled/declared_item_count_mismatch/fire-010.md"
+category = "declared_item_count_mismatch"
+expect = "fire"
+genre = "essay"
+note = "生活の場面で二つと予告し、リストが3項目"
+
+[[sample]]
+id = "declared-item-count-mismatch-silent-001"
+path = "labeled/declared_item_count_mismatch/silent-001.md"
+category = "declared_item_count_mismatch"
+expect = "silent"
+genre = "tech"
+note = "3点の予告と3項目が一致する"
+
+[[sample]]
+id = "declared-item-count-mismatch-silent-002"
+path = "labeled/declared_item_count_mismatch/silent-002.md"
+category = "declared_item_count_mismatch"
+expect = "silent"
+genre = "business"
+note = "親2項目と入れ子の子項目。子を親へ数えない"
+
+[[sample]]
+id = "declared-item-count-mismatch-silent-003"
+path = "labeled/declared_item_count_mismatch/silent-003.md"
+category = "declared_item_count_mismatch"
+expect = "silent"
+genre = "tech"
+note = "項目内の補足段落を別項目として数えない"
+
+[[sample]]
+id = "declared-item-count-mismatch-silent-004"
+path = "labeled/declared_item_count_mismatch/silent-004.md"
+category = "declared_item_count_mismatch"
+expect = "silent"
+genre = "business"
+note = "2点以上という下限の宣言は照合しない"
+
+[[sample]]
+id = "declared-item-count-mismatch-silent-005"
+path = "labeled/declared_item_count_mismatch/silent-005.md"
+category = "declared_item_count_mismatch"
+expect = "silent"
+genre = "tech"
+note = "全8項目のうち次の3点という部分の宣言は照合しない"
+
+[[sample]]
+id = "declared-item-count-mismatch-silent-006"
+path = "labeled/declared_item_count_mismatch/silent-006.md"
+category = "declared_item_count_mismatch"
+expect = "silent"
+genre = "tech"
+note = "省略記号の項目を含むリストは数えない"
+
+[[sample]]
+id = "declared-item-count-mismatch-silent-007"
+path = "labeled/declared_item_count_mismatch/silent-007.md"
+category = "declared_item_count_mismatch"
+expect = "silent"
+genre = "tech"
+note = "宣言とリストの間に本文段落がある"
+
+[[sample]]
+id = "declared-item-count-mismatch-silent-008"
+path = "labeled/declared_item_count_mismatch/silent-008.md"
+category = "declared_item_count_mismatch"
+expect = "silent"
+genre = "tech"
+note = "見出しで区切られた後続のリストを合算しない"
+
+[[sample]]
+id = "declared-item-count-mismatch-silent-009"
+path = "labeled/declared_item_count_mismatch/silent-009.md"
+category = "declared_item_count_mismatch"
+expect = "silent"
+genre = "tech"
+note = "コードブロック内の宣言とリストは対象外"
+
+[[sample]]
+id = "declared-item-count-mismatch-silent-010"
+path = "labeled/declared_item_count_mismatch/silent-010.md"
+category = "declared_item_count_mismatch"
+expect = "silent"
+genre = "tech"
+note = "3秒の数字ではなく次の2点と照合し、2項目で一致する"

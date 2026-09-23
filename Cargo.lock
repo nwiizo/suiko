@@ -1221,7 +1221,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "suiko"
-version = "0.3.8"
+version = "0.3.9"
 dependencies = [
  "assert_cmd",
  "clap",

@@ -3,6 +3,7 @@
 //! reading_load(読解負荷レーン)、baseline(前回比較)へ分割している。
 
 mod baseline;
+mod item_count;
 mod metrics;
 mod morph;
 mod patterns;
@@ -27,6 +28,7 @@ pub(crate) use word_rules::{WordRule, validate_word_rules, word_rule_findings};
 
 const EXPERIMENTAL_CATEGORIES: &[&str] = &[
     "consecutive_nominal_endings",
+    "declared_item_count_mismatch",
     "high_length_autocorrelation",
     "paragraph_lead_conjunction",
     "repeated_syntax_template",
@@ -62,6 +64,7 @@ const RULE_CATEGORIES: &[&str] = &[
     "buried_list",
     "consecutive_nominal_endings",
     "custom_wording",
+    "declared_item_count_mismatch",
     "demonstrative_reference",
     "double_negative",
     "english_syntax_cleft_because",
@@ -344,6 +347,12 @@ pub fn analyze_with_thresholds(
 
     let mut findings = structural_findings;
     findings.extend(patterns::local_pattern_findings(raw, morphology)?);
+    if experimental {
+        findings.extend(item_count::declared_item_count_findings(
+            &mask_html_comments(raw),
+            &raw_lines,
+        ));
+    }
     // 箇条書きの並行性は技術・業務文書では理解を助けるため、散文を明示した場合だけ観測する。
     if experimental && genre == Some("essay") {
         findings.extend(patterns::uniform_bullet_structure_findings(
