@@ -1,6 +1,7 @@
 //! 読解負荷レーン。自然度スコアとは分離した推敲用の指さしを返す。
 
 use std::collections::BTreeMap;
+use std::sync::LazyLock;
 
 use regex::Regex;
 
@@ -19,9 +20,12 @@ use super::{Finding, ReadingLoadReport, ReadingLoadStats, ReadingLoadThresholds}
 const QUESTION_LIST_SENTENCE_MIN: usize = 45;
 const QUESTION_CLAUSE_MIN: usize = 6;
 
+// 文ごとに呼ばれるため、正規表現は一度だけコンパイルする。
+static WHITESPACE_RUN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\s{2,}").expect("valid whitespace regex"));
+
 fn reading_length(text: &str) -> usize {
-    let whitespace = Regex::new(r"\s{2,}").expect("valid whitespace regex");
-    whitespace.replace_all(text, " ").trim().chars().count()
+    WHITESPACE_RUN.replace_all(text, " ").trim().chars().count()
 }
 
 fn first_negation_modifies_noun(

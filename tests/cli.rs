@@ -2409,13 +2409,9 @@ fn reading_load_is_reported_in_a_separate_json_lane() {
     );
     let (_dir, path) = draft(&long_sentence);
 
+    // v0.3.10から読解負荷は既定で出力する。
     let output = cargo_bin_cmd!("suiko")
-        .args([
-            "lint",
-            path.to_str().expect("UTF-8 path"),
-            "--json",
-            "--reading-load",
-        ])
+        .args(["lint", path.to_str().expect("UTF-8 path"), "--json"])
         .output()
         .expect("run reading-load lane");
 
@@ -2426,6 +2422,40 @@ fn reading_load_is_reported_in_a_separate_json_lane() {
         json["reading_load"]["findings"][0]["category"],
         "sentence_too_long"
     );
+}
+
+// 読解負荷は自然度と分離したままなので、--fail-onの判定に含めない。
+// --no-reading-loadで出力から外し、互換の--reading-loadとは同時に指定できない。
+#[test]
+fn reading_load_can_be_disabled_and_never_affects_fail_on() {
+    let long_sentence = format!(
+        "{}。\n",
+        "この文には、分割すべき情報が含まれています".repeat(8)
+    );
+    let (_dir, path) = draft(&long_sentence);
+    let file = path.to_str().expect("UTF-8 path");
+
+    let output = cargo_bin_cmd!("suiko")
+        .args(["lint", file, "--json", "--fail-on", "info"])
+        .output()
+        .expect("run suiko lint");
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    assert_eq!(json["stats"]["total_findings"], 0);
+    assert_eq!(json["reading_load"]["stats"]["total"], 1);
+
+    let output = cargo_bin_cmd!("suiko")
+        .args(["lint", file, "--json", "--no-reading-load"])
+        .output()
+        .expect("run suiko lint without reading load");
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    assert!(json.get("reading_load").is_none());
+
+    cargo_bin_cmd!("suiko")
+        .args(["lint", file, "--reading-load", "--no-reading-load"])
+        .assert()
+        .code(2);
 }
 
 // no_comma_sentence契約: 読点ゼロの60字以上の日本語散文だけが対象で、読点

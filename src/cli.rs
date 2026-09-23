@@ -130,9 +130,12 @@ struct LintArgs {
     /// 前回の JSON と比較して解消・新規・継続を分類する
     #[arg(long, value_name = "PREV.json")]
     baseline: Option<PathBuf>,
-    /// 読解負荷レーンを追加する
-    #[arg(long)]
+    /// 読解負荷レーンを出力する（既定で有効。v0.3.9以前との互換のため残す）
+    #[arg(long, conflicts_with = "no_reading_load")]
     reading_load: bool,
+    /// 読解負荷レーンを出力しない
+    #[arg(long)]
+    no_reading_load: bool,
     /// 指定 severity 以上の finding があれば終了コード2を返す
     #[arg(long, value_enum)]
     fail_on: Option<FailOn>,
@@ -861,7 +864,7 @@ fn execute(cli: Cli) -> Result<ExitCode, Error> {
                     }
                     _ => None,
                 };
-                let reading_load = if args.reading_load {
+                let reading_load = if !args.no_reading_load {
                     let mut report = lint::analyze_reading_load(&text, &morphology, genre)?;
                     apply_reading_load_config(&mut report, config.as_ref());
                     Some(report)

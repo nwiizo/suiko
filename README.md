@@ -12,7 +12,7 @@
 
 | コマンド | 読み直す作業 |
 |---|---|
-| `lint` | 翻訳調、定型表現、反復、リズム、段落構造を確認する |
+| `lint` | 翻訳調、定型表現、反復、リズム、段落構造と、長い文や埋もれた列挙などの読解負荷を確認する |
 | `outline` | 見出し・段落の先頭文・箇条書きから論旨を俯瞰する |
 | `terms` | 専門用語候補、初出時の説明、複数ファイルの表記揺れを確認する |
 | `lexical-audit` | 参照データを使って一般名詞複合語や語彙の揺れを確認する |
@@ -109,13 +109,13 @@ suiko lint draft.md --genre tech --experimental --json
 
 これらは`info`の読み直し候補です。形態素解析だけでは主語の省略、指示先、修飾先の正誤を決められません。[検出仕様と形態素解析の手順](https://github.com/nwiizo/suiko/blob/main/eval/technical-wording.md)に、候補一覧、採用理由、実測した分割、評価結果を記録しています。
 
-### 読解負荷を追加する
+### 読解負荷を確認する
 
 ```sh
-suiko lint draft.md --genre tech --reading-load --json
+suiko lint draft.md --genre tech --json
 ```
 
-長すぎる一文、読点のない60字以上の一文、埋もれた列挙、疑問節の埋もれた列挙、長い連続漢字、二重否定、格助詞「の」の近接した連鎖、一つの名詞に前置された長い修飾節を確認します。結果は`findings`と分けた`reading_load`へ出力し、`--baseline`比較と`--fail-on`判定には含めません。
+`lint`は自然度の診断と同時に、長すぎる一文、読点のない60字以上の一文、埋もれた列挙、疑問節の埋もれた列挙、長い連続漢字、二重否定、格助詞「の」の近接した連鎖、一つの名詞に前置された長い修飾節を確認します。v0.3.10から既定で有効です。結果は`findings`と分けた`reading_load`へ出力し、`--baseline`比較と`--fail-on`判定には含めません。不要な場合は`--no-reading-load`で出力から外せます。v0.3.9以前の`--reading-load`も互換のため受け付けます。
 
 `long_attributive_span`は、述語を2つ以上含む30字以上の連体修飾節が一つの実質名詞に係り、その名詞句が「が」「を」「は」などで主節の項になっている文を指さします。読み手は名詞が出るまで修飾節全体を保留するため、被修飾名詞か述語を先に出すか、修飾節を独立した文に分けると読みやすくなります。「〜すること」「〜したとき」「〜する必要がある」のような形式名詞・枕の名詞と、「〜という関係である」の述語名詞は対象外です。連体形の個数で判定して人間文書で全発火した旧`nested_attributive`とは異なり、一つの名詞が背負う修飾節の長さと述語数を測ります。v0.3.8で追加し、採用の経緯と実測は[校正記録](https://github.com/nwiizo/suiko/blob/v0.3.8/eval/calibration.md)にまとめています。
 
@@ -150,7 +150,7 @@ suiko lint docs/*.md --genre tech --format github --fail-on warn
 suiko lint docs/*.md --genre tech --format sarif > suiko.sarif
 ```
 
-`--format github`では`critical` / `warn` / `info`を`error` / `warning` / `notice`へ対応づけます。SARIFでは`error` / `warning` / `note`を使い、列の単位は`unicodeCodePoints`です。
+`--format github`では`critical` / `warn` / `info`を`error` / `warning` / `notice`へ対応づけます。SARIFでは`error` / `warning` / `note`を使い、列の単位は`unicodeCodePoints`です。読解負荷の指摘は重要度にかかわらず`notice`（SARIFでは`note`）で出ます。注釈に含めない場合は`--no-reading-load`を付けてください。
 
 `lint`の終了コードは次のとおりです。`--fail-on`は、実験機能を含む`findings`内の指摘を判定します。
 
