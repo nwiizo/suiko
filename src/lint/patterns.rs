@@ -14,7 +14,7 @@ use super::{Finding, make_span};
 
 const BULLET_MARKER_PATTERN: &str = r"^\s*(?:[-*+]|[0-9]+[.)])\s+";
 
-fn fenced_lines(lines: &[&str]) -> Vec<bool> {
+pub(super) fn fenced_lines(lines: &[&str]) -> Vec<bool> {
     let mut fence: Option<(char, usize)> = None;
     lines
         .iter()

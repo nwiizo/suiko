@@ -99,6 +99,7 @@ suiko lint draft.md --genre tech --experimental --json
 | `demonstrative_reference` | `tech`で、同じ文の前方に動詞が2個以上ある位置に「このこと」等がある |
 | `respectively_scope` | `tech`で、列挙の後に「それぞれ」があり、後方に対応する列挙が見えない |
 | `repeated_explanation_preview` | `tech`で、同じ節の段落頭に「本節では〜説明します」等の予告が3回以上ある |
+| `declared_item_count_mismatch` | 全ジャンルで、リスト直前の段落の最後の文が「次の3点」「以下の三つ」等と予告し、直後の箇条書きの同じ階層の項目数と一致しない。入れ子・項目内のコード・「以上」「のうち」・省略記号は数えない |
 | `technical_jargon_metaphor` | `tech`で、CIの成功を「緑」、コードの公開を「出荷」と表すなど、技術現場の比喩的な言い回しがある |
 | `repeated_sentence_mode` / `consecutive_nominal_endings` | 長さの近い明示的な文末や、短い体言止めが局所的に続く |
 

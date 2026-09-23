@@ -2489,3 +2489,81 @@ fn config_rejects_unknown_keys_and_versions() {
         .code(1)
         .stderr(predicate::str::contains("version = 2"));
 }
+
+fn item_count_findings(text: &str, experimental: bool) -> Vec<lint::Finding> {
+    let morphology = Morphology::new().expect("initialize morphology");
+    lint::analyze(text, &morphology, Some("tech"), experimental)
+        .expect("analyze text")
+        .findings
+        .into_iter()
+        .filter(|finding| finding.category == "declared_item_count_mismatch")
+        .collect()
+}
+
+#[test]
+fn declared_item_count_mismatch_compares_the_following_list() {
+    let text = "接続に失敗したときは、以下の3点を確認してください。\n\n- 接続先\n- 認証情報\n";
+    let findings = item_count_findings(text, true);
+    assert_eq!(findings.len(), 1);
+    let finding = &findings[0];
+    assert_eq!(finding.line, 1);
+    assert_eq!(finding.severity, "info");
+    assert_eq!(finding.related_lines, Some(vec![3, 4]));
+    assert!(finding.suggestion.is_none());
+    assert!(
+        finding
+            .detail
+            .contains("3点と予告していますが、直後の箇条書きは2項目です")
+    );
+    let span = finding.span.expect("declaration span");
+    assert_eq!(
+        &text.lines().next().unwrap()[span.start_byte..span.end_byte],
+        "以下の3点"
+    );
+    assert!(item_count_findings(text, false).is_empty());
+
+    for (body, expected) in [
+        (
+            "次の4つを終えます。\n\n1. 更新する\n2. 作成する\n3. 署名する\n",
+            3,
+        ),
+        (
+            "次の三つを添付します：\n- 見積書\n- 仕様書\n- 契約書\n- 連絡先\n",
+            4,
+        ),
+        (
+            "次の５項目を書きます。\n\n- 時刻\n\n- 範囲\n\n- 暫定対応\n",
+            3,
+        ),
+        ("次の3点です。\n\n- a\n  - a1\n  - a2\n- b\n", 2),
+    ] {
+        let findings = item_count_findings(body, true);
+        assert_eq!(findings.len(), 1, "{body}");
+        assert_eq!(
+            findings[0].related_lines.as_ref().map(Vec::len),
+            Some(expected),
+            "{body}"
+        );
+    }
+}
+
+#[test]
+fn declared_item_count_mismatch_skips_matching_or_uncountable_lists() {
+    for body in [
+        "以下の3点を確認してください。\n\n- 接続先\n- 認証情報\n- 権限\n",
+        "次の3つを確認します。\n\n- 接続先\n  - 本番\n  - 検証\n- 認証情報\n- 権限\n",
+        "3秒以内に次の2点を確かめます。\n\n1. 応答\n2. 記録\n",
+        "次の2点です。\n\n- 一つ目\n\n  補足の段落です。\n\n- 二つ目\n\n本文に戻ります。\n\n- 別のリスト\n",
+        "次の2点を確認します。\n\n- a\n\n  ```sh\n  - not item\n  ```\n\n- b\n",
+        "次の3点以上を確認します。\n\n- a\n- b\n",
+        "全10項目のうち次の3点を扱います。\n\n- a\n- b\n",
+        "次の3点を確認します。\n\n- a\n- b\n- …\n",
+        "次の3点を確認します。\n\n確認は担当者が行います。\n\n- a\n- b\n",
+        "```markdown\n次の3点を確認します。\n\n- a\n```\n",
+        "> 次の3点を確認します。\n>\n> - a\n",
+        "次の3点を確認します。\n\n- a\n- b\n1. c\n",
+        "次の3点について\n\n- a\n- b\n",
+    ] {
+        assert!(item_count_findings(body, true).is_empty(), "{body}");
+    }
+}

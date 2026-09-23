@@ -59,6 +59,7 @@ Web検索が使えない環境（Claude.aiなど）では、この往復を自�
 | ~~`nested_attributive`~~ | **削除済み**（連体修飾の入れ子）。コーパス校正で全文書型に近い発火（人間85%以上、AIも同水準）を示し、閾値調整では救えない弁別力ゼロの検出器と判明したため検出器ごと廃止した。経緯は `translationese.md` 参照 | 連体形の個数による機械検出は不可。一つの名詞に係る長い修飾節だけは `--reading-load` の `long_attributive_span` が指さす。それ以外は `translationese.md` の連体修飾節の Before/After、または `readability-antipatterns.md` の「係り受けの曖昧さ」を参考に、人手で判断する |
 | `long_attributive_span` | `--reading-load` の指さし（info）。述語を2つ以上含む30字以上の連体修飾節が一つの実質名詞に係り、その名詞句が「が」「を」「は」などで主節の項になっている文。形式名詞・枕の名詞（こと、とき、必要、可能性）と述語名詞は対象外 | 被修飾名詞か述語を先に出す（「次のような候補が返る。〜と考えている。〜」）か、修飾節を独立した文に分ける。並列の手順や引用を意図して一つの名詞に束ねている場合は、読者が名詞まで保留できる長さかを確かめて残してよい |
 | `english_syntax_inanimate_subject` / `inanimate_subject_morph` | 無生物主語+他動詞 | 主語を人や状況に戻すか、述語を状態描写に変える |
+| `declared_item_count_mismatch` | 「次の3点」「以下の三つ」などの予告と、直後の箇条書きの同じ階層の項目数が一致しない（EXPERIMENTAL、デフォルト無効、info）。入れ子・項目内のコード・「以上」「のうち」・省略記号は判定しない | 項目の書き漏れか、予告の数字の誤りかを原文で確かめて直す。数の予告そのものは直す対象ではない。予告の対象とリストの中身が別物（「3つの画面を開き、手順は次のとおり」）なら、指摘は誤りとして残してよい |
 | `english_syntax_cleft_because` | 「それは〜。なぜなら〜」型（EXPERIMENTAL、デフォルト無効） | 理由を先に書くか、1文にまとめる |
 | `high_bold_density` / `high_bullet_ratio` / `boilerplate_heading` / `numbered_phase_structure` / `high_emoji_symbol_density` | Markdown構造レベルの教科書的AI癖（太字多用・箇条書き偏重・「まとめ」等の定型見出し・番号付きフェーズ構造・絵文字/装飾記号の多用）。すべて EXPERIMENTAL、デフォルト無効 | `--experimental` で出力させたうえで、構成を見直す（太字を減らす、箇条書きの一部を地の文に戻す、定型見出しをやめて内容そのもので締める） |
 | `semantic_topic_flatness`（Suiko初版には非搭載） | 話題の起伏。同じ主題を同じ抽象度で刻み続けていないか | 具体例への降下・視点の転換・短い脱線で意味的な緩急をつける |
