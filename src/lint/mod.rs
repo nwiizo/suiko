@@ -62,6 +62,7 @@ const RULE_CATEGORIES: &[&str] = &[
     "bullet_bold_label",
     "bullet_emoji",
     "buried_list",
+    "buried_question_list",
     "consecutive_nominal_endings",
     "custom_wording",
     "declared_item_count_mismatch",
@@ -110,6 +111,7 @@ const RULE_CATEGORIES: &[&str] = &[
 
 const READING_LOAD_CATEGORIES: &[&str] = &[
     "buried_list",
+    "buried_question_list",
     "double_negative",
     "kanji_run",
     "long_attributive_span",

@@ -460,7 +460,12 @@ pub(super) fn ngram_analysis(
                 return None;
             }
             let lead = format!("{}{}", tokens[0].surface, tokens[1].surface);
-            let tech_lead = (tokens[0].pos(0) == "名詞" && tokens[0].pos(1) == "固有名詞")
+            // 「確認待ちが」のような名詞主題の反復は本文の題材そのもので、
+            // 「ただ、」「ここで」のような接続詞・副詞・指示語の反復とは読み直す
+            // 価値が違う。「今回は」のような副詞可能の名詞は後者に含める。
+            let noun_topic = (tokens[0].pos(0) == "名詞"
+                && matches!(tokens[0].pos(1), "普通名詞" | "固有名詞")
+                && tokens[0].pos(2) != "副詞可能")
                 || (tokens[0]
                     .surface
                     .chars()
@@ -470,7 +475,7 @@ pub(super) fn ngram_analysis(
                         .surface
                         .chars()
                         .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.')));
-            Some((sentence, lead, tech_lead))
+            Some((sentence, lead, noun_topic))
         })
         .collect::<Vec<_>>();
     let mut lead_counts = BTreeMap::<String, usize>::new();
@@ -479,7 +484,7 @@ pub(super) fn ngram_analysis(
     }
     // 同じ反復キーは文書単位で1件に集約し、全対象行はrelated_linesで示す。
     let mut reported = BTreeSet::new();
-    for (sentence, lead, tech_lead) in &leads {
+    for (sentence, lead, noun_topic) in &leads {
         let count = lead_counts[lead];
         if count < lead_threshold || !reported.insert(lead.clone()) {
             continue;
@@ -521,10 +526,12 @@ pub(super) fn ngram_analysis(
             .count()
             * 2
             >= count;
+        // 名詞主題の反復は報告しない。定型フィールドのラベルは名詞でも構造として示す。
+        if *noun_topic && !label_like {
+            continue;
+        }
         let qualifier = if label_like {
             "ラベル+コロンの定型フィールドとみられ、意図的な構造なら言い換えの対象にしない"
-        } else if *tech_lead {
-            "固有名詞/技術用語由来の可能性が高い"
         } else {
             "人間の意図的な反復技法との区別がつかないため参考情報として提示"
         };

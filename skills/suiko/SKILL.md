@@ -61,13 +61,9 @@ suiko lint <file> --json
 suiko lint <file> --genre tech --json
 ```
 
-読みやすさも対象なら、自然度検出と混ぜず別レーンを追加する。
+`lint` は既定で読解負荷レーン（`reading_load`）も返す（v0.3.10以降。v0.3.9以前は `--reading-load` が必要）。自然度の `findings` と混ぜずに読む。読みやすさを対象にしない依頼では `--no-reading-load` で外してよい。
 
-```sh
-suiko lint <file> --genre tech --reading-load --json
-```
-
-`reading_load` は一文長、埋もれた列挙、連続漢字、二重否定、「の」連鎖、一つの名詞に前置された長い修飾節（`long_attributive_span`）を見るための指さしであり、自然度 finding やベースラインには含まれない。
+`reading_load` は一文長、埋もれた列挙、疑問節の埋もれた列挙（`buried_question_list`）、連続漢字、二重否定、「の」連鎖、一つの名詞に前置された長い修飾節（`long_attributive_span`）を見るための指さしであり、自然度 finding やベースラインには含まれない。
 
 full では構造と用語も抽出する。
 

@@ -341,7 +341,7 @@ fn labeled_reports_detection_and_fpr_per_category() {
         .args(["labeled", "eval/corpus.toml"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("samples: total=156 categories=22"))
+        .stdout(predicate::str::contains("samples: total=194 categories=24"))
         .stdout(predicate::str::contains("ci=wilson95 low_n<5"))
         .stdout(predicate::str::contains("corpus: sha256="))
         .stdout(predicate::str::contains(
@@ -355,6 +355,12 @@ fn labeled_reports_detection_and_fpr_per_category() {
         ))
         .stdout(predicate::str::contains(
             "category=technical_jargon_metaphor\tfire=6/6 detection=1.000 ci95=0.610-1.000\tsilent_fired=0/8 fpr=0.000 ci95=0.000-0.324",
+        ))
+        .stdout(predicate::str::contains(
+            "category=buried_list\tfire=5/5 detection=1.000 ci95=0.566-1.000\tsilent_fired=0/10 fpr=0.000 ci95=0.000-0.278",
+        ))
+        .stdout(predicate::str::contains(
+            "category=buried_question_list\tfire=10/10 detection=1.000 ci95=0.722-1.000\tsilent_fired=0/12 fpr=0.000 ci95=0.000-0.243",
         ))
         .stdout(predicate::str::contains(
             "category=declared_item_count_mismatch\tfire=10/10 detection=1.000 ci95=0.722-1.000\tsilent_fired=0/10 fpr=0.000 ci95=0.000-0.278",

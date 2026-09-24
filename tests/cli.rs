@@ -29,6 +29,15 @@ fn inanimate_subject_reports_one_finding_per_actionable_span() {
             "それは問題を証明する。\n",
             vec![("english_syntax_inanimate_subject", 0)],
         ),
+        // 「こと」で名詞化した動詞は主節の述語ではない。説明の「のである」は述語のまま。
+        (
+            "それは、休息の価値を生産量で証明することとは別です。\n",
+            vec![],
+        ),
+        (
+            "それは問題を証明するのである。\n",
+            vec![("english_syntax_inanimate_subject", 0)],
+        ),
         (
             "これは結果を示す。これは問題を示す。\n",
             vec![
@@ -100,6 +109,17 @@ fn double_negative_ignores_independent_predicates_and_parallel_modifiers() {
         "根拠のない情報や信頼できない情報を除きます。",
         "読者が思わぬ落とし穴に遭わずに済みます。",
         "根拠のない情報や価値のある情報を区別できない。",
+        // 推量の定型、名詞に付く副詞の「なく」、理由の接続助詞、「ずに」「ず」＋サ変名詞、
+        // 名詞を修飾した否定から「へ」で別の対象へ続く並び（書籍原稿の点検で確認した誤検知）
+        "この方法では十分な結果が出ないかもしれない。",
+        "判定を待つ場合も、期限を際限なく延ばしません。",
+        "練習しないから才能がないと決めつける人もいる。",
+        "相手の意図を確かめずに推測していないか確かめる。",
+        "記録が足りず区別できない場合もあります。",
+        "見えない論点へ届かない説明もある。",
+        "長く残った案件は進んでいないかもしれません。",
+        "自己評価だけでは、間違いが増えていないかは分かりません。",
+        "完成した原稿を覚えるだけでは、何を省くと伝わらなくなるかを試せません。",
     ] {
         let report =
             lint::analyze_reading_load(text, &morphology, Some("tech")).expect("analyze text");
@@ -115,6 +135,7 @@ fn double_negative_ignores_independent_predicates_and_parallel_modifiers() {
         "見ずにはいられない。",
         "知らぬわけではない。",
         "根拠のない情報や信頼できない情報を、使わないわけではない。",
+        "この案を採らないわけにはいかない。",
     ] {
         let report =
             lint::analyze_reading_load(text, &morphology, Some("tech")).expect("analyze text");
@@ -175,6 +196,133 @@ fn long_attributive_span_points_at_one_noun_carrying_a_long_multi_predicate_modi
         assert_eq!(
             report.stats.by_category.get("long_attributive_span"),
             None,
+            "{text}"
+        );
+    }
+}
+
+// buried_question_list契約: 述語を含む疑問節「〜か、」を並べ、末尾の「か」＋を/が/は/も
+// で一つの述語へ係らせる45字以上の文を指さす。「かどうか」、推量の「かもしれない」、
+// 述語のない選択肢、「かで」、節ごとに分けた文は対象にしない。
+// 2節が「分ける」「見分ける」などの選択肢や「それとも」「あるいは」で結ぶ選択疑問なら数えない。
+#[test]
+fn buried_question_list_points_at_parallel_question_clauses_sharing_one_particle() {
+    let morphology = Morphology::new().expect("initialize morphology");
+    for (text, clauses) in [
+        (
+            "実際の職場では、早く提出した後に次の依頼が増えたか、確認を終えて利用者へ届くまでの時間も短くなったかを追います。",
+            2,
+        ),
+        (
+            "結果が次の条件へ戻るか、入力と出力の変化が比例するか、影響が届くまで時間差があるかは、別の問いです。",
+            3,
+        ),
+        (
+            "受け方を変えても待ちが減らなければ、同じ期間の流入量、つまり新たに受けた件数が本当に減ったか、確認できる量や手順が変わっていないかを調べます。",
+            2,
+        ),
+    ] {
+        let report =
+            lint::analyze_reading_load(text, &morphology, Some("essay")).expect("analyze text");
+        let findings = report
+            .findings
+            .iter()
+            .filter(|finding| finding.category == "buried_question_list")
+            .collect::<Vec<_>>();
+        assert_eq!(findings.len(), 1, "{text}");
+        assert_eq!(findings[0].severity, "info");
+        assert!(
+            findings[0].detail.contains(&format!("読点で{clauses}個")),
+            "{text}: {}",
+            findings[0].detail
+        );
+        assert!(findings[0].span.is_some(), "{text}");
+    }
+    // 直前の文を閉じる太字記号は、指摘の抜粋と範囲に含めない。
+    let report = lint::analyze_reading_load(
+        "**前の文です。** 早く提出した後に次の依頼が増えたか、確認を終えて利用者へ届くまでの時間も短くなったかを追います。\n",
+        &morphology,
+        Some("essay"),
+    )
+    .expect("analyze text");
+    let finding = report
+        .findings
+        .iter()
+        .find(|finding| finding.category == "buried_question_list")
+        .expect("buried_question_list after a bold sentence");
+    assert!(
+        finding.excerpt.starts_with("早く提出した"),
+        "{}",
+        finding.excerpt
+    );
+    assert_eq!(finding.span.expect("span").start_column, 12);
+    for text in [
+        "はいか、いいえかを選んでから、次の画面へ進み、表示された内容を最後まで確認してください。",
+        "導入後の一か月で問い合わせの件数が減ったかどうか、担当者の作業時間が短くなったかどうかを確認します。",
+        "明日の午後には雨がやむか、それとも夜まで降り続くかもしれないと、朝の天気予報は伝えていました。",
+        "導入後の一か月で問い合わせの件数が減ったか、担当者の作業時間が短くなったかで、次の年度の予算の配分を決めます。",
+        "実際の職場では、早く提出した後に次の依頼が増えたかを追います。あわせて、確認を終えて利用者へ届くまでの時間も短くなったかを見ます。",
+        "何を選ぶのか、誰が決めるのかが問題だ。",
+        "前提を書き出したら、自分の推測なのか、記録や他の人の経験で確かめられる事実なのかを分けます。",
+        "この二つを見分けると、自分の状況がなぜ悪化するのか、あるいはなぜ変わらないのかを調べる手掛かりが増えます。",
+        "雨の日に来店する客が減ったか、それとも来店の時間帯が夕方へずれただけなのかを、売上の記録から読み取ります。",
+        "後者なら、追加の要求や未確認点が残っていたのか、何もしていない時間への不安を和らげていたのかを分けて記録します。",
+        "数字の誤りを見つける場なのか、利用部門へ変更を予告する場なのか、誰が負担を引き受けるかを決める場なのか。",
+        "何が起きたら見直すか、誰がその結果を見るかを残せば、維持を選んだ後も、条件の変化を次の判断へ返せます。",
+    ] {
+        let report =
+            lint::analyze_reading_load(text, &morphology, Some("essay")).expect("analyze text");
+        assert_eq!(
+            report.stats.by_category.get("buried_question_list"),
+            None,
+            "{text}"
+        );
+    }
+}
+
+// buried_list契約: 最後の項目より前の並びが20字以上か6項目以上の同格列挙を指す。
+// 一語ずつの短い並び、「〜したところ」のような副詞節、書誌の「（著）、（訳）」は数えない。
+#[test]
+fn buried_list_points_at_long_noun_phrase_enumerations_only() {
+    let morphology = Morphology::new().expect("initialize morphology");
+    for text in [
+        "本機能は、リクエストの再送、再送回数の上限管理、再送間隔のバックオフ制御、失敗時の通知先の切り替えを一つの設定で行います。",
+        "この時期においては、携帯電話の小型化・低廉化が進んだこと、PHSがサービスを開始したこと、また端末売切制の導入などの制度改革等を契機として、急速に移動通信サービスの普及が進んだ。",
+    ] {
+        let report =
+            lint::analyze_reading_load(text, &morphology, Some("essay")).expect("analyze text");
+        assert_eq!(
+            report.stats.by_category.get("buried_list"),
+            Some(&1),
+            "{text}"
+        );
+    }
+    for text in [
+        "仕事、睡眠、食事、人間関係は、どれか一つを変えるとほかの三つにも影響が及ぶので、まとめて記録しておくと原因をたどりやすくなります。",
+        "東京、大阪、名古屋、福岡の四つの拠点で同じ手順を試したところ、いずれの拠点でも問い合わせの件数が減った。",
+        "**山田太郎（著）、佐藤花子（監訳）、鈴木一郎（訳）、架空出版、二〇二〇年、全三百二十ページの改訂版**",
+        "本書は、エンジニアがシステムに向けてきた観察、仮説、介入、検証の目を、自分の仕事と生活に当て、説明が外れれば直してきた記録でもあります。",
+    ] {
+        let report =
+            lint::analyze_reading_load(text, &morphology, Some("essay")).expect("analyze text");
+        assert_eq!(report.stats.by_category.get("buried_list"), None, "{text}");
+    }
+}
+
+// no_chain契約: 数えるのは格助詞の「の」だけで、「〜するのは」「〜なの」の準体助詞は含めない。
+#[test]
+fn no_chain_counts_only_case_marking_no() {
+    let morphology = Morphology::new().expect("initialize morphology");
+    for (text, expected) in [
+        ("上限の設定の検討の結果を報告する。", Some(1)),
+        ("私が見ているのは世相の上皮だけのことだ。", None),
+        ("それは結局のところ好みの問題なのだ。", None),
+    ] {
+        let report =
+            lint::analyze_reading_load(text, &morphology, Some("essay")).expect("analyze text");
+        assert_eq!(
+            report.stats.by_category.get("no_chain").copied(),
+            expected,
             "{text}"
         );
     }
@@ -1311,6 +1459,42 @@ fn antithesis_matches_aggregate_into_a_single_document_finding() {
     assert!(detail.contains("100%を超える"));
 }
 
+// 主題名詞の反復は題材そのものなので報告せず、接続詞・副詞・指示語と
+// 副詞可能の名詞で始まる反復だけを残す。
+#[test]
+fn repeated_leads_skip_noun_topics_but_keep_connective_leads() {
+    let (_dir, path) = draft(concat!(
+        "確認待ちが増えると、許容量を超えた分が増えます。確認待ちの数字を仕事を割り当てる人へ届けます。",
+        "確認待ちが少ない間は、提出の実績を見て割り当てが増えます。確認待ちの記録を更新した日を並べます。",
+        "確認待ちが残っている職場へ戻ります。ただ、これは仮説です。ただ、依頼は減りません。",
+        "ただ、確認は残ります。ただ、結果は遅れます。ただ、記録は残せます。\n",
+        "今回は晴れた。今回は歩いた。今回は迷った。今回は休んだ。今回は戻った。\n",
+    ));
+
+    let output = cargo_bin_cmd!("suiko")
+        .args([
+            "lint",
+            path.to_str().expect("UTF-8 path"),
+            "--genre",
+            "essay",
+            "--experimental",
+            "--json",
+        ])
+        .output()
+        .expect("run suiko lint");
+
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    let leads = json["findings"]
+        .as_array()
+        .expect("findings array")
+        .iter()
+        .filter(|finding| finding["category"] == "repeated_sentence_lead")
+        .map(|finding| finding["excerpt"].as_str().expect("excerpt"))
+        .collect::<Vec<_>>();
+    assert_eq!(leads, vec!["ただ、", "今回は"]);
+}
+
 #[test]
 fn repeated_leads_aggregate_per_key_and_flag_label_fields() {
     let glossary = (1..=6)
@@ -1425,6 +1609,50 @@ fn terms_ignore_tokenizer_noise_and_trim_middle_dots() {
         .map(|term| term["term"].as_str().expect("term"))
         .collect::<Vec<_>>();
     assert_eq!(terms, vec!["Rust", "API", "ルール"]);
+}
+
+#[test]
+fn terms_gloss_hint_accepts_conjugated_naming_verbs() {
+    for (text, term, expected) in [
+        (
+            "ある行動が結果を生み、その結果が次の行動の条件を変える循環を、**フィードバックループ**と呼びます。\n",
+            "フィードバックループ",
+            true,
+        ),
+        (
+            "ある時点でたまっている量を**ストック**と呼びます。ここでは未確認の資料の件数です。\n",
+            "ストック",
+            true,
+        ),
+        (
+            "ある時点でたまっている量をストックと呼ぶ。\n",
+            "ストック",
+            true,
+        ),
+        (
+            "入力と出力の比率をスループットと言います。\n",
+            "スループット",
+            true,
+        ),
+        (
+            "この値をスループットと名づけました。\n",
+            "スループット",
+            true,
+        ),
+        ("スループットを計測します。\n", "スループット", false),
+    ] {
+        let (_dir, path) = draft(text);
+
+        let output = cargo_bin_cmd!("suiko")
+            .args(["terms", path.to_str().expect("UTF-8 path"), "--json"])
+            .output()
+            .expect("run suiko terms");
+
+        assert!(output.status.success());
+        let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+        assert_eq!(json["terms"][0]["term"], term, "{text}");
+        assert_eq!(json["terms"][0]["has_gloss_hint"], expected, "{text}");
+    }
 }
 
 #[test]
@@ -2256,13 +2484,9 @@ fn reading_load_is_reported_in_a_separate_json_lane() {
     );
     let (_dir, path) = draft(&long_sentence);
 
+    // v0.3.10から読解負荷は既定で出力する。
     let output = cargo_bin_cmd!("suiko")
-        .args([
-            "lint",
-            path.to_str().expect("UTF-8 path"),
-            "--json",
-            "--reading-load",
-        ])
+        .args(["lint", path.to_str().expect("UTF-8 path"), "--json"])
         .output()
         .expect("run reading-load lane");
 
@@ -2275,11 +2499,45 @@ fn reading_load_is_reported_in_a_separate_json_lane() {
     );
 }
 
+// 読解負荷は自然度と分離したままなので、--fail-onの判定に含めない。
+// --no-reading-loadで出力から外し、互換の--reading-loadとは同時に指定できない。
+#[test]
+fn reading_load_can_be_disabled_and_never_affects_fail_on() {
+    let long_sentence = format!(
+        "{}。\n",
+        "この文には、分割すべき情報が含まれています".repeat(8)
+    );
+    let (_dir, path) = draft(&long_sentence);
+    let file = path.to_str().expect("UTF-8 path");
+
+    let output = cargo_bin_cmd!("suiko")
+        .args(["lint", file, "--json", "--fail-on", "info"])
+        .output()
+        .expect("run suiko lint");
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    assert_eq!(json["stats"]["total_findings"], 0);
+    assert_eq!(json["reading_load"]["stats"]["total"], 1);
+
+    let output = cargo_bin_cmd!("suiko")
+        .args(["lint", file, "--json", "--no-reading-load"])
+        .output()
+        .expect("run suiko lint without reading load");
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    assert!(json.get("reading_load").is_none());
+
+    cargo_bin_cmd!("suiko")
+        .args(["lint", file, "--reading-load", "--no-reading-load"])
+        .assert()
+        .code(2);
+}
+
 // no_comma_sentence契約: 読点ゼロの60字以上の日本語散文だけが対象で、読点
 // （、・，・,）を1つでも含む文、60字未満、Latin優勢の引用行・URL行は発火しない。
 #[test]
 fn no_comma_sentence_fires_only_on_long_japanese_prose_without_touten() {
-    let contents = "システムはリクエストを受信すると内部キューへ登録して即座に仮応答を返す非同期処理方式を採用しているため利用者の体感応答時間は常に一定です。読点を、1つ含む同じ長さの文はこの検出の対象にならず読解負荷レーンにも現れない仕組みになっています。\nhttps://medium.com/airbnb-engineering/listing-embeddings-for-similar-listing-recommendations-and-real-time-personalization\n";
+    let contents = "システムはリクエストを受信すると内部キューへ登録して即座に仮応答を返す非同期処理方式を採用しているため利用者の体感応答時間は常に一定です。読点を、1つ含む同じ長さの文はこの検出の対象にならず読解負荷レーンにも現れない仕組みになっています。\nhttps://medium.com/airbnb-engineering/listing-embeddings-for-similar-listing-recommendations-and-real-time-personalization\n未処理が増える → ツールでの処理を増やす → 受け方を見直す時間が減る → 新たに受ける件数が増えて確認がさらに遅れる\n**「わかる」（対象・目的・条件）＝ 関係をつかめる AND 条件に応じて判断できる AND 根拠に照らして見直せる**\n";
     let (_dir, path) = draft(contents);
 
     let output = cargo_bin_cmd!("suiko")
@@ -2565,5 +2823,26 @@ fn declared_item_count_mismatch_skips_matching_or_uncountable_lists() {
         "次の3点について\n\n- a\n- b\n",
     ] {
         assert!(item_count_findings(body, true).is_empty(), "{body}");
+    }
+}
+
+// 「まとめると」は話をまとめる前置きだけを指し、「まとめるとき」の一部は数えない。
+#[test]
+fn forbidden_summary_marker_ignores_matome_toki() {
+    let morphology = Morphology::new().expect("initialize morphology");
+    for (text, expected) in [
+        (
+            "AIで要望をまとめるときも、何の判断で困ったかという条件を落としません。\n",
+            0,
+        ),
+        ("まとめると、次の三点になります。\n", 1),
+    ] {
+        let report = lint::analyze(text, &morphology, Some("essay"), false).expect("analyze text");
+        let hits = report
+            .findings
+            .iter()
+            .filter(|finding| finding.category == "forbidden_phrase")
+            .count();
+        assert_eq!(hits, expected, "{text}");
     }
 }
