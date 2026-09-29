@@ -29,6 +29,7 @@ pub(crate) use word_rules::{WordRule, validate_word_rules, word_rule_findings};
 const EXPERIMENTAL_CATEGORIES: &[&str] = &[
     "consecutive_nominal_endings",
     "declared_item_count_mismatch",
+    "decision_direction_metaphor",
     "high_length_autocorrelation",
     "paragraph_lead_conjunction",
     "repeated_syntax_template",
@@ -44,6 +45,7 @@ const EXPERIMENTAL_CATEGORIES: &[&str] = &[
     "repeated_sentence_mode",
     "respectively_scope",
     "self_labeling_repetition",
+    "short_object_comma",
     "short_topic_comma",
     "technical_jargon_metaphor",
     "uniform_bullet_structure",
@@ -65,6 +67,7 @@ const RULE_CATEGORIES: &[&str] = &[
     "buried_question_list",
     "consecutive_nominal_endings",
     "custom_wording",
+    "decision_direction_metaphor",
     "declared_item_count_mismatch",
     "demonstrative_reference",
     "double_negative",
@@ -101,6 +104,7 @@ const RULE_CATEGORIES: &[&str] = &[
     "respectively_scope",
     "self_labeling_repetition",
     "sentence_too_long",
+    "short_object_comma",
     "short_topic_comma",
     "technical_jargon_metaphor",
     "translationese",
@@ -377,7 +381,8 @@ pub fn analyze_with_thresholds(
     ));
     findings.extend(morph::negative_listing_findings(&tokenized, &raw_lines));
     if experimental {
-        findings.extend(morph::short_topic_comma_findings(&tokenized, &raw_lines));
+        findings.extend(morph::short_phrase_comma_findings(&tokenized, &raw_lines));
+        findings.extend(morph::decision_direction_findings(&tokenized, &raw_lines));
     }
     if genre == Some("tech") {
         findings.extend(morph::technical_repetition_findings(

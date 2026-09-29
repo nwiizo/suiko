@@ -8,12 +8,12 @@ use sha2::{Digest, Sha256};
 
 // 決定的な検出を保つため、埋め込む辞書を1つのSHA-256へ固定する。
 // 辞書を更新する場合は版、URL、zipと展開後ファイルのSHA-256を同時に変更する。
-const DICT_NAME: &str = "SudachiDict 20260723 core (system_core.dic)";
-const DICT_SHA256: &str = "53fa281d11eef3769712fe1c3c892117338f9892bee6daf4dad51daa5281bb6f";
-const DICT_ZIP_SHA256: &str = "b6e835f63440f97474c2da45d80950f73746e632e40bbfc168b4041729135e1f";
-const DICT_ZIP_URL: &str =
-    "https://d2ej7fkh96fzlu.cloudfront.net/sudachidict/sudachi-dictionary-20260723-core.zip";
-const DICT_ZIP_ENTRY: &str = "system_core.dic";
+const DICT_NAME: &str = "SudachiDict 20260723.1 core V1 (system.dic)";
+const DICT_SHA256: &str = "b2d8c0c3ece5b5244c3db66c5be9e36dd1f7d73f6e7e6ce68c4ef2ee8640c95b";
+const DICT_ZIP_SHA256: &str = "2b711055dca03423869e491eca0ddbe3e17c4d7418ed738fd7c75d4e0eb9e4b1";
+// wheelはZIP形式。Pythonを実行せず、公式配布に含まれるV1辞書だけを取り出す。
+const DICT_ZIP_URL: &str = "https://files.pythonhosted.org/packages/85/af/ba8419f684865b8cca587e01cedb41ba83fbdc985d75ab9e6ff38fdedf1a/sudachidict_core-20260723.1-py3-none-any.whl";
+const DICT_ZIP_ENTRY: &str = "sudachidict_core/resources/system.dic";
 
 fn sha256_hex(bytes: &[u8]) -> String {
     let mut output = String::with_capacity(64);
@@ -42,7 +42,7 @@ fn verify(bytes: &[u8], origin: &str) {
     }
 }
 
-/// 公式配布のzipをSHA-256固定で取得し、system_core.dicをOUT_DIRへ展開する。
+/// 公式配布のwheelをSHA-256固定で取得し、system.dicをOUT_DIRへ展開する。
 /// これはビルド時の1回だけで、実行時のダウンロードは発生しない。
 fn download_dictionary(out_dir: &Path) -> PathBuf {
     let response = ureq::get(DICT_ZIP_URL)
@@ -66,7 +66,7 @@ fn download_dictionary(out_dir: &Path) -> PathBuf {
     let mut found = false;
     for index in 0..archive.len() {
         let mut entry = archive.by_index(index).expect("read zip entry");
-        if entry.name().ends_with(DICT_ZIP_ENTRY) {
+        if entry.name() == DICT_ZIP_ENTRY {
             entry
                 .read_to_end(&mut dictionary)
                 .expect("extract dictionary entry");

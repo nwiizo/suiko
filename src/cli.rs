@@ -23,15 +23,15 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    /// AI的な定型、翻訳調、単調な構造、読解負荷を検出する
+    /// 表現・反復・読解負荷を確認し、読み直す行と理由を示す
     Lint(LintArgs),
-    /// 見出し、段落の先頭文、箇条書きから文書構造を抽出する
+    /// 見出し・段落の先頭文・箇条書きで説明の順序を見直す
     Outline(FileArgs),
-    /// 専門用語候補と初出時の説明手掛かりを抽出する
+    /// 専門用語の初出説明と、複数ファイルの表記揺れを確認する
     Terms(TermsArgs),
     /// 一般名詞複合語、表記・レジスターの揺れを読み取り専用で監査する
     LexicalAudit(LexicalAuditArgs),
-    /// 中心命題、論証順序、用語、引用、注、Word/PDF納品を監査契約に照らして検証する
+    /// 学術稿の論証・引用・Word/PDFを、執筆者が記録した方針と照合する
     Academic(AcademicArgs),
 }
 
@@ -93,7 +93,7 @@ struct LexicalAuditArgs {
 struct AcademicArgs {
     /// 監査するMarkdown原稿
     source: PathBuf,
-    /// 中心命題、説明対象、用語来歴、章間接続、注分類を記したJSON契約
+    /// 中心命題、説明対象、用語来歴、章間接続、注分類を記したJSON方針ファイル
     #[arg(long)]
     contract: PathBuf,
     /// 同期とOOXML不変条件を確認するDOCX
@@ -102,7 +102,7 @@ struct AcademicArgs {
     /// Microsoft Wordから書き出した最終PDF
     #[arg(long)]
     pdf: Option<PathBuf>,
-    /// 成果物の設計権威となる公式DOCXテンプレート
+    /// 成果物の書式を照合する公式DOCXテンプレート
     #[arg(long, requires = "docx")]
     template: Option<PathBuf>,
     /// Word出力、PDF全頁目視、三成果物のSHA-256を記録したJSON
@@ -124,7 +124,7 @@ struct LintArgs {
     /// ジャンル別の校正済み閾値を適用する
     #[arg(long, value_enum)]
     genre: Option<Genre>,
-    /// 未校正または無反応の実験的検出器も有効にする。一部は --genre essay / tech の指定が必要
+    /// 文脈を読んで採否を決める追加の確認候補を表示する。一部は --genre essay / tech の指定が必要
     #[arg(long)]
     experimental: bool,
     /// 前回の JSON と比較して解消・新規・継続を分類する

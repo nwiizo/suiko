@@ -1,12 +1,12 @@
-# WorksApplications/sudachi.rs v0.6.11 の非公式crates.io再配布。
+# WorksApplications/sudachi.rs v0.7.0 の非公式crates.io再配布。
 # 上流が公式にcrates.ioへ公開した時点でそちらへ乗り換える。詳細はREADME.md。
 [package]
 name = "suiko-sudachi"
-version = "0.6.11"
+version = "0.7.0"
 authors = ["Works Applications <sudachi@worksap.co.jp>"]
 edition = "2021"
 rust-version = "1.74.1"
-description = "Unofficial crates.io redistribution of WorksApplications/sudachi.rs v0.6.11 (Japanese morphological analyzer) so that the suiko CLI can be installed from crates.io. Prefer the official crate once upstream publishes one."
+description = "Unofficial crates.io redistribution of WorksApplications/sudachi.rs v0.7.0 (Japanese morphological analyzer) so that the suiko CLI can be installed from crates.io. Prefer the official crate once upstream publishes one."
 readme = "README.md"
 homepage = "https://github.com/WorksApplications/sudachi.rs"
 repository = "https://github.com/nwiizo/suiko"
@@ -17,6 +17,7 @@ include = [
     "/src/**",
     "/resources/**",
     "/tests/resources/char.def",
+    "/tests/resources/system.dic.test",
     "/Cargo.toml",
     "/README.md",
     "/LICENSE",
@@ -37,6 +38,7 @@ fancy-regex = "0.13"
 indexmap = "2.2"
 itertools = "0.13"
 lazy_static = "1.4"
+libc = "0.2"
 libloading = "0.8"
 memmap2 = "0.9"
 nom = "7"

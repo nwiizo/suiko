@@ -59,7 +59,7 @@ impl Morphology {
         let config =
             Config::new_embedded().map_err(|error| Error::Morphology(error.to_string()))?;
         let data = SudachiDicData::new(Storage::Borrowed(SYSTEM_DICTIONARY));
-        let dictionary = JapaneseDictionary::from_cfg_storage_with_embedded_chardef(&config, data)
+        let dictionary = JapaneseDictionary::from_cfg_storage(&config, data)
             .map_err(|error| Error::Morphology(error.to_string()))?;
         Ok(Self {
             tokenizer: StatelessTokenizer::new(Arc::new(dictionary)),

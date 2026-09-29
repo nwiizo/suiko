@@ -48,6 +48,10 @@ thresholds; they are not probabilities that a document was written by AI.
 Morphological analysis uses sudachi.rs with the SudachiDict version pinned in
 `build.rs`. Changing the dictionary or tokenizer version can change these
 measurements; rerun `report`, `labeled`, and the sweeps after any change.
+Suiko v0.3.11 uses sudachi.rs v0.7.0 and SudachiDict 20260723.1 core in V1
+format, extracted from the official wheel without running Python. The
+2026-09-30 migration and the new revision hints are recorded in
+[`calibration.md`](calibration.md).
 
 ## Corpus acquisition (`sources.toml`)
 
@@ -155,9 +159,11 @@ the git history and it is committed as a stable file.
 cargo run --features evaluation --bin suiko-eval -- report eval/corpus.toml
 cargo run --features evaluation --bin suiko-eval -- labeled eval/corpus.toml
 cargo run --features evaluation --bin suiko-eval -- sweep eval/corpus.toml --rule low-lexical-diversity-ttr --values 0.35,0.40,0.42,0.45,0.47,0.50
+cargo run --features evaluation --bin suiko-eval -- sweep eval/corpus.toml --rule low-lexical-diversity-mtld --values 40,60,80,100,120
 cargo run --features evaluation --bin suiko-eval -- sweep eval/corpus.toml --rule repeated-sentence-lead --values 3,5,7,9,11,13,15
 cargo run --features evaluation --bin suiko-eval -- sweep eval/corpus.toml --rule low-specificity --values=-0.30,-0.25,-0.20,-0.15,-0.10,-0.05
 cargo run --features evaluation --bin suiko-eval -- sweep eval/corpus.toml --rule nominal-ending --values 0.0,0.02,0.05,0.10
 cargo run --features evaluation --bin suiko-eval -- sweep eval/corpus.toml --rule sentence-too-long --values 70,90,110,130
+cargo run --features evaluation --bin suiko-eval -- sweep eval/corpus.toml --rule long-attributive-span --values 25,30,35,40
 cargo run --features evaluation --bin suiko-eval -- length-analysis eval/corpus.toml
 ```

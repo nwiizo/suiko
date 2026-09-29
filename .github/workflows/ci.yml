@@ -21,7 +21,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: resources/system.dic
-          key: sudachidict-20260723-core-53fa281d11eef376
+          key: sudachidict-20260723.1-core-v1-b2d8c0c3ece5b524
       - name: Check formatting
         run: cargo +1.97 fmt --check
       - name: Run Clippy

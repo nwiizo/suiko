@@ -9,7 +9,7 @@ set -eu
 cd "$(dirname "$0")/.."
 
 PINNED_SUDACHI="$(grep '^version' crates/suiko-sudachi/Cargo.toml | head -1 | cut -d'"' -f2)"
-PINNED_DICT="$(sed -n 's/^const DICT_NAME: &str = "SudachiDict \([0-9][0-9]*\) core.*/\1/p' build.rs | head -1)"
+PINNED_DICT="$(sed -n 's/^const DICT_NAME: &str = "SudachiDict \([0-9][0-9.]*\) core.*/\1/p' build.rs | head -1)"
 
 github_api_jq() {
     endpoint="$1"

@@ -386,3 +386,57 @@ v0.3.10の候補版を、programmer-thinking-for-life（本編14章と連載14�
 ## 「の」連鎖を格助詞に限る（2026-09-24、v0.3.10）
 
 Natural Japaneseとの実行比較（[competitive-review-2026-09-24.md](competitive-review-2026-09-24.md)）で、Suikoだけが出す`no_chain`の17件は、「〜するのは」「〜なの」の準体助詞まで数えていたものだった。メッセージとカタログは「格助詞の『の』」と書いており、実装が一致していなかった。数える「の」を助詞・格助詞に限った。実文書99件で161件（人間50文書）から142件（人間47文書）になり、文書ごとの件数もNatural Japaneseと一致した。
+
+## 公開前の改稿支援とSudachi 0.7への移行（2026-09-30、v0.3.11）
+
+目的は、公開前に読み直す箇所を絞り、文脈から採否を判断して意味を保った改稿へ進めること。[「AI臭い文章とは何なのか」](https://speakerdeck.com/nasuvitz/ai-kusai-bunshou-toha-nanina-no-ka)の全17枚を確認し、具体例5件のうち、形態素列で範囲を指せる2種類を追加した。残る指示先・因果・省略された条件・対句の妥当性は決定的な判定へ含めず、[改稿の手順](../docs/revision-workflow.md)とAgent Skillで文脈を確認する。
+
+### 新しい確認候補
+
+どちらも全ジャンルの`--experimental`で使う`info`。自動修正は付けない。
+
+| category | 決定的に確認する形 | ラベル付き評価 |
+|---|---|---|
+| `short_object_comma` | 文頭の名詞・代名詞等だけの句＋格助詞「を」が5字以内で、直後に「、」があり、その先に内容語がある。動詞節・並列の助詞・長い句・引用・コードを除く。既存`short_topic_comma`と走査を共有する | fire 5/5（CI 0.566–1.000）、silent 0/10（CI 0.000–0.278） |
+| `decision_direction_metaphor` | 選択動詞＋任意の否定助動詞「ない」＋名詞「側」＋格助詞「に」＋動詞「倒す」。選択動詞は「残す・捨てる・除く・省く・見送る」か、「採用・許可・保存・実行・削除・追加」＋「する」。基本形で照合して丁寧体・過去形も拾う | fire 5/5（CI 0.566–1.000）、silent 0/10（CI 0.000–0.278） |
+
+`tests/slide_wording.rs`で修正前の見落としを再現してから実装した。実辞書による検出、原文のbyte/column位置、引用・コード等の除外、実験機能の無効時、ジャンル、個別許可・無効化、baseline、改稿後に2件が解消するCLI操作を検証する。
+
+`eval/labeled/short_object_comma/`と`eval/labeled/decision_side/`に各15件を追加し、manifestは194件/24カテゴリから224件/26カテゴリになった（SHA-256先頭: `c79aac964b10` → `c7ff8f31e816`）。新カテゴリはinfoの事前登録条件を満たす。既存194件の判定は同じで、`low-ttr-silent-002`（堕落論）の既知の不一致1件は残る。
+
+実文書99件（人間95・AI4、外部取得81件はlock一致、`--experimental`・各文書のgenre）では、`short_object_comma`は人間4文書で4件（tech 2、essay 1、business 1）、AI側0件。該当箇所は`hatena-tech-cohalz-cache-improvement:175`、`zenn-tech-kaityo256-save-the-earth:31`、`note-essay-kishidanami-a67433:271`、`biz-gov-soumu-dx-economic-impact-2021:10563`。短い名詞句の確認候補であって、4件とも読点を削るべきだという評価ではない。`decision_direction_metaphor`は実文書では0件で、実文書の検出率や有用性はまだ評価できない。
+
+資料の具体例5件を入力した場合、2件に局所的な指摘が付く。読点の指摘は、その文の主語の曖昧さまで解決したという意味ではない。無関係な例を連結した入力に出るリズム統計も、各例の意味を検証した根拠には数えない。今回のラベルは構文の検出・除外を固定するもので、改稿後の読みやすさや意味の保持を人が独立評価した成績ではない。
+
+### Sudachiと辞書
+
+[Issue #37](https://github.com/nwiizo/suiko/issues/37)では公式V1辞書の公開を待っていた。[SudachiDict v20260723.1](https://github.com/WorksApplications/SudachiDict/releases/tag/v20260723.1)（2026-09-24）のリリース本文は、PythonパッケージへV1対応を追加し、辞書内容は変えないと説明している。古い移行ガイドの「202610xx以降」という予定を、実際の公開物に照らして見直した。
+
+- 再配布: sudachi.rs v0.7.0、commit `5de0410b6edfd428fc510cc9763440772e9619d5`。上流ソースとの差は`config.rs`の埋め込みファイル相対パス4箇所だけ。crateの配置用メタデータと単体テストの必要資産を揃えた。
+- 辞書: 公式PyPIの`sudachidict_core-20260723.1-py3-none-any.whl`をZIPとして読む。`sudachidict_core/resources/system.dic`を取り出し、Pythonは実行しない。
+- 固定値: wheel SHA-256 `2b711055dca03423869e491eca0ddbe3e17c4d7418ed738fd7c75d4e0eb9e4b1`、辞書 SHA-256 `b2d8c0c3ece5b5244c3db66c5be9e36dd1f7d73f6e7e6ce68c4ef2ee8640c95b`。
+- 空の一時ディレクトリからビルドスクリプトの取得経路も実行し、展開後のハッシュがローカル配置した辞書と一致することを確認した。実行時は辞書を埋め込み、外部取得しない。
+
+検出器追加だけを適用したv0.6.11の中間測定とも比較し、解析器移行による件数差を分けた。99文書の既存カテゴリでは`no_chain`が142件から141件へ変わり、他は全カテゴリ・各genreで件数と率が一致した。差は寺田寅彦「映画雑感（一）」の95行にある「の句々の連珠の」1件。本文とルールは変えておらず、新解析器で検出されなくなった。件数減だけを診断品質の改善とは評価しない。
+
+### 再現と検証範囲
+
+```sh
+cargo +1.97 run --locked --features evaluation --bin suiko-eval -- report eval/corpus.toml --external --experimental
+cargo +1.97 run --locked --features evaluation --bin suiko-eval -- labeled eval/corpus.toml
+cargo +1.97 run --locked --features evaluation --bin suiko-eval -- sweep eval/corpus.toml --experimental --rule <rule> --values=<values>
+```
+
+最後のコマンドは以下の全7種・36候補値で移行前後に実行した。いずれも各候補値の件数・率・Wilson区間が一致し、閾値は変えていない。sweepは既存のdev 15文書だけで、外部コーパスを含めない。reportはdev 79＋holdout 20文書の観測で、holdoutに合わせた調整はしていない。
+
+| rule | values |
+|---|---|
+| `repeated-sentence-lead` | `3,5,7,9,11,13,15` |
+| `low-lexical-diversity-ttr` | `0.35,0.40,0.42,0.45,0.47,0.50` |
+| `low-lexical-diversity-mtld` | `40,60,80,100,120` |
+| `low-specificity` | `-0.30,-0.25,-0.20,-0.15,-0.10,-0.05` |
+| `nominal-ending` | `0.0,0.02,0.05,0.10` |
+| `sentence-too-long` | `70,90,110,130` |
+| `long-attributive-span` | `25,30,35,40` |
+
+Rust 1.97で`fmt --check`、`clippy --locked --all-targets --all-features -- -D warnings`、`test --locked --all-features --all-targets`（148テスト）が成功した。再配布crateの`cargo package --allow-dirty`は梱包・展開後のビルド検証まで成功。Suiko本体の同梱ファイル一覧に辞書のLEGAL/LICENSEがあることも確認した。公開先の依存解決は`suiko-sudachi 0.7.0`の公開後に確認する。公開やタグ作成はこの作業に含めていない。

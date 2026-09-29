@@ -4,21 +4,25 @@
 [![CI](https://github.com/nwiizo/suiko/actions/workflows/ci.yml/badge.svg)](https://github.com/nwiizo/suiko/actions/workflows/ci.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/nwiizo/suiko/blob/main/LICENSE)
 
-日本語文書の翻訳調、近接した反復、単調なリズム、読解負荷を診断するRust CLIです。Markdownやテキストから、推敲で読み直す箇所とその理由を返します。
+日本語文書を決定的に診断し、自然で明晰な推敲を支援するRust CLIです。公開・共有する原稿の翻訳調、近接した反復、単調なリズム、読解負荷を手掛かりに、読み直す行と理由を返します。
 
-診断はローカルで実行します。形態素辞書はバイナリに埋め込み、実行時の辞書・モデル取得はありません。原稿を書き換えず、指摘を採用するかは書き手やエージェントが文脈から判断します。AIが書いた確率や、文章の品質を表す総合スコアは出しません。
+診断はローカルで実行し、同じ入力・バージョン・設定には同じ結果を返します。形態素辞書はバイナリに埋め込み、実行時の辞書・モデル取得はありません。指摘を採用するかは書き手やエージェントが文脈から判断し、原稿を直します。CLIは原稿を書き換えません。AIが書いた確率や、文章の品質を表す総合スコアは出しません。
 
-## できること
+## 目的から選ぶ
 
-| コマンド | 読み直す作業 |
+| 進めたい作業 | コマンドと得られる手掛かり |
 |---|---|
-| `lint` | 翻訳調、定型表現、反復、リズム、段落構造と、長い文や埋もれた列挙などの読解負荷を確認する |
-| `outline` | 見出し・段落の先頭文・箇条書きから論旨を俯瞰する |
-| `terms` | 専門用語候補、初出時の説明、複数ファイルの表記揺れを確認する |
-| `lexical-audit` | 参照データを使って一般名詞複合語や語彙の揺れを確認する |
-| `academic` | 執筆者が記録した方針と論証・引用・提出用成果物を照合する |
+| 公開前に読み直す箇所を絞り、改稿後の変化を確かめたい | `lint`で行・抜粋・理由を確認し、`--baseline`で前回の指摘と比較する |
+| 説明の順序や結論の置き場所を見直したい | `outline`で見出し・段落の先頭文・箇条書きを俯瞰する |
+| 読者に必要な用語説明を確かめたい | `terms`で専門用語候補と初出付近の説明の手掛かりを確認する。`--audit`で複数ファイルの表記揺れを集計する |
+| チームの語彙・表現方針を原稿に反映したい | `lexical-audit`で参照データと照合し、`lint`の独自ルール・個別許可・CI出力でレビューを共有する |
+| 学術稿と提出ファイルの整合を確かめたい | `academic`で、記録した方針と論証・引用・DOCX/PDFを照合する |
+
+まず `suiko lint draft.md` で箇所を確認します。指摘ごとに原文と前後を読み、直すか、理由を付けて残すかを判断してください。書き手が説明したつもりでも、対象や条件が原稿にないことがあります。読み手が自分の経験で補わないと判断できない箇所を直し、事実や意図が保たれているかを通読して確かめます。[公開前の点検から改稿まで](https://github.com/nwiizo/suiko/blob/main/docs/revision-workflow.md)に、実行例と改稿時の判断をまとめています。
 
 ## インストール
+
+v0.3.11は公開準備中です。新機能を試す場合は、変更済みのソースからビルドしてください。以下のCargoとGitHub Releasesは公開済みのバージョンを導入します。
 
 ### Cargo
 
@@ -34,7 +38,7 @@ suiko --version
 Rustを入れずに使う場合は、[GitHub Releases](https://github.com/nwiizo/suiko/releases)から取得できます。macOS（Apple Silicon / Intel）、Linux（x86_64 / aarch64）、Windows（x86_64）に対応し、各アーカイブにSHA-256ファイルが付きます。
 
 ```sh
-# v0.3.10 / macOS（Apple Silicon）
+# v0.3.10 / macOS（Apple Silicon、公開済みのバージョン）
 curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.3.10/suiko-v0.3.10-aarch64-apple-darwin.tar.gz
 curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.3.10/suiko-v0.3.10-aarch64-apple-darwin.tar.gz.sha256
 shasum -a 256 -c suiko-v0.3.10-aarch64-apple-darwin.tar.gz.sha256
@@ -52,9 +56,9 @@ cd suiko
 cargo install --path . --locked
 ```
 
-ビルド時にSudachiDict 20260723 coreのzip（約69MB）を取得し、zipと辞書本体のSHA-256を検証して埋め込みます。辞書が約207MBあるため、バイナリは200MB台になります。検証済みの辞書を`resources/system.dic`に置くか、環境変数`SUIKO_SUDACHI_DICT`で指定すれば、ビルド時の辞書取得も省けます。オフラインビルドでは、Rust依存のキャッシュに加えて、この辞書の配置が必要です。
+ビルド時にSudachiDict 20260723.1 coreの公式wheel（ZIP形式、約77MB）を取得し、配布ファイルとV1形式の辞書本体のSHA-256を検証して埋め込みます。Pythonの実行は不要です。辞書が約202MBあるため、バイナリは200MB台になります。検証済みのV1辞書を`resources/system.dic`に置くか、環境変数`SUIKO_SUDACHI_DICT`で指定すれば、ビルド時の辞書取得も省けます。オフラインビルドでは、Rust依存のキャッシュに加えて、この辞書の配置が必要です。v0.3.10以前に使っていたV0辞書は使えません。
 
-形態素解析には[sudachi.rs](https://github.com/WorksApplications/sudachi.rs) v0.6.11を非公式に再配布した[suiko-sudachi](https://crates.io/crates/suiko-sudachi)を使います。再配布に関する説明は[同crateのREADME](https://github.com/nwiizo/suiko/blob/main/crates/suiko-sudachi/README.md)にあります。
+形態素解析には[sudachi.rs](https://github.com/WorksApplications/sudachi.rs) v0.7.0を非公式に再配布した[suiko-sudachi](https://crates.io/crates/suiko-sudachi)を使います。再配布に関する説明は[同crateのREADME](https://github.com/nwiizo/suiko/blob/main/crates/suiko-sudachi/README.md)にあります。
 
 ## lintで原稿を確認する
 
@@ -94,6 +98,8 @@ suiko lint draft.md --genre tech --experimental --json
 |---|---|
 | `self_labeling_repetition` | 評価語を含む「〜のは」型の主題提示が文書内に3回以上ある |
 | `short_topic_comma` | 文頭の5文字以内の名詞句＋「は」の直後に読点「、」がある。長い主題や動詞を含む節は除く |
+| `short_object_comma` | 文頭の5文字以内の名詞句＋格助詞「を」の直後に読点「、」がある。長い名詞句・動詞を含む節・引用内は除く |
+| `decision_direction_metaphor` | 全ジャンルで、選択する動作を「残さない側に倒す」「採用する側に倒す」等で表している。物理的な方向は除く |
 | `negative_listing` | 同じ段落で否定文が2文続き、形態素8個以下の肯定文へ続く |
 | `uniform_bullet_structure` | `essay`で、4項目以上の箇条書きの文末品詞がそろい、内容語数のばらつきが小さい |
 | `demonstrative_reference` | `tech`で、同じ文の前方に動詞が2個以上ある位置に「このこと」等がある |
@@ -104,6 +110,8 @@ suiko lint draft.md --genre tech --experimental --json
 | `repeated_sentence_mode` / `consecutive_nominal_endings` | 長さの近い明示的な文末や、短い体言止めが局所的に続く |
 
 `technical_jargon_metaphor`は、技術対象に続く「静かに壊れる」「黙って捨てる／無視する」「地味に効く」「安全側／保守側に倒す」と、「時間を溶かす」も対象にします。活用と近くの名詞・助詞を確認し、候補語の出現だけでは判定しません。
+
+v0.3.11の`decision_direction_metaphor`と`short_object_comma`は、技術文書に限らず`--experimental`で使えます。前者は選択の条件と実際の動作を、後者は名詞句と述語のつながりを確認するための指摘です。どちらも自動修正せず、説明済みの比喩や意図した間は残せます。
 
 通常の`abstract_metaphor`は、抽象的な対象を「地図」「土台」等の役割で表す用例を扱います。`--genre tech --experimental`では、「仕様は意図を実装へ運ぶ」のような抽象語の関係や、抽象的な「入口」「主役」等も加えます。比喩の追加分は、説明済みの内容や体験談にも一致するため、実験機能に留めています。
 

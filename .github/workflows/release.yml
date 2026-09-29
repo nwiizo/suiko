@@ -81,7 +81,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: resources/system.dic
-          key: sudachidict-20260723-core-53fa281d11eef376
+          key: sudachidict-20260723.1-core-v1-b2d8c0c3ece5b524
       - name: Build
         if: steps.assets.outputs.complete != 'true'
         run: cargo +1.97 build --release --locked --target ${{ matrix.target }}
@@ -95,6 +95,7 @@ jobs:
           mkdir "${NAME}"
           cp "target/${TARGET}/release/suiko" "${NAME}/"
           cp README.md LICENSE THIRD_PARTY_NOTICES.md CHANGELOG.md "${NAME}/"
+          cp -R data/sudachidict "${NAME}/sudachidict"
           tar czf "${NAME}.tar.gz" "${NAME}"
           if command -v sha256sum >/dev/null 2>&1; then
             sha256sum "${NAME}.tar.gz" > "${NAME}.tar.gz.sha256"
@@ -111,6 +112,7 @@ jobs:
           New-Item -ItemType Directory -Path $name | Out-Null
           Copy-Item "target/$env:TARGET/release/suiko.exe" $name/
           Copy-Item README.md,LICENSE,THIRD_PARTY_NOTICES.md,CHANGELOG.md $name/
+          Copy-Item -Recurse data/sudachidict "$name/sudachidict"
           Compress-Archive -Path $name -DestinationPath "$name.zip"
           (Get-FileHash "$name.zip" -Algorithm SHA256).Hash.ToLower() + "  $name.zip" | Set-Content "$name.zip.sha256"
       - name: Upload to release

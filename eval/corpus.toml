@@ -1602,3 +1602,243 @@ path = "labeled/buried_list/silent-010.md"
 category = "buried_list"
 expect = "silent"
 note = "地名の一語の並び"
+
+[[sample]]
+id = "short-object-comma-fire-001"
+path = "labeled/short_object_comma/fire-001.md"
+category = "short_object_comma"
+expect = "fire"
+genre = "tech"
+note = "スライド11の短い名詞句＋格助詞を"
+
+[[sample]]
+id = "short-object-comma-fire-002"
+path = "labeled/short_object_comma/fire-002.md"
+category = "short_object_comma"
+expect = "fire"
+genre = "tech"
+note = "短い名詞句と述語の間"
+
+[[sample]]
+id = "short-object-comma-fire-003"
+path = "labeled/short_object_comma/fire-003.md"
+category = "short_object_comma"
+expect = "fire"
+genre = "tech"
+note = "連体詞付きの短い名詞句"
+
+[[sample]]
+id = "short-object-comma-fire-004"
+path = "labeled/short_object_comma/fire-004.md"
+category = "short_object_comma"
+expect = "fire"
+genre = "tech"
+note = "複合名詞を含めて5字以内"
+
+[[sample]]
+id = "short-object-comma-fire-005"
+path = "labeled/short_object_comma/fire-005.md"
+category = "short_object_comma"
+expect = "fire"
+genre = "tech"
+note = "述語の前に別の名詞句"
+
+[[sample]]
+id = "short-object-comma-silent-001"
+path = "labeled/short_object_comma/silent-001.md"
+category = "short_object_comma"
+expect = "silent"
+genre = "tech"
+note = "5字を超える名詞句"
+
+[[sample]]
+id = "short-object-comma-silent-002"
+path = "labeled/short_object_comma/silent-002.md"
+category = "short_object_comma"
+expect = "silent"
+genre = "tech"
+note = "名詞化した動詞節"
+
+[[sample]]
+id = "short-object-comma-silent-003"
+path = "labeled/short_object_comma/silent-003.md"
+category = "short_object_comma"
+expect = "silent"
+genre = "tech"
+note = "主語を含む名詞節"
+
+[[sample]]
+id = "short-object-comma-silent-004"
+path = "labeled/short_object_comma/silent-004.md"
+category = "short_object_comma"
+expect = "silent"
+genre = "tech"
+note = "並列の名詞句"
+
+[[sample]]
+id = "short-object-comma-silent-005"
+path = "labeled/short_object_comma/silent-005.md"
+category = "short_object_comma"
+expect = "silent"
+genre = "tech"
+note = "読点がない"
+
+[[sample]]
+id = "short-object-comma-silent-006"
+path = "labeled/short_object_comma/silent-006.md"
+category = "short_object_comma"
+expect = "silent"
+genre = "tech"
+note = "後続する内容語がない"
+
+[[sample]]
+id = "short-object-comma-silent-007"
+path = "labeled/short_object_comma/silent-007.md"
+category = "short_object_comma"
+expect = "silent"
+genre = "tech"
+note = "引用内の読点"
+
+[[sample]]
+id = "short-object-comma-silent-008"
+path = "labeled/short_object_comma/silent-008.md"
+category = "short_object_comma"
+expect = "silent"
+genre = "tech"
+note = "インラインコードをまたがない"
+
+[[sample]]
+id = "short-object-comma-silent-009"
+path = "labeled/short_object_comma/silent-009.md"
+category = "short_object_comma"
+expect = "silent"
+genre = "tech"
+note = "引用ブロック"
+
+[[sample]]
+id = "short-object-comma-silent-010"
+path = "labeled/short_object_comma/silent-010.md"
+category = "short_object_comma"
+expect = "silent"
+genre = "tech"
+note = "コードブロック"
+
+[[sample]]
+id = "decision-side-fire-001"
+path = "labeled/decision_side/fire-001.md"
+category = "decision_direction_metaphor"
+expect = "fire"
+genre = "tech"
+note = "スライド8の否定動詞と側に倒す"
+
+[[sample]]
+id = "decision-side-fire-002"
+path = "labeled/decision_side/fire-002.md"
+category = "decision_direction_metaphor"
+expect = "fire"
+genre = "tech"
+note = "サ変動詞の否定と過去形"
+
+[[sample]]
+id = "decision-side-fire-003"
+path = "labeled/decision_side/fire-003.md"
+category = "decision_direction_metaphor"
+expect = "fire"
+genre = "tech"
+note = "許可の判断"
+
+[[sample]]
+id = "decision-side-fire-004"
+path = "labeled/decision_side/fire-004.md"
+category = "decision_direction_metaphor"
+expect = "fire"
+genre = "tech"
+note = "肯定の動作選択と継続形"
+
+[[sample]]
+id = "decision-side-fire-005"
+path = "labeled/decision_side/fire-005.md"
+category = "decision_direction_metaphor"
+expect = "fire"
+genre = "tech"
+note = "保存の判断と丁寧過去形"
+
+[[sample]]
+id = "decision-side-silent-001"
+path = "labeled/decision_side/silent-001.md"
+category = "decision_direction_metaphor"
+expect = "silent"
+genre = "tech"
+note = "物理的な方向"
+
+[[sample]]
+id = "decision-side-silent-002"
+path = "labeled/decision_side/silent-002.md"
+category = "decision_direction_metaphor"
+expect = "silent"
+genre = "tech"
+note = "人のいない場所"
+
+[[sample]]
+id = "decision-side-silent-003"
+path = "labeled/decision_side/silent-003.md"
+category = "decision_direction_metaphor"
+expect = "silent"
+genre = "tech"
+note = "物理的な状態"
+
+[[sample]]
+id = "decision-side-silent-004"
+path = "labeled/decision_side/silent-004.md"
+category = "decision_direction_metaphor"
+expect = "silent"
+genre = "tech"
+note = "別の節の技術対象を持ち越さない"
+
+[[sample]]
+id = "decision-side-silent-005"
+path = "labeled/decision_side/silent-005.md"
+category = "decision_direction_metaphor"
+expect = "silent"
+genre = "tech"
+note = "倒す以外の動詞"
+
+[[sample]]
+id = "decision-side-silent-006"
+path = "labeled/decision_side/silent-006.md"
+category = "decision_direction_metaphor"
+expect = "silent"
+genre = "tech"
+note = "直前の修飾と隣接していない"
+
+[[sample]]
+id = "decision-side-silent-007"
+path = "labeled/decision_side/silent-007.md"
+category = "decision_direction_metaphor"
+expect = "silent"
+genre = "tech"
+note = "選択する動作を直接書く"
+
+[[sample]]
+id = "decision-side-silent-008"
+path = "labeled/decision_side/silent-008.md"
+category = "decision_direction_metaphor"
+expect = "silent"
+genre = "tech"
+note = "引用ブロック"
+
+[[sample]]
+id = "decision-side-silent-009"
+path = "labeled/decision_side/silent-009.md"
+category = "decision_direction_metaphor"
+expect = "silent"
+genre = "tech"
+note = "インラインコード"
+
+[[sample]]
+id = "decision-side-silent-010"
+path = "labeled/decision_side/silent-010.md"
+category = "decision_direction_metaphor"
+expect = "silent"
+genre = "tech"
+note = "コードブロック"

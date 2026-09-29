@@ -1,6 +1,6 @@
 [package]
 name = "suiko"
-version = "0.3.10"
+version = "0.3.11"
 default-run = "suiko"
 edition = "2024"
 rust-version = "1.97"
@@ -45,9 +45,9 @@ regex = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.11"
-# WorksApplications/sudachi.rs v0.6.11の非公式再配布(crates/suiko-sudachi)。
+# WorksApplications/sudachi.rs v0.7.0の非公式再配布(crates/suiko-sudachi)。
 # 上流が公式にcrates.ioへ公開したら sudachi = "..." へ戻す。
-sudachi = { package = "suiko-sudachi", version = "0.6.11", path = "crates/suiko-sudachi" }
+sudachi = { package = "suiko-sudachi", version = "0.7.0", path = "crates/suiko-sudachi" }
 thiserror = "2"
 toml = "1.1"
 ureq = { version = "3", optional = true }

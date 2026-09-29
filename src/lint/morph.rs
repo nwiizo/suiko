@@ -201,7 +201,7 @@ pub(super) fn significant_tokens(tokens: &[Morpheme]) -> &[Morpheme] {
     &tokens[start..]
 }
 
-pub(super) fn short_topic_comma_findings(
+pub(super) fn short_phrase_comma_findings(
     tokenized: &[TokenizedSentence],
     raw_lines: &[&str],
 ) -> Vec<Finding> {
@@ -211,17 +211,26 @@ pub(super) fn short_topic_comma_findings(
         let Some(comma_index) = tokens.iter().position(|token| token.surface == "、") else {
             continue;
         };
-        // nwiizo-coding-style: 5文字以内の名詞句＋係助詞「は」に限定する;
-        // 節やほかの読点へ広げる場合は、必要な区切りを残す評価例を先に追加する。
+        // nwiizo-coding-style: 5文字以内の名詞句＋「は／を」に限定する;
+        // 必要な間かどうかは判断せず、節や引用内の読点は対象にしない。
         if comma_index < 2 {
             continue;
         }
         let comma = &tokens[comma_index];
-        let topic = &tokens[comma_index - 1];
+        let particle = &tokens[comma_index - 1];
+        let (category, detail) = match (particle.surface.as_str(), particle.pos(1)) {
+            ("は", "係助詞") => (
+                "short_topic_comma",
+                "短い主題の直後に読点があります。区切りが読みやすさや意図した間に必要か確認してください。必要な読点は残せます。",
+            ),
+            ("を", "格助詞") => (
+                "short_object_comma",
+                "短い名詞句＋「を」の直後に読点があります。後続の述語とのつながりを確認してください。強調や読みやすさに必要な読点は残せます。",
+            ),
+            _ => continue,
+        };
         let prefix = &sentence.text[..comma.byte_start];
-        if topic.surface != "は"
-            || topic.pos(0) != "助詞"
-            || topic.pos(1) != "係助詞"
+        if particle.pos(0) != "助詞"
             || prefix.chars().count() > 5
             || !tokens[..comma_index - 1].iter().all(|token| {
                 matches!(
@@ -241,8 +250,8 @@ pub(super) fn short_topic_comma_findings(
         let mut finding = sentence.info_finding(
             raw_lines,
             comma.byte_start..comma.byte_end,
-            "short_topic_comma",
-            "短い主題の直後に読点があります。区切りが読みやすさや意図した間に必要か確認してください。必要な読点は残せます。",
+            category,
+            detail,
         );
         finding.excerpt = sentence.excerpt(0, comma.byte_end);
         findings.push(finding);
@@ -1443,6 +1452,65 @@ fn technical_wording_start(
         }
     }
     Some((start, detail))
+}
+
+/// 選択の説明は技術文書に限らないため、ジャンルを問わず確認候補にする。
+pub(super) fn decision_direction_findings(
+    tokenized: &[TokenizedSentence],
+    raw_lines: &[&str],
+) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    for (sentence, index, token) in token_positions(tokenized) {
+        if token.pos(0) == "動詞"
+            && token.dictionary_form() == "倒す"
+            && let Some(start) = decision_side_start(&sentence.tokens, index)
+        {
+            findings.push(sentence.info_finding(
+                raw_lines,
+                start..token.byte_end,
+                "decision_direction_metaphor",
+                "採否や処理の選択を「側に倒す」で表しています。何を残す・除外する・許可するのか、条件と動作を直接書けるか確認してください。選択内容が前後で明らかなら残せます。",
+            ));
+        }
+    }
+    findings
+}
+
+/// 選択する動作＋（否定）＋側に倒す。物理的な方向や場所を指す節は拾わない。
+fn decision_side_start(tokens: &[Morpheme], index: usize) -> Option<usize> {
+    let side = index.checked_sub(2)?;
+    if tokens[side].surface != "側"
+        || tokens[side].pos(0) != "名詞"
+        || tokens[side + 1].surface != "に"
+        || tokens[side + 1].pos(1) != "格助詞"
+    {
+        return None;
+    }
+    let mut action = side.checked_sub(1)?;
+    if tokens[action].pos(0) == "助動詞" && tokens[action].dictionary_form() == "ない" {
+        action = action.checked_sub(1)?;
+    }
+    let verb = &tokens[action];
+    if verb.pos(0) != "動詞" {
+        return None;
+    }
+    let start = match verb.dictionary_form() {
+        "残す" | "捨てる" | "除く" | "省く" | "見送る" => action,
+        "する" => {
+            let noun = action.checked_sub(1)?;
+            if tokens[noun].pos(0) != "名詞"
+                || !matches!(
+                    tokens[noun].dictionary_form(),
+                    "採用" | "許可" | "保存" | "実行" | "削除" | "追加"
+                )
+            {
+                return None;
+            }
+            noun
+        }
+        _ => return None,
+    };
+    Some(tokens[start].byte_start)
 }
 
 /// 同じ節の5文以内に3回現れる型を集約し、離れた説明の累積を避ける。

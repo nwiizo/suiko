@@ -33,7 +33,7 @@ exact dependency graph.
 ## sudachi.rs and SudachiDict
 
 Morphological analysis uses [sudachi.rs](https://github.com/WorksApplications/sudachi.rs)
-(v0.6.11, Apache License 2.0). Because upstream is not published on crates.io,
+(v0.7.0, Apache License 2.0). Because upstream is not published on crates.io,
 this repository redistributes it unmodified (apart from resource include paths)
 as the [suiko-sudachi](https://crates.io/crates/suiko-sudachi) crate under the
 Apache License 2.0, with the upstream LICENSE and provenance recorded in
@@ -42,18 +42,24 @@ favor of the official crate once upstream publishes one.
 
 The binary embeds the SudachiDict system dictionary at build time:
 
-- dictionary: SudachiDict 20260723 `core` (`system_core.dic`)
+- dictionary: SudachiDict 20260723.1 `core`, V1 format (`system.dic`)
 - source: https://github.com/WorksApplications/SudachiDict
-  (distribution zip `sudachi-dictionary-20260723-core.zip`)
+  (official PyPI wheel `sudachidict_core-20260723.1-py3-none-any.whl`,
+  extracted as ZIP without running Python; lexicon contents unchanged from 20260723)
 - license: Apache License 2.0
-- SHA-256 (`system_core.dic`):
-  `53fa281d11eef3769712fe1c3c892117338f9892bee6daf4dad51daa5281bb6f`
+- SHA-256 (wheel):
+  `2b711055dca03423869e491eca0ddbe3e17c4d7418ed738fd7c75d4e0eb9e4b1`
+- SHA-256 (`system.dic`):
+  `b2d8c0c3ece5b5244c3db66c5be9e36dd1f7d73f6e7e6ce68c4ef2ee8640c95b`
 
 SudachiDict's LEGAL notice states that parts of its lexicon and connection
 matrix derive from UniDic (Copyright (c) 2011-2013, The UniDic Consortium),
-distributed under a BSD-style license. The full notices ship inside the
-dictionary distribution zip (`LEGAL`, `LICENSE-2.0.txt`); the dictionary is
-fetched and verified by `build.rs`.
+distributed under a BSD-style license. Other entries derive from NEologd.
+The full upstream notices (`LEGAL` from the SudachiDict v20260723.1 tag and
+`LICENSE-2.0.txt` from the wheel) are included in `data/sudachidict/` in the
+source crate and `sudachidict/` in binary release archives. The wheel does not
+include `LEGAL`, so it is retained separately. The dictionary is fetched and
+verified by `build.rs`.
 
 ## AI-generated evaluation documents
 
