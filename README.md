@@ -22,8 +22,6 @@
 
 ## インストール
 
-v0.3.11は公開準備中です。新機能を試す場合は、変更済みのソースからビルドしてください。以下のCargoとGitHub Releasesは公開済みのバージョンを導入します。
-
 ### Cargo
 
 Rust 1.97以降が必要です。
@@ -38,12 +36,12 @@ suiko --version
 Rustを入れずに使う場合は、[GitHub Releases](https://github.com/nwiizo/suiko/releases)から取得できます。macOS（Apple Silicon / Intel）、Linux（x86_64 / aarch64）、Windows（x86_64）に対応し、各アーカイブにSHA-256ファイルが付きます。
 
 ```sh
-# v0.3.10 / macOS（Apple Silicon、公開済みのバージョン）
-curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.3.10/suiko-v0.3.10-aarch64-apple-darwin.tar.gz
-curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.3.10/suiko-v0.3.10-aarch64-apple-darwin.tar.gz.sha256
-shasum -a 256 -c suiko-v0.3.10-aarch64-apple-darwin.tar.gz.sha256
-tar xzf suiko-v0.3.10-aarch64-apple-darwin.tar.gz
-./suiko-v0.3.10-aarch64-apple-darwin/suiko --version
+# v0.3.11 / macOS（Apple Silicon）
+curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.3.11/suiko-v0.3.11-aarch64-apple-darwin.tar.gz
+curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.3.11/suiko-v0.3.11-aarch64-apple-darwin.tar.gz.sha256
+shasum -a 256 -c suiko-v0.3.11-aarch64-apple-darwin.tar.gz.sha256
+tar xzf suiko-v0.3.11-aarch64-apple-darwin.tar.gz
+./suiko-v0.3.11-aarch64-apple-darwin/suiko --version
 ```
 
 以降の例で`suiko`として実行するには、展開した実行ファイルをPATHの通ったディレクトリへ配置してください。
