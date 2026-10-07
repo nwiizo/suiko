@@ -1842,3 +1842,331 @@ category = "decision_direction_metaphor"
 expect = "silent"
 genre = "tech"
 note = "コードブロック"
+
+[[sample]]
+id = "technical-jargon-metaphor-fire-007"
+path = "labeled/technical_jargon_metaphor/fire-007.md"
+category = "technical_jargon_metaphor"
+expect = "fire"
+genre = "tech"
+note = "技術対象の受身と黙ってスキップ"
+
+[[sample]]
+id = "technical-jargon-metaphor-fire-008"
+path = "labeled/technical_jargon_metaphor/fire-008.md"
+category = "technical_jargon_metaphor"
+expect = "fire"
+genre = "tech"
+note = "静かに失われるの丁寧体"
+
+[[sample]]
+id = "technical-jargon-metaphor-fire-009"
+path = "labeled/technical_jargon_metaphor/fire-009.md"
+category = "technical_jargon_metaphor"
+expect = "fire"
+genre = "tech"
+note = "主語を後置して効果を予告する分裂文"
+
+[[sample]]
+id = "technical-jargon-metaphor-fire-010"
+path = "labeled/technical_jargon_metaphor/fire-010.md"
+category = "technical_jargon_metaphor"
+expect = "fire"
+genre = "tech"
+note = "不具合と数量・ずつを挟む潰す"
+
+[[sample]]
+id = "technical-jargon-metaphor-fire-011"
+path = "labeled/technical_jargon_metaphor/fire-011.md"
+category = "technical_jargon_metaphor"
+expect = "fire"
+genre = "tech"
+note = "複合名詞の主要部が不具合語"
+
+[[sample]]
+id = "technical-jargon-metaphor-silent-009"
+path = "labeled/technical_jargon_metaphor/silent-009.md"
+category = "technical_jargon_metaphor"
+expect = "silent"
+genre = "tech"
+note = "同じ節に主語がある本来の効く"
+
+[[sample]]
+id = "technical-jargon-metaphor-silent-010"
+path = "labeled/technical_jargon_metaphor/silent-010.md"
+category = "technical_jargon_metaphor"
+expect = "silent"
+genre = "tech"
+note = "時間を潰す慣用句"
+
+[[sample]]
+id = "technical-jargon-metaphor-silent-011"
+path = "labeled/technical_jargon_metaphor/silent-011.md"
+category = "technical_jargon_metaphor"
+expect = "silent"
+genre = "tech"
+note = "物理的に潰す"
+
+[[sample]]
+id = "technical-jargon-metaphor-silent-012"
+path = "labeled/technical_jargon_metaphor/silent-012.md"
+category = "technical_jargon_metaphor"
+expect = "silent"
+genre = "tech"
+note = "主要部が不具合語でない複合名詞"
+
+[[sample]]
+id = "technical-jargon-metaphor-silent-013"
+path = "labeled/technical_jargon_metaphor/silent-013.md"
+category = "technical_jargon_metaphor"
+expect = "silent"
+genre = "tech"
+note = "人物の動作としての黙って消える"
+
+[[sample]]
+id = "technical-jargon-metaphor-silent-014"
+path = "labeled/technical_jargon_metaphor/silent-014.md"
+category = "technical_jargon_metaphor"
+expect = "silent"
+genre = "tech"
+note = "通知の有無を書いた言い換え"
+
+[[sample]]
+id = "vague-sensory-fire-001"
+path = "labeled/vague_sensory_term/fire-001.md"
+category = "vague_sensory_term"
+expect = "fire"
+genre = "business"
+note = "理解の程度を解像度と上げるで表す"
+
+[[sample]]
+id = "vague-sensory-fire-002"
+path = "labeled/vague_sensory_term/fire-002.md"
+category = "vague_sensory_term"
+expect = "fire"
+genre = "business"
+note = "解像度が高いの過去形"
+
+[[sample]]
+id = "vague-sensory-fire-003"
+path = "labeled/vague_sensory_term/fire-003.md"
+category = "vague_sensory_term"
+expect = "fire"
+genre = "essay"
+note = "腹＋落ちに分かれる腹落ちとする"
+
+[[sample]]
+id = "vague-sensory-fire-004"
+path = "labeled/vague_sensory_term/fire-004.md"
+category = "vague_sensory_term"
+expect = "fire"
+genre = "business"
+note = "根拠を肌感覚＋ではで示す"
+
+[[sample]]
+id = "vague-sensory-fire-005"
+path = "labeled/vague_sensory_term/fire-005.md"
+category = "vague_sensory_term"
+expect = "fire"
+genre = "business"
+note = "関心の程度を温度感と述語で表す"
+
+[[sample]]
+id = "vague-sensory-silent-001"
+path = "labeled/vague_sensory_term/silent-001.md"
+category = "vague_sensory_term"
+expect = "silent"
+genre = "tech"
+note = "画面の解像度"
+
+[[sample]]
+id = "vague-sensory-silent-002"
+path = "labeled/vague_sensory_term/silent-002.md"
+category = "vague_sensory_term"
+expect = "silent"
+genre = "tech"
+note = "数値付きの解像度"
+
+[[sample]]
+id = "vague-sensory-silent-003"
+path = "labeled/vague_sensory_term/silent-003.md"
+category = "vague_sensory_term"
+expect = "silent"
+genre = "tech"
+note = "述語を伴わない解像度"
+
+[[sample]]
+id = "vague-sensory-silent-004"
+path = "labeled/vague_sensory_term/silent-004.md"
+category = "vague_sensory_term"
+expect = "silent"
+genre = "essay"
+note = "肌の感覚という本来の意味"
+
+[[sample]]
+id = "vague-sensory-silent-005"
+path = "labeled/vague_sensory_term/silent-005.md"
+category = "vague_sensory_term"
+expect = "silent"
+genre = "essay"
+note = "根拠の標識がない肌感覚"
+
+[[sample]]
+id = "vague-sensory-silent-006"
+path = "labeled/vague_sensory_term/silent-006.md"
+category = "vague_sensory_term"
+expect = "silent"
+genre = "essay"
+note = "腹の本来の用法"
+
+[[sample]]
+id = "vague-sensory-silent-007"
+path = "labeled/vague_sensory_term/silent-007.md"
+category = "vague_sensory_term"
+expect = "silent"
+genre = "tech"
+note = "温度という物理量"
+
+[[sample]]
+id = "vague-sensory-silent-008"
+path = "labeled/vague_sensory_term/silent-008.md"
+category = "vague_sensory_term"
+expect = "silent"
+genre = "business"
+note = "語を説明の対象として挙げる"
+
+[[sample]]
+id = "vague-sensory-silent-009"
+path = "labeled/vague_sensory_term/silent-009.md"
+category = "vague_sensory_term"
+expect = "silent"
+genre = "business"
+note = "引用"
+
+[[sample]]
+id = "vague-sensory-silent-010"
+path = "labeled/vague_sensory_term/silent-010.md"
+category = "vague_sensory_term"
+expect = "silent"
+genre = "business"
+note = "インラインコード"
+
+[[sample]]
+id = "copy-fragment-fire-001"
+path = "labeled/copy_fragment/fire-001.md"
+category = "copy_fragment"
+expect = "fire"
+genre = "business"
+note = "格助詞へで終える惹句"
+
+[[sample]]
+id = "copy-fragment-fire-002"
+path = "labeled/copy_fragment/fire-002.md"
+category = "copy_fragment"
+expect = "fire"
+genre = "business"
+note = "形状詞＋にで終える惹句"
+
+[[sample]]
+id = "copy-fragment-fire-003"
+path = "labeled/copy_fragment/fire-003.md"
+category = "copy_fragment"
+expect = "fire"
+genre = "tech"
+note = "コピュラのでで終える惹句"
+
+[[sample]]
+id = "copy-fragment-fire-004"
+path = "labeled/copy_fragment/fire-004.md"
+category = "copy_fragment"
+expect = "fire"
+genre = "business"
+note = "係助詞はと格助詞からの惹句"
+
+[[sample]]
+id = "copy-fragment-fire-005"
+path = "labeled/copy_fragment/fire-005.md"
+category = "copy_fragment"
+expect = "fire"
+genre = "tech"
+note = "本文中の惹句"
+
+[[sample]]
+id = "copy-fragment-silent-001"
+path = "labeled/copy_fragment/silent-001.md"
+category = "copy_fragment"
+expect = "silent"
+genre = "essay"
+note = "応答の感動詞"
+
+[[sample]]
+id = "copy-fragment-silent-002"
+path = "labeled/copy_fragment/silent-002.md"
+category = "copy_fragment"
+expect = "silent"
+genre = "essay"
+note = "読点のない短い応答"
+
+[[sample]]
+id = "copy-fragment-silent-003"
+path = "labeled/copy_fragment/silent-003.md"
+category = "copy_fragment"
+expect = "silent"
+genre = "business"
+note = "述語まで書いた文"
+
+[[sample]]
+id = "copy-fragment-silent-004"
+path = "labeled/copy_fragment/silent-004.md"
+category = "copy_fragment"
+expect = "silent"
+genre = "business"
+note = "過去形の述語"
+
+[[sample]]
+id = "copy-fragment-silent-005"
+path = "labeled/copy_fragment/silent-005.md"
+category = "copy_fragment"
+expect = "silent"
+genre = "business"
+note = "形状詞にサ変動詞が続く"
+
+[[sample]]
+id = "copy-fragment-silent-006"
+path = "labeled/copy_fragment/silent-006.md"
+category = "copy_fragment"
+expect = "silent"
+genre = "business"
+note = "読点のない惹句"
+
+[[sample]]
+id = "copy-fragment-silent-007"
+path = "labeled/copy_fragment/silent-007.md"
+category = "copy_fragment"
+expect = "silent"
+genre = "business"
+note = "読点の前が長い句"
+
+[[sample]]
+id = "copy-fragment-silent-008"
+path = "labeled/copy_fragment/silent-008.md"
+category = "copy_fragment"
+expect = "silent"
+genre = "business"
+note = "見出し"
+
+[[sample]]
+id = "copy-fragment-silent-009"
+path = "labeled/copy_fragment/silent-009.md"
+category = "copy_fragment"
+expect = "silent"
+genre = "business"
+note = "引用"
+
+[[sample]]
+id = "copy-fragment-silent-010"
+path = "labeled/copy_fragment/silent-010.md"
+category = "copy_fragment"
+expect = "silent"
+genre = "business"
+note = "疑問符で終わる"

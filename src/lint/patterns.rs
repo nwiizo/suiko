@@ -1,7 +1,7 @@
 //! 表層（文字列・正規表現）ベースの検出器。行単位でmasked本文を走査し、
 //! 抜粋とspanはbyteレイアウトが同一のraw行から作る。
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use regex::Regex;
 use serde_json::{Value, json};
@@ -185,6 +185,127 @@ pub(super) fn forbidden_findings(masked: &str, raw: &str) -> Vec<Finding> {
         }
     }
     findings
+}
+
+/// 同じ語の左右を別々に比較し、媒体による空白の方針を決めつけない。
+pub(super) fn mixed_latin_spacing_findings(masked: &str, raw_lines: &[&str]) -> Vec<Finding> {
+    struct Occurrence {
+        line: usize,
+        start: usize,
+        end: usize,
+        spacing: [Option<bool>; 2],
+    }
+
+    // URL・パス等を一まとまりで取り出し、途中の英単語だけを比較しない。
+    let word = Regex::new(r"[A-Za-z0-9_./:@%+?#=$~\-]+").expect("valid Latin-word regex");
+    let japanese = Regex::new(r"^[\p{Hiragana}\p{Katakana}\p{Han}ー]$")
+        .expect("valid Japanese-character regex");
+    let mut words = BTreeMap::<&str, Vec<Occurrence>>::new();
+    for (line_no, line) in numbered_lines(masked) {
+        for found in word.find_iter(line) {
+            let term = found.as_str();
+            if term.len() < 2
+                || !term.as_bytes()[0].is_ascii_alphabetic()
+                || !term
+                    .bytes()
+                    .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, b'_' | b'-'))
+            {
+                continue;
+            }
+            // マスク由来の空白を数えず、英語の複合語やコードとの境界も除く。
+            let raw = raw_lines[line_no - 1];
+            let before = &raw[..found.start()];
+            let after = &raw[found.end()..];
+            let left = before.trim_end_matches(' ');
+            let right = after.trim_start_matches(' ');
+            let neighbors = [left.chars().next_back(), right.chars().next()];
+            if neighbors
+                .iter()
+                .flatten()
+                .any(|ch| ch.is_ascii_alphanumeric() || *ch == '`')
+            {
+                continue;
+            }
+            let spaces = [before.len() != left.len(), after.len() != right.len()];
+            let spacing = std::array::from_fn(|index| {
+                neighbors[index]
+                    .filter(|ch| japanese.is_match(&ch.to_string()))
+                    .map(|_| spaces[index])
+            });
+            if spacing == [None, None] {
+                continue;
+            }
+            words.entry(term).or_default().push(Occurrence {
+                line: line_no,
+                start: found.start(),
+                end: found.end(),
+                spacing,
+            });
+        }
+    }
+
+    let mut findings = Vec::new();
+    for (term, occurrences) in words {
+        let mixed: [bool; 2] = std::array::from_fn(|side| {
+            occurrences
+                .iter()
+                .any(|hit| hit.spacing[side] == Some(true))
+                && occurrences
+                    .iter()
+                    .any(|hit| hit.spacing[side] == Some(false))
+        });
+        let relevant = occurrences
+            .iter()
+            .filter(|hit| (0..2).any(|side| mixed[side] && hit.spacing[side].is_some()))
+            .collect::<Vec<_>>();
+        let Some(first) = relevant.first() else {
+            continue;
+        };
+        let mut finding = Finding::new(
+            first.line,
+            "mixed_latin_spacing",
+            term,
+            "info",
+            format!(
+                "「{term}」と日本語の境界で半角空白の有無が混在する。媒体の表記方針を確認する。空白あり・なしのどちらも選べる"
+            ),
+        );
+        finding.span = make_span(raw_lines, first.line, first.start, first.line, first.end);
+        finding.related_lines = Some(
+            relevant
+                .iter()
+                .map(|hit| hit.line)
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect(),
+        );
+        findings.push(finding);
+    }
+    findings
+}
+
+pub(super) fn boilerplate_closing_findings(
+    sentences: &[Sentence],
+    raw_lines: &[&str],
+) -> Vec<Finding> {
+    let Some(last) = sentences.last() else {
+        return Vec::new();
+    };
+    let closing =
+        Regex::new(r"^(?:いかがでしたでしょうか|ぜひ(?:参考に|活用|試)して(?:みて)?ください)$")
+            .expect("valid closing regex");
+    if !closing.is_match(&last.text) || last.text != last.raw_text {
+        return Vec::new();
+    }
+    vec![spanned_line_finding(
+        raw_lines,
+        last.line,
+        last.line_byte_start,
+        last.line_byte_start + last.text.len(),
+        "boilerplate_closing",
+        "info",
+        "本文の最後の文が定型的な締め言葉になっている。読者への働きかけが必要か、省いても内容が伝わるかを確認する".to_owned(),
+    )]
 }
 
 pub(super) fn translationese_findings(masked: &str, raw: &str) -> Vec<Finding> {
