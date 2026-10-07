@@ -118,7 +118,52 @@ const TECHNICAL_WORDING_NOUNS: &[&str] = &[
     "ビルド",
     "キャッシュ",
     "クエリ",
+    // 品質特性・状態も、気づけない劣化の主語として同じ比喩に現れる。
+    "整合性",
+    "互換性",
+    "一貫性",
+    "アクセシビリティ",
+    "性能",
+    "状態",
+    "スキーマ",
+    "レイアウト",
 ];
+
+const DEFECT_NOUNS: &[&str] = &[
+    "バグ",
+    "不具合",
+    "エラー",
+    "警告",
+    "脆弱性",
+    "課題",
+    "問題",
+    "問題点",
+    "懸念",
+    "懸念点",
+    "リスク",
+    "指摘",
+];
+
+// 画質・表示の話題では「解像度」を本来の意味で使う。
+const DISPLAY_RESOLUTION_NOUNS: &[&str] = &[
+    "画像",
+    "画面",
+    "写真",
+    "動画",
+    "映像",
+    "ディスプレイ",
+    "モニター",
+    "カメラ",
+    "センサー",
+    "スクリーン",
+    "ピクセル",
+    "画素",
+    "印刷",
+    "レンダリング",
+    "テクスチャ",
+];
+
+const RESOLUTION_PREDICATES: &[&str] = &["高い", "低い", "粗い", "上げる", "上がる", "高める"];
 
 #[derive(Clone, Debug)]
 pub(super) struct TokenizedSentence {
@@ -1351,8 +1396,10 @@ pub(super) fn technical_jargon_metaphor_findings(
 ) -> Vec<Finding> {
     let mut findings = Vec::new();
     for sentence in tokenized {
+        let mut starts = Vec::new();
         for index in 0..sentence.tokens.len() {
             if let Some((start, detail)) = technical_wording_start(sentence, index) {
+                starts.push(start);
                 findings.push(sentence.info_finding(
                     raw_lines,
                     start..sentence.tokens[index].byte_end,
@@ -1360,6 +1407,25 @@ pub(super) fn technical_jargon_metaphor_findings(
                     detail,
                 ));
             }
+        }
+        // 「地味に効いてくる」を既に指した文では、同じ箇所を分裂文として重ねない。
+        if let Some((start, end)) = effect_cleft_span(&sentence.tokens)
+            && !starts.iter().any(|known| (start..end).contains(known))
+        {
+            findings.push(sentence.info_finding(
+                raw_lines,
+                start..end,
+                "technical_jargon_metaphor",
+                "「効いてくるのが／のは」で、後に続く内容の効果を予告する言い回し。何がどの条件で改善するのかを、主語と述語で直接書けるか確認してください",
+            ));
+        }
+        if let Some((start, end)) = defect_crush_span(&sentence.tokens) {
+            findings.push(sentence.info_finding(
+                raw_lines,
+                start..end,
+                "technical_jargon_metaphor",
+                "不具合や課題への対応を「潰す」で表す技術現場の言い回し。直す、取り除く、再発を防ぐなど、実際に行った作業を書けるか確認してください",
+            ));
         }
         if !contains_any(&sentence.tokens, DISPLAY_NOUNS)
             && let Some((start, end)) = color_status_span(&sentence.tokens)
@@ -1396,19 +1462,22 @@ fn technical_wording_start(
 ) -> Option<(usize, &'static str)> {
     let token = &sentence.tokens[index];
     let (prefixes, needs_context, detail): (&[&str], bool, &str) = match token.dictionary_form() {
-        "壊れる" | "失敗" | "捨てる" | "無視" => {
-            if matches!(token.dictionary_form(), "失敗" | "無視")
-                && !sentence
-                    .tokens
-                    .get(index + 1)
-                    .is_some_and(|next| next.dictionary_form() == "する")
+        "壊れる" | "失敗" | "捨てる" | "無視" | "失う" | "消える" | "スキップ" | "沈黙" =>
+        {
+            if matches!(
+                token.dictionary_form(),
+                "失敗" | "無視" | "スキップ" | "沈黙"
+            ) && !sentence
+                .tokens
+                .get(index + 1)
+                .is_some_and(|next| next.dictionary_form() == "する")
             {
                 return None;
             }
             (
                 &["静かに", "黙って"],
                 true,
-                "技術的な失敗や破棄を「静かに／黙って」で表す言い回し。エラーが出ない、通知されないなど、利用者が気づけない理由を具体的に書けるか確認してください",
+                "技術的な失敗・破棄・消失を「静かに／黙って」で表す言い回し。エラーが出ない、通知されないなど、利用者が気づけない理由を具体的に書けるか確認してください",
             )
         }
         "効く" => (
@@ -1436,7 +1505,12 @@ fn technical_wording_start(
         .position(|part| part.byte_start == start)?;
     if needs_context {
         // 直近の「名詞+は/が/を/も」を確認し、別の人物・対象へ文脈を持ち越さない。
-        let argument = sentence.tokens[..prefix_index]
+        // 強調の`**`・`_`は読み飛ばし、「設定が**静かに壊れる**」も同じ文脈として扱う。
+        let plain = sentence.tokens[..prefix_index]
+            .iter()
+            .filter(|token| !token.surface.chars().all(|ch| matches!(ch, '*' | '_')))
+            .collect::<Vec<_>>();
+        let argument = plain
             .windows(2)
             .rev()
             .take(12)
@@ -1452,6 +1526,218 @@ fn technical_wording_start(
         }
     }
     Some((start, detail))
+}
+
+/// 理解・根拠・関心の程度を、画質や身体感覚の語で表す言い回し。語の出現だけでは
+/// 判定せず、述語・「として」・格関係との結び付きを確認し、画質や触覚の話題を除く。
+/// 業務文書や随筆にも現れるため、ジャンルを問わず確認候補にする。
+pub(super) fn vague_sensory_findings(
+    tokenized: &[TokenizedSentence],
+    raw_lines: &[&str],
+) -> Vec<Finding> {
+    // 「1920x1080」「300dpi」等の数値付き画質表記も本来の意味として除く。
+    let display_unit = Regex::new(r"\d\s*(?:px|dpi|ppi|[KkPp](?:[^A-Za-z]|$))|\d\s*[x×]\s*\d")
+        .expect("valid display unit regex");
+    let mut findings = Vec::new();
+    for (sentence, index, token) in token_positions(tokenized) {
+        if token.pos(0) != "名詞" {
+            continue;
+        }
+        let tokens = &sentence.tokens;
+        let hit = match token.dictionary_form() {
+            "解像度" if !contains_any(tokens, DISPLAY_RESOLUTION_NOUNS)
+                && !display_unit.is_match(&sentence.text) =>
+            {
+                predicate_after_particle(tokens, index, RESOLUTION_PREDICATES).map(|end| {
+                    (end, "理解や把握の程度を「解像度」で表しています。何が分かった、区別できるようになったのかを具体的に書けるか確認してください")
+                })
+            }
+            // Sudachiは「腹落ち」を「腹」＋「落ち／落ち感」に分ける。
+            "腹" if tokens
+                .get(index + 1)
+                .is_some_and(|next| next.surface.starts_with("落ち") && next.pos(0) == "名詞") =>
+            {
+                Some((index + 1, "納得を「腹落ち」で表しています。何に納得したのか、判断の根拠を書けるか確認してください"))
+            }
+            "肌感" | "肌" => {
+                let noun_end = if token.dictionary_form() == "肌" {
+                    tokens
+                        .get(index + 1)
+                        .filter(|next| next.dictionary_form() == "感覚")
+                        .map(|_| index + 1)
+                } else {
+                    Some(index)
+                };
+                noun_end
+                    .and_then(|end| basis_marker_end(tokens, end))
+                    .map(|end| {
+                        (end, "根拠を「肌感／肌感覚」で示しています。観察した事例、件数、期間など、判断の材料を書けるか確認してください")
+                    })
+            }
+            "温度感" => predicate_after_particle(tokens, index, &[]).map(|end| {
+                (end, "関心や優先度の程度を「温度感」で表しています。誰が、何を、どの程度急ぐのかを書けるか確認してください")
+            }),
+            _ => None,
+        };
+        let Some((end, detail)) = hit else {
+            continue;
+        };
+        // 語の採否は原稿全体で一度判断するため、語ごとに最初の箇所へまとめて対応行を返す。
+        if let Some(finding) = findings
+            .iter_mut()
+            .find(|finding: &&mut Finding| finding.detail == detail)
+        {
+            let lines = finding.related_lines.get_or_insert_with(Vec::new);
+            if !lines.contains(&sentence.line) {
+                lines.push(sentence.line);
+            }
+            continue;
+        }
+        let mut finding = sentence.info_finding(
+            raw_lines,
+            token.byte_start..tokens[end].byte_end,
+            "vague_sensory_term",
+            detail,
+        );
+        finding.related_lines = Some(vec![sentence.line]);
+        findings.push(finding);
+    }
+    findings
+}
+
+/// 「資料を、全員へ。」「作業を、もっと確かに。」のように、短い名詞句＋格助詞の後で読点の間を置き、
+/// 格助詞または「〜に／〜で」で述語を書かずに終える文。広告の惹句に近い型を、散文の文単位で確認する。
+/// 応答の「ええ、東京へ。」は読点の前が格助詞でないため除く。
+pub(super) fn copy_fragment_findings(
+    tokenized: &[TokenizedSentence],
+    raw_lines: &[&str],
+) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    for sentence in tokenized {
+        if !matches!(sentence.end_mark, Some('。')) || sentence.text.chars().count() > 30 {
+            continue;
+        }
+        let tokens = significant_tokens(&sentence.tokens);
+        let content = tokens
+            .iter()
+            .rposition(|token| !matches!(token.pos(0), "補助記号" | "記号" | "空白"))
+            .map(|index| &tokens[..=index]);
+        let Some(content @ [first, .., last]) = content else {
+            continue;
+        };
+        let Some(comma) = content.iter().position(|token| token.surface == "、") else {
+            continue;
+        };
+        let lead = &content[..comma];
+        let ends_with_case = |token: &Morpheme| token.pos(1) == "格助詞";
+        // 「誰にでも」「ここからも」の末尾の「も」は外し、その前の語で終わり方を判定する。
+        let body = match content {
+            [rest @ .., particle] if particle.surface == "も" && particle.pos(1) == "係助詞" => {
+                rest
+            }
+            _ => content,
+        };
+        let Some((end, before_end)) = body.split_last() else {
+            continue;
+        };
+        let fragment_end = (ends_with_case(end)
+            && matches!(
+                end.surface.as_str(),
+                "へ" | "に" | "を" | "と" | "で" | "から" | "まで"
+            ))
+            || (end.pos(0) == "助動詞"
+                && matches!(end.surface.as_str(), "に" | "で")
+                && before_end.last().is_some_and(|token| {
+                    matches!(token.pos(0), "名詞" | "代名詞" | "形状詞") || token.pos(1) == "格助詞"
+                }));
+        if comma == 0
+            || lead.iter().map(|token| token.surface.chars().count()).sum::<usize>() > 8
+            || !lead.last().is_some_and(|token| ends_with_case(token) || token.surface == "は")
+            // 連体修飾の形容詞（「新しい資料を」）は句の一部として許し、動詞節は除く。
+            || !lead[..lead.len() - 1].iter().all(|token| {
+                matches!(
+                    token.pos(0),
+                    "名詞" | "代名詞" | "接頭辞" | "接尾辞" | "連体詞" | "形容詞"
+                ) || token.surface == "の"
+            })
+            || !fragment_end
+            || content[comma..].iter().any(|token| {
+                matches!(token.pos(0), "動詞" | "形容詞")
+                    || (token.pos(0) == "助動詞" && !std::ptr::eq(token, end))
+            })
+            || lead.iter().any(|token| matches!(token.pos(0), "動詞" | "助動詞"))
+        {
+            continue;
+        }
+        findings.push(sentence.info_finding(
+            raw_lines,
+            first.byte_start..last.byte_end,
+            "copy_fragment",
+            "短い句の後に読点で間を置き、述語を書かずに格助詞などで終える惹句の型です。誰が何をするのか、文の働きに合う述語まで書けるか確認してください。見出しや意図した標語なら残せます。",
+        ));
+    }
+    findings
+}
+
+/// 名詞＋が／を／は／も／に＋（程度の語）＋述語。候補が空なら、動詞・形容詞・サ変名詞＋するを述語とみなす。
+/// 「一段」「格段に」「さらに」のような程度の語は3語まで読み飛ばす。
+fn predicate_after_particle(
+    tokens: &[Morpheme],
+    noun: usize,
+    predicates: &[&str],
+) -> Option<usize> {
+    let particle = tokens.get(noun + 1)?;
+    if particle.pos(0) != "助詞"
+        || !matches!(particle.surface.as_str(), "が" | "を" | "は" | "も" | "に")
+    {
+        return None;
+    }
+    let degree = |token: &Morpheme| {
+        matches!(token.pos(0), "副詞" | "形状詞" | "接尾辞")
+            || (token.pos(0) == "名詞" && matches!(token.pos(1), "数詞"))
+            || (token.pos(0) == "名詞" && matches!(token.pos(2), "助数詞可能" | "副詞可能"))
+            || (token.pos(0) == "助動詞" && token.surface == "に")
+    };
+    let index = (noun + 2..tokens.len().min(noun + 6))
+        .find(|index| !degree(&tokens[*index]))
+        .filter(|index| *index <= noun + 5)?;
+    let predicate = &tokens[index];
+    if !predicates.is_empty() {
+        return predicates
+            .contains(&predicate.dictionary_form())
+            .then_some(index);
+    }
+    match predicate.pos(0) {
+        "動詞" | "形容詞" => Some(index),
+        "名詞"
+            if tokens
+                .get(index + 1)
+                .is_some_and(|next| next.dictionary_form() == "する") =>
+        {
+            Some(index + 1)
+        }
+        _ => None,
+    }
+}
+
+/// 名詞を判断の根拠として示す「として／では／で／的に」。
+fn basis_marker_end(tokens: &[Morpheme], noun: usize) -> Option<usize> {
+    let marker = tokens.get(noun + 1)?;
+    match marker.surface.as_str() {
+        "として" => Some(noun + 1),
+        "と" if tokens
+            .get(noun + 2)
+            .is_some_and(|next| next.dictionary_form() == "する")
+            && tokens
+                .get(noun + 3)
+                .is_some_and(|next| next.surface == "て") =>
+        {
+            Some(noun + 3)
+        }
+        "で" if marker.pos(0) == "助詞" => Some(noun + 1),
+        "的" => Some(noun + 1),
+        _ => None,
+    }
 }
 
 /// 選択の説明は技術文書に限らないため、ジャンルを問わず確認候補にする。
@@ -1476,7 +1762,8 @@ pub(super) fn decision_direction_findings(
     findings
 }
 
-/// 選択する動作＋（否定）＋側に倒す。物理的な方向や場所を指す節は拾わない。
+/// 選択する動作＋（否定）＋側に倒す、または方針を表す名詞＋側に倒す。
+/// 物理的な方向や場所を指す節は拾わない。
 fn decision_side_start(tokens: &[Morpheme], index: usize) -> Option<usize> {
     let side = index.checked_sub(2)?;
     if tokens[side].surface != "側"
@@ -1485,6 +1772,25 @@ fn decision_side_start(tokens: &[Morpheme], index: usize) -> Option<usize> {
         || tokens[side + 1].pos(1) != "格助詞"
     {
         return None;
+    }
+    // 「安全側／保守側」は技術文書の`technical_jargon_metaphor`が扱うため、ここでは重ねない。
+    if let Some(policy) = side.checked_sub(1)
+        && matches!(tokens[policy].pos(0), "名詞" | "形状詞")
+        && matches!(
+            tokens[policy].dictionary_form(),
+            "共通"
+                | "厳格"
+                | "寛容"
+                | "慎重"
+                | "標準"
+                | "既定"
+                | "互換"
+                | "許可"
+                | "拒否"
+                | "失敗"
+        )
+    {
+        return Some(tokens[policy].byte_start);
     }
     let mut action = side.checked_sub(1)?;
     if tokens[action].pos(0) == "助動詞" && tokens[action].dictionary_form() == "ない" {
@@ -1715,6 +2021,91 @@ fn software_shipment_span(tokens: &[Morpheme]) -> Option<(usize, usize)> {
         tokens[context.min(shipment)].byte_start,
         tokens[end].byte_end,
     ))
+}
+
+/// 効く＋て＋くる（＋た）＋準体の「の」＋が／は。効く対象を後置して予告する分裂文に限り、
+/// 「薬が効いてくるのは」のように同じ節で主語を先に示す文は除く。
+fn effect_cleft_span(tokens: &[Morpheme]) -> Option<(usize, usize)> {
+    let verb = tokens
+        .iter()
+        .position(|token| token.pos(0) == "動詞" && token.dictionary_form() == "効く")?;
+    let mut next = verb + 1;
+    if tokens.get(next)?.surface != "て" || tokens.get(next + 1)?.dictionary_form() != "くる" {
+        return None;
+    }
+    next += 2;
+    if tokens
+        .get(next)
+        .is_some_and(|token| token.pos(0) == "助動詞" && token.dictionary_form() == "た")
+    {
+        next += 1;
+    }
+    let nominalizer = tokens.get(next)?;
+    let topic = tokens.get(next + 1)?;
+    if nominalizer.surface != "の"
+        || nominalizer.pos(1) != "準体助詞"
+        || !matches!(topic.surface.as_str(), "が" | "は")
+        || topic.pos(0) != "助詞"
+    {
+        return None;
+    }
+    let clause = tokens[..verb]
+        .iter()
+        .rposition(|token| matches!(token.pos(0), "記号" | "補助記号"))
+        .map_or(0, |index| index + 1);
+    if tokens[clause..verb].windows(2).any(|pair| {
+        matches!(pair[0].pos(0), "名詞" | "代名詞")
+            && pair[1].pos(0) == "助詞"
+            && matches!(pair[1].surface.as_str(), "が" | "は")
+    }) {
+        return None;
+    }
+    // 「地味に」「じわじわ」等の直前の修飾は指摘範囲へ含め、読み直す単位を揃える。
+    let start = match verb.checked_sub(2).map(|index| &tokens[index..verb]) {
+        Some([manner, copula])
+            if manner.pos(0) == "形状詞" && copula.surface == "に" && clause + 2 <= verb =>
+        {
+            verb - 2
+        }
+        _ => verb,
+    };
+    Some((tokens[start].byte_start, topic.byte_end))
+}
+
+/// 不具合を表す名詞＋を＋（数量・ずつ等）＋潰す。「時間を潰す」「箱を潰す」は対象名詞で除く。
+fn defect_crush_span(tokens: &[Morpheme]) -> Option<(usize, usize)> {
+    let verb = tokens
+        .iter()
+        .position(|token| token.pos(0) == "動詞" && token.dictionary_form() == "潰す")?;
+    let object = tokens[..verb]
+        .iter()
+        .rposition(|token| token.surface == "を" && token.pos(1) == "格助詞")?;
+    if verb - object > 5
+        || tokens[object + 1..verb]
+            .iter()
+            .any(|token| matches!(token.pos(0), "記号" | "補助記号" | "動詞" | "形容詞"))
+    {
+        return None;
+    }
+    // 複合名詞は主要部（末尾）か全体で照合する。「型エラー」「懸念＋点」を拾い、「バグ報告」は拾わない。
+    let head = object.checked_sub(1)?;
+    let first = tokens[..object]
+        .iter()
+        .rposition(|token| token.pos(0) != "名詞" || token.pos(1) == "数詞")
+        .map_or(0, |index| index + 1);
+    if first > head {
+        return None;
+    }
+    let compound = tokens[first..object]
+        .iter()
+        .map(|token| token.surface.as_str())
+        .collect::<String>();
+    if !DEFECT_NOUNS.contains(&tokens[head].dictionary_form())
+        && !DEFECT_NOUNS.contains(&compound.as_str())
+    {
+        return None;
+    }
+    Some((tokens[first].byte_start, tokens[verb].byte_end))
 }
 
 fn abstract_transport_span(tokens: &[Morpheme]) -> Option<(usize, usize)> {

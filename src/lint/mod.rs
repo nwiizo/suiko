@@ -27,6 +27,8 @@ pub use reading_load::{analyze_reading_load, analyze_reading_load_with_threshold
 pub(crate) use word_rules::{WordRule, validate_word_rules, word_rule_findings};
 
 const EXPERIMENTAL_CATEGORIES: &[&str] = &[
+    "copy_fragment",
+    "boilerplate_closing",
     "consecutive_nominal_endings",
     "declared_item_count_mismatch",
     "decision_direction_metaphor",
@@ -40,6 +42,7 @@ const EXPERIMENTAL_CATEGORIES: &[&str] = &[
     "numbered_phase_structure",
     "high_emoji_symbol_density",
     "demonstrative_reference",
+    "mixed_latin_spacing",
     "negative_listing",
     "repeated_explanation_preview",
     "repeated_sentence_mode",
@@ -55,17 +58,20 @@ const EXPERIMENTAL_CATEGORIES: &[&str] = &[
     "low_lexical_diversity_ttr",
     "low_lexical_diversity_mtld",
     "repeated_sentence_lead",
+    "vague_sensory_term",
 ];
 
 const RULE_CATEGORIES: &[&str] = &[
     "abstract_metaphor",
     "antithesis_repetition",
+    "boilerplate_closing",
     "boilerplate_heading",
     "bullet_bold_label",
     "bullet_emoji",
     "buried_list",
     "buried_question_list",
     "consecutive_nominal_endings",
+    "copy_fragment",
     "custom_wording",
     "decision_direction_metaphor",
     "declared_item_count_mismatch",
@@ -87,6 +93,7 @@ const RULE_CATEGORIES: &[&str] = &[
     "low_lexical_diversity_ttr",
     "low_sentence_variance",
     "low_specificity",
+    "mixed_latin_spacing",
     "negative_listing",
     "no_chain",
     "no_comma_sentence",
@@ -111,6 +118,7 @@ const RULE_CATEGORIES: &[&str] = &[
     "translationese_morph",
     "uniform_bullet_structure",
     "uniform_paragraph_structure",
+    "vague_sensory_term",
 ];
 
 const READING_LOAD_CATEGORIES: &[&str] = &[
@@ -354,6 +362,8 @@ pub fn analyze_with_thresholds(
     let mut findings = structural_findings;
     findings.extend(patterns::local_pattern_findings(raw, morphology)?);
     if experimental {
+        findings.extend(patterns::mixed_latin_spacing_findings(&masked, &raw_lines));
+        findings.extend(patterns::boilerplate_closing_findings(&split, &raw_lines));
         findings.extend(item_count::declared_item_count_findings(
             &mask_html_comments(raw),
             &raw_lines,
@@ -383,6 +393,8 @@ pub fn analyze_with_thresholds(
     if experimental {
         findings.extend(morph::short_phrase_comma_findings(&tokenized, &raw_lines));
         findings.extend(morph::decision_direction_findings(&tokenized, &raw_lines));
+        findings.extend(morph::vague_sensory_findings(&tokenized, &raw_lines));
+        findings.extend(morph::copy_fragment_findings(&tokenized, &raw_lines));
     }
     if genre == Some("tech") {
         findings.extend(morph::technical_repetition_findings(

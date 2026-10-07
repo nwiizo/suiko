@@ -22,8 +22,6 @@
 
 ## インストール
 
-v0.3.11は公開準備中です。新機能を試す場合は、変更済みのソースからビルドしてください。以下のCargoとGitHub Releasesは公開済みのバージョンを導入します。
-
 ### Cargo
 
 Rust 1.97以降が必要です。
@@ -38,12 +36,12 @@ suiko --version
 Rustを入れずに使う場合は、[GitHub Releases](https://github.com/nwiizo/suiko/releases)から取得できます。macOS（Apple Silicon / Intel）、Linux（x86_64 / aarch64）、Windows（x86_64）に対応し、各アーカイブにSHA-256ファイルが付きます。
 
 ```sh
-# v0.3.10 / macOS（Apple Silicon、公開済みのバージョン）
-curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.3.10/suiko-v0.3.10-aarch64-apple-darwin.tar.gz
-curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.3.10/suiko-v0.3.10-aarch64-apple-darwin.tar.gz.sha256
-shasum -a 256 -c suiko-v0.3.10-aarch64-apple-darwin.tar.gz.sha256
-tar xzf suiko-v0.3.10-aarch64-apple-darwin.tar.gz
-./suiko-v0.3.10-aarch64-apple-darwin/suiko --version
+# v0.3.11 / macOS（Apple Silicon）
+curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.3.11/suiko-v0.3.11-aarch64-apple-darwin.tar.gz
+curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.3.11/suiko-v0.3.11-aarch64-apple-darwin.tar.gz.sha256
+shasum -a 256 -c suiko-v0.3.11-aarch64-apple-darwin.tar.gz.sha256
+tar xzf suiko-v0.3.11-aarch64-apple-darwin.tar.gz
+./suiko-v0.3.11-aarch64-apple-darwin/suiko --version
 ```
 
 以降の例で`suiko`として実行するには、展開した実行ファイルをPATHの通ったディレクトリへ配置してください。
@@ -96,10 +94,14 @@ suiko lint draft.md --genre tech --experimental --json
 
 | category | 検出する状態・対象ジャンル |
 |---|---|
+| `mixed_latin_spacing` | 全ジャンルで、同じ英数字語と日本語の境界に半角空白あり・なしが混在する。語ごとに集約し、対応行を返す。統一された表記はどちらも許容する |
+| `boilerplate_closing` | 全ジャンルで、本文の最後の文が「いかがでしたでしょうか」「ぜひ参考にしてみてください」等の定型句だけになっている。具体的な対象を伴う依頼や引用は除く |
+| `vague_sensory_term` | 全ジャンルで、理解・根拠・関心の程度を「解像度を（一段）上げる／が高い」「腹落ち」「肌感（覚）として／では」「温度感を揃える」等の感覚語で表している。語ごとに集約し、対応行を返す。画面・写真・数値付きの画質や触覚の話題は除く |
+| `copy_fragment` | 全ジャンルで、「資料を、全員へ。」「作業を、もっと確かに。」のように、8文字以内の名詞句＋格助詞の後に読点で間を置き、述語を書かずに格助詞や「〜に／〜で」で終える30文字以内の文。動詞・形容詞の述語がある文、見出し・引用・リストは除く |
 | `self_labeling_repetition` | 評価語を含む「〜のは」型の主題提示が文書内に3回以上ある |
 | `short_topic_comma` | 文頭の5文字以内の名詞句＋「は」の直後に読点「、」がある。長い主題や動詞を含む節は除く |
 | `short_object_comma` | 文頭の5文字以内の名詞句＋格助詞「を」の直後に読点「、」がある。長い名詞句・動詞を含む節・引用内は除く |
-| `decision_direction_metaphor` | 全ジャンルで、選択する動作を「残さない側に倒す」「採用する側に倒す」等で表している。物理的な方向は除く |
+| `decision_direction_metaphor` | 全ジャンルで、選択する動作を「残さない側に倒す」「採用する側に倒す」等で表している。v0.3.11では「共通側／厳格側／既定側に倒す」等の方針を表す名詞＋側も対象にする。物理的な方向は除く |
 | `negative_listing` | 同じ段落で否定文が2文続き、形態素8個以下の肯定文へ続く |
 | `uniform_bullet_structure` | `essay`で、4項目以上の箇条書きの文末品詞がそろい、内容語数のばらつきが小さい |
 | `demonstrative_reference` | `tech`で、同じ文の前方に動詞が2個以上ある位置に「このこと」等がある |
@@ -109,13 +111,17 @@ suiko lint draft.md --genre tech --experimental --json
 | `technical_jargon_metaphor` | `tech`で、CIの成功を「緑」、コードの公開を「出荷」と表すなど、技術現場の比喩的な言い回しがある |
 | `repeated_sentence_mode` / `consecutive_nominal_endings` | 長さの近い明示的な文末や、短い体言止めが局所的に続く |
 
-`technical_jargon_metaphor`は、技術対象に続く「静かに壊れる」「黙って捨てる／無視する」「地味に効く」「安全側／保守側に倒す」と、「時間を溶かす」も対象にします。活用と近くの名詞・助詞を確認し、候補語の出現だけでは判定しません。
+`technical_jargon_metaphor`は、技術対象に続く「静かに壊れる／失われる／消える」「黙って捨てる／無視する／スキップする」「地味に効く」「安全側／保守側に倒す」と、「時間を溶かす」も対象にします。v0.3.11では、効く対象を後置して予告する「（地味に）効いてくるのが／のは」と、「バグ・不具合・懸念点等を潰す」も加えました。前者は「薬が効いてくるのは」のように同じ節で主語を先に示す文を、後者は「時間を潰す」「箱を潰す」や主要部が不具合語でない複合名詞（「バグ報告」）を除きます。技術対象には「整合性」「アクセシビリティ」等の品質特性も加え、「設定が**静かに壊れる**」のように太字で囲んだ箇所も同じ文脈として扱います。活用と近くの名詞・助詞を確認し、候補語の出現だけでは判定しません。
 
 v0.3.11の`decision_direction_metaphor`と`short_object_comma`は、技術文書に限らず`--experimental`で使えます。前者は選択の条件と実際の動作を、後者は名詞句と述語のつながりを確認するための指摘です。どちらも自動修正せず、説明済みの比喩や意図した間は残せます。
 
 通常の`abstract_metaphor`は、抽象的な対象を「地図」「土台」等の役割で表す用例を扱います。`--genre tech --experimental`では、「仕様は意図を実装へ運ぶ」のような抽象語の関係や、抽象的な「入口」「主役」等も加えます。比喩の追加分は、説明済みの内容や体験談にも一致するため、実験機能に留めています。
 
 これらは`info`の読み直し候補です。形態素解析だけでは主語の省略、指示先、修飾先の正誤を決められません。[検出仕様と形態素解析の手順](https://github.com/nwiizo/suiko/blob/main/eval/technical-wording.md)に、候補一覧、採用理由、実測した分割、評価結果を記録しています。
+
+`mixed_latin_spacing`と`boilerplate_closing`は、[yomiyasuとの比較](https://github.com/nwiizo/suiko/blob/main/eval/competitive-review-2026-10-01.md)から追加しました。前者は大文字・小文字が一致する2文字以上の英数字語を比較し、単語内のハイフン・アンダースコアを許容します。左右の境界は別々に比べ、コード・URL・英語の複合語・数字で始まる単位表記を除きます。後者はMarkdownの除外範囲を除いた最後の文を見ます。いずれも自動修正せず、媒体の表記方針や読者への働きかけが必要かを確認するための候補です。
+
+`vague_sensory_term`、`copy_fragment`と`technical_jargon_metaphor`の追加分は、[yomiyasuの解説記事](https://zenn.dev/algoartis/articles/0b1c731881b25c)と語彙カタログから、形態素の並びで範囲を指せる型だけを選びました。人間の技術記事にも「腹落ち」「原因の解像度を上げる」「企業の温度感」の用例があり、AIによる執筆の判定には使えません。抽象的な語が何を指すかを、書き手が具体的に書けるか確かめるための候補です。選定の理由と見送った候補は[ジョブ理論による再調査](https://github.com/nwiizo/suiko/blob/main/eval/competitive-review-2026-10-07.md)にまとめています。
 
 ### 読解負荷を確認する
 

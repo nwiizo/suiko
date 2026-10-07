@@ -30,6 +30,46 @@ SOFTWARE.
 Rust dependencies retain their respective licenses. See `Cargo.lock` for the
 exact dependency graph.
 
+## yomiyasu
+
+The editorial checks and revision guidance added on 2026-10-01 draw on
+[nanaism/yomiyasu](https://github.com/nanaism/yomiyasu), revision
+`30ee6041c328ce21d38a7963f667e079a93d7a12`: `SKILL.md`,
+`references/gemini-syntax.md`, and `scripts/yomiyasu_lint.py`.
+Suiko implements its own Rust checks with narrower detection conditions;
+the upstream Python program and evaluation corpus are not bundled.
+The adaptation decisions are recorded in `eval/competitive-review-2026-10-01.md`.
+The checks added on 2026-10-07 (`vague_sensory_term`, `copy_fragment`, and the
+additional `technical_jargon_metaphor` patterns) draw on revision
+`8f77b7aa8f19c3f718b511e71a3eee5d06eb3013`: `references/slop-catalog.md`,
+`SKILL.md`, and the explanatory article linked from its README. No upstream
+word list is copied; Suiko matches its own morpheme sequences. Those decisions
+are recorded in `eval/competitive-review-2026-10-07.md`.
+
+```text
+MIT License
+
+Copyright (c) 2026 nanaism
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ## sudachi.rs and SudachiDict
 
 Morphological analysis uses [sudachi.rs](https://github.com/WorksApplications/sudachi.rs)

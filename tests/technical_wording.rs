@@ -42,6 +42,51 @@ fn technical_wording_detects_context_and_inflections() {
             "保守側に倒す",
         ),
         (
+            "テストが黙ってスキップされる。",
+            "technical_jargon_metaphor",
+            "黙ってスキップ",
+        ),
+        (
+            "データが静かに失われます。",
+            "technical_jargon_metaphor",
+            "静かに失わ",
+        ),
+        (
+            "ログが黙って消える。",
+            "technical_jargon_metaphor",
+            "黙って消える",
+        ),
+        (
+            "設定が**静かに壊れます**。",
+            "technical_jargon_metaphor",
+            "静かに壊れ",
+        ),
+        (
+            "アクセシビリティが静かに壊れます。",
+            "technical_jargon_metaphor",
+            "静かに壊れ",
+        ),
+        (
+            "そこで地味に効いてくるのが、以下の3つの原則です。",
+            "technical_jargon_metaphor",
+            "地味に効いてくるのが",
+        ),
+        (
+            "ここで効いてきたのは設計です。",
+            "technical_jargon_metaphor",
+            "効いてきたのは",
+        ),
+        (
+            "バグを一つずつ潰していく。",
+            "technical_jargon_metaphor",
+            "バグを一つずつ潰し",
+        ),
+        (
+            "残りの懸念点を潰した。",
+            "technical_jargon_metaphor",
+            "懸念点を潰し",
+        ),
+        (
             "この資料は設計の入口として使える。",
             "abstract_metaphor",
             "設計の入口",
@@ -120,6 +165,16 @@ fn wording_preserves_literal_technical_and_separate_clause_uses() {
         "設計図に入口を描く。",
         "設定の既定値を実測結果と照合した。",
         "原因を切り分けて事故を防ぐ。",
+        "薬が効いてくるのは三十分後だ。",
+        "この設定が効いてくるのは再起動後だ。",
+        "効いてくる薬を選ぶ。",
+        "時間を潰した。",
+        "バグ報告を潰した。",
+        "空き箱を潰す。",
+        "バグを調べ、箱を潰す。",
+        "彼は黙って消えた。",
+        "火が静かに消える。",
+        "設定を確認した人が黙ってスキップする。",
     ] {
         let report = lint::analyze(body, &morphology, Some("tech"), true).unwrap();
         assert!(

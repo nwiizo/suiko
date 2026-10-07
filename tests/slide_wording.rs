@@ -136,6 +136,8 @@ fn decision_side_metaphor_uses_inflected_action_not_physical_direction() {
         "不明な権限は許可しない側に倒す。",
         "判断できなければ削除する側に倒している。",
         "不明な入力は保存しない側に倒しました。",
+        "判断に迷うスタイルは、あらかじめ共通側に倒します。",
+        "曖昧な値は厳格側に倒した。",
     ] {
         let report = lint::analyze(body, &morphology, Some("tech"), true).unwrap();
         let findings: Vec<_> = report
@@ -162,6 +164,8 @@ fn decision_side_metaphor_uses_inflected_action_not_physical_direction() {
         "設定を確認し、倒れない側に倒す。",
         "残さない側に立つ。",
         "残さない側に、椅子を倒す。",
+        "椅子を共通の側に倒す。",
+        "設定を安全側に倒す。",
         "採用しない方針にする。",
         "> 判断に迷うものは、残さない側に倒します。",
         "`残さない側に倒す`。",
