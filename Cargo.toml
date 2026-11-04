@@ -1,6 +1,6 @@
 [package]
 name = "suiko"
-version = "0.3.11"
+version = "0.4.1"
 default-run = "suiko"
 edition = "2024"
 rust-version = "1.97"
@@ -27,19 +27,10 @@ include = [
 [workspace]
 exclude = ["crates/suiko-sudachi"]
 
-[features]
-default = []
-evaluation = [
-    "dep:encoding_rs",
-    "dep:jiff",
-    "dep:ureq",
-]
-
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
-encoding_rs = { version = "0.8", optional = true }
-jiff = { version = "0.2", default-features = false, features = ["std"], optional = true }
 pdf-extract = "0.12"
+pulldown-cmark = { version = "0.13", default-features = false }
 quick-xml = "0.42"
 regex = "1"
 serde = { version = "1", features = ["derive"] }
@@ -49,30 +40,19 @@ sha2 = "0.11"
 # 上流が公式にcrates.ioへ公開したら sudachi = "..." へ戻す。
 sudachi = { package = "suiko-sudachi", version = "0.7.0", path = "crates/suiko-sudachi" }
 thiserror = "2"
+tempfile = "3"
 toml = "1.1"
-ureq = { version = "3", optional = true }
-zip = { version = "8", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
 
 [build-dependencies]
 sha2 = "0.11"
 ureq = "3"
-zip = { version = "8", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 assert_cmd = "2"
 predicates = "3"
 serde_json = "1"
-tempfile = "3"
-
-[[bin]]
-name = "suiko-eval"
-path = "src/bin/suiko-eval.rs"
-required-features = ["evaluation"]
-
-[[test]]
-name = "evaluation"
-path = "tests/evaluation.rs"
-required-features = ["evaluation"]
 
 [profile.release]
 strip = true

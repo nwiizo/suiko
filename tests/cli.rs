@@ -773,7 +773,7 @@ fn explanation_preview_repetition_uses_morphology_and_preserves_meaning() {
         let report =
             lint::analyze(positive, &morphology, genre, experimental).expect("analyze text");
         assert!(
-            !report
+            report
                 .findings
                 .iter()
                 .any(|f| f.category == "repeated_explanation_preview")
@@ -841,7 +841,7 @@ fn explanation_preview_repetition_does_not_duplicate_generic_syntax_hits() {
 }
 
 #[test]
-fn self_labeling_repetition_requires_three_hits_and_experimental_mode() {
+fn self_labeling_repetition_requires_three_hits_in_default_mode() {
     let morphology = Morphology::new().expect("initialize morphology");
     let body = concat!(
         "必要なのは、判断基準を揃えることです。\n",
@@ -865,7 +865,7 @@ fn self_labeling_repetition_requires_three_hits_and_experimental_mode() {
         default
             .findings
             .iter()
-            .all(|finding| finding.category != "self_labeling_repetition")
+            .any(|finding| finding.category == "self_labeling_repetition")
     );
 
     let two_hits = "必要なのは速度です。\n面白いのは結果です。\n";
@@ -913,7 +913,7 @@ fn negative_listing_requires_two_negations_followed_by_a_short_assertion() {
         default
             .findings
             .iter()
-            .all(|finding| finding.category != "negative_listing")
+            .any(|finding| finding.category == "negative_listing")
     );
 
     let separate_paragraphs =
@@ -1031,7 +1031,7 @@ fn uniform_bullet_structure_requires_four_morphologically_similar_items() {
 }
 
 #[test]
-fn technical_ambiguity_candidates_require_tech_and_experimental_mode() {
+fn ambiguity_candidates_are_available_without_genre_or_experimental_mode() {
     let morphology = Morphology::new().expect("initialize morphology");
     let body = concat!(
         "入力値を検査し、異常なら処理を中断して、そのことをログに記録する。\n",
@@ -1058,16 +1058,16 @@ fn technical_ambiguity_candidates_require_tech_and_experimental_mode() {
     );
 
     let essay = lint::analyze(body, &morphology, Some("essay"), true).expect("analyze text");
-    assert!(essay.findings.iter().all(|finding| {
-        !matches!(
+    assert!(essay.findings.iter().any(|finding| {
+        matches!(
             finding.category.as_str(),
             "demonstrative_reference" | "respectively_scope"
         )
     }));
 
     let default = lint::analyze(body, &morphology, Some("tech"), false).expect("analyze text");
-    assert!(default.findings.iter().all(|finding| {
-        !matches!(
+    assert!(default.findings.iter().any(|finding| {
+        matches!(
             finding.category.as_str(),
             "demonstrative_reference" | "respectively_scope"
         )
@@ -1075,7 +1075,7 @@ fn technical_ambiguity_candidates_require_tech_and_experimental_mode() {
 }
 
 #[test]
-fn technical_jargon_metaphors_require_tech_and_experimental_mode() {
+fn technical_jargon_metaphors_are_default_contextual_hints() {
     let morphology = Morphology::new().expect("initialize morphology");
     let positive = concat!(
         "用意されたテストはすべて緑になります。\n",
@@ -1140,20 +1140,20 @@ fn technical_jargon_metaphors_require_tech_and_experimental_mode() {
         (Some("business"), true),
         (None, true),
     ] {
-        let disabled = lint::analyze(positive, &morphology, genre, experimental)
-            .expect("analyze disabled mode");
+        let enabled = lint::analyze(positive, &morphology, genre, experimental)
+            .expect("analyze default mode");
         assert!(
-            disabled
+            enabled
                 .findings
                 .iter()
-                .all(|finding| finding.category != "technical_jargon_metaphor"),
+                .any(|finding| finding.category == "technical_jargon_metaphor"),
             "genre={genre:?}, experimental={experimental}"
         );
     }
 }
 
 #[test]
-fn abstract_predicate_metaphors_require_tech_and_experimental_mode() {
+fn abstract_predicate_metaphors_are_default_contextual_hints() {
     let morphology = Morphology::new().expect("initialize morphology");
     let positive = concat!(
         "仕様はチームの意図を実装へ運べます。\n",
@@ -1198,13 +1198,13 @@ fn abstract_predicate_metaphors_require_tech_and_experimental_mode() {
         (Some("business"), true),
         (None, true),
     ] {
-        let disabled = lint::analyze(positive, &morphology, genre, experimental)
-            .expect("analyze disabled mode");
+        let enabled = lint::analyze(positive, &morphology, genre, experimental)
+            .expect("analyze default mode");
         assert!(
-            disabled
+            enabled
                 .findings
                 .iter()
-                .all(|finding| finding.category != "abstract_metaphor"),
+                .any(|finding| finding.category == "abstract_metaphor"),
             "genre={genre:?}, experimental={experimental}"
         );
     }
@@ -1987,7 +1987,7 @@ fn github_format_emits_workflow_command_annotations() {
     assert!(annotation.contains("line=1"));
     assert!(annotation.contains("col=1"));
     assert!(annotation.contains("endColumn=6"));
-    assert!(annotation.contains("::禁止語/LLM常套句ヒット"));
+    assert!(annotation.contains("::「重要なのは」"));
 }
 
 // SARIF 2.1.0: エディタ・コードスキャン向け。columnKind=unicodeCodePointsを
@@ -2778,7 +2778,7 @@ fn declared_item_count_mismatch_compares_the_following_list() {
         &text.lines().next().unwrap()[span.start_byte..span.end_byte],
         "以下の3点"
     );
-    assert!(item_count_findings(text, false).is_empty());
+    assert_eq!(item_count_findings(text, false).len(), 1);
 
     for (body, expected) in [
         (

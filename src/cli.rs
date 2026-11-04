@@ -8,7 +8,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::lint::{Finding, LintStats};
 use crate::morphology::Morphology;
-use crate::{Error, academic, lexical, lint, outline, read_source, terms};
+use crate::{Error, academic, diff, lexical, lint, outline, read_source, terms};
+
+mod batch;
+mod check;
+mod fix;
+mod style;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -23,6 +28,14 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// 太字の表示を修正してプレビューする。--writeで保存する
+    Fix(fix::FixArgs),
+    /// 利用可能なコマンド・規則・出力形式を確認する
+    Capabilities(batch::CapabilitiesArgs),
+    /// Gitの指定した版と作業ツリーの指摘を同じ設定で比較する
+    Compare(batch::CompareArgs),
+    /// 指定した過去文書から文体の観測値を集計する
+    StyleProfile(style::StyleArgs),
     /// 表現・反復・読解負荷を確認し、読み直す行と理由を示す
     Lint(LintArgs),
     /// 見出し・段落の先頭文・箇条書きで説明の順序を見直す
@@ -33,14 +46,22 @@ enum Command {
     LexicalAudit(LexicalAuditArgs),
     /// 学術稿の論証・引用・Word/PDFを、執筆者が記録した方針と照合する
     Academic(AcademicArgs),
+    /// 改稿前後の文書を文単位で対応づけ、数値・否定・文末の働き・条件・識別子の変化を候補として示す
+    Diff(DiffArgs),
+    /// 最終稿・原文・資料をまとめて検査し、提出前の照合用に記録する
+    Check(check::CheckArgs),
+    /// 検査記録と現在の本文・資料・設定・実行ファイルを照合する
+    Verify(check::VerifyArgs),
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, ValueEnum)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq, ValueEnum)]
 #[serde(rename_all = "lowercase")]
 enum Genre {
     Essay,
     Tech,
     Business,
+    /// 品詞・人称・数詞・文末の分布から随筆・技術・業務を推定して適用する
+    Auto,
 }
 
 impl Genre {
@@ -49,6 +70,7 @@ impl Genre {
             Self::Essay => "essay",
             Self::Tech => "tech",
             Self::Business => "business",
+            Self::Auto => "auto",
         }
     }
 }
@@ -114,6 +136,20 @@ struct AcademicArgs {
 }
 
 #[derive(Debug, Args)]
+struct DiffArgs {
+    /// 改稿前の Markdown/テキストファイル。- で標準入力（片方だけ）
+    before: String,
+    /// 改稿後の Markdown/テキストファイル。- で標準入力（片方だけ）
+    after: String,
+    /// 機械可読な JSON で出力する
+    #[arg(long)]
+    json: bool,
+    /// 指定 severity 以上の候補があれば終了コード2を返す
+    #[arg(long, value_enum)]
+    fail_on: Option<FailOn>,
+}
+
+#[derive(Debug, Args)]
 struct LintArgs {
     /// lint 対象の Markdown/テキストファイル。複数指定可。- で標準入力
     #[arg(required = true)]
@@ -121,10 +157,13 @@ struct LintArgs {
     /// 機械可読な JSON で出力する
     #[arg(long)]
     json: bool,
+    /// ファイル別・規則別の件数を集計する
+    #[arg(long, value_enum, conflicts_with_all = ["json", "format", "baseline"])]
+    summary: Option<batch::SummaryFormat>,
     /// ジャンル別の校正済み閾値を適用する
     #[arg(long, value_enum)]
     genre: Option<Genre>,
-    /// 文脈を読んで採否を決める追加の確認候補を表示する。一部は --genre essay / tech の指定が必要
+    /// 文書全体の反復・比率などの実験的な指標を追加する。表現の修正候補は既定で表示。一部の構造検査は --genre essay が必要
     #[arg(long)]
     experimental: bool,
     /// 前回の JSON と比較して解消・新規・継続を分類する
@@ -157,7 +196,7 @@ enum OutputFormat {
     Sarif,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, ValueEnum)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq, ValueEnum)]
 #[serde(rename_all = "lowercase")]
 enum FailOn {
     Info,
@@ -277,25 +316,59 @@ fn config_error(path: &Path, message: impl Into<String>) -> Error {
 }
 
 fn load_config(explicit: Option<&Path>, no_config: bool) -> Result<Option<Config>, Error> {
+    let Some(path) = config_path(explicit, no_config)? else {
+        return Ok(None);
+    };
+    if explicit.is_none()
+        && !path
+            .try_exists()
+            .map_err(|e| config_error(&path, e.to_string()))?
+    {
+        return Ok(None);
+    }
+    let source = read_source(&path)?;
+    parse_config(&path, &source).map(Some)
+}
+
+fn config_path(explicit: Option<&Path>, no_config: bool) -> Result<Option<PathBuf>, Error> {
     if no_config {
         return Ok(None);
     }
-    let path = if let Some(path) = explicit {
-        path.to_path_buf()
-    } else {
-        let path = std::env::current_dir()
-            .map_err(|source| config_error(Path::new(".suiko.toml"), source.to_string()))?
-            .join(".suiko.toml");
-        if !path.exists() {
-            return Ok(None);
-        }
-        path
-    };
-    let source = read_source(&path)?;
-    let config = toml::from_str::<Config>(&source)
-        .map_err(|source| config_error(&path, source.to_string()))?;
-    config.validate(&path)?;
-    Ok(Some(config))
+    explicit.map(Path::to_path_buf).map_or_else(
+        || {
+            std::env::current_dir()
+                .map(|dir| Some(dir.join(".suiko.toml")))
+                .map_err(|source| config_error(Path::new(".suiko.toml"), source.to_string()))
+        },
+        |path| Ok(Some(path)),
+    )
+}
+
+fn parse_config(path: &Path, source: &str) -> Result<Config, Error> {
+    let config = toml::from_str::<Config>(source)
+        .map_err(|source| config_error(path, source.to_string()))?;
+    config.validate(path)?;
+    Ok(config)
+}
+
+fn configured_lint(
+    text: &str,
+    morphology: &Morphology,
+    genre: Option<&str>,
+    experimental: bool,
+    config: Option<&Config>,
+) -> Result<lint::LintReport, Error> {
+    let mut report = lint::analyze(text, morphology, genre, experimental)?;
+    if let Some(config) = config {
+        report.findings.extend(lint::word_rule_findings(
+            text,
+            morphology,
+            &config.word_rules,
+        )?);
+        report.findings.sort_by_key(|finding| finding.line);
+    }
+    apply_config(&mut report, config);
+    Ok(report)
 }
 
 fn category_counts(findings: &[Finding]) -> BTreeMap<String, usize> {
@@ -628,6 +701,55 @@ fn print_lint_github(run: &LintRun) {
     }
 }
 
+#[derive(Serialize)]
+struct DiffInput<'a> {
+    file: &'a str,
+    sha256: String,
+}
+
+#[derive(Serialize)]
+struct DiffOutput<'a> {
+    suiko_version: &'static str,
+    before: DiffInput<'a>,
+    after: DiffInput<'a>,
+    #[serde(flatten)]
+    report: &'a diff::DiffReport,
+}
+
+fn print_diff_human(before: &str, after: &str, report: &diff::DiffReport) {
+    let stats = &report.stats;
+    println!("=== diff: {before} → {after} ===");
+    println!(
+        "文の単位: 変更前 {} / 変更後 {} / 一致 {} / 移動 {} / 変更領域 {}",
+        stats.before_units,
+        stats.after_units,
+        stats.matched_units,
+        stats.moved_units,
+        stats.changed_regions
+    );
+    println!(
+        "候補 {}件。意味が同じかは判定していません。候補のない変更領域も読み直してください。\n",
+        stats.total_findings
+    );
+    for finding in &report.findings {
+        let label = match finding.severity.as_str() {
+            "info" => "情報",
+            "warn" => "警告",
+            other => other,
+        };
+        let position = match (finding.before_line, finding.after_line) {
+            (Some(before), Some(after)) => format!("前L{before} → 後L{after}"),
+            (Some(before), None) => format!("前L{before} → なし"),
+            (None, Some(after)) => format!("なし → 後L{after}"),
+            (None, None) => String::new(),
+        };
+        println!("[{label}] {position} ({})", finding.category);
+        println!("    変更前: {}", finding.before_excerpt);
+        println!("    変更後: {}", finding.after_excerpt);
+        println!("    詳細  : {}\n", finding.detail);
+    }
+}
+
 fn print_lint_human(run: &LintRun) {
     let file = &run.file;
     let report = &run.report;
@@ -780,6 +902,12 @@ fn validate_inputs(files: &[String]) -> Result<(), Error> {
 
 fn execute(cli: Cli) -> Result<ExitCode, Error> {
     match cli.command {
+        Command::Fix(args) => return fix::execute(args),
+        Command::Capabilities(args) => return batch::capabilities(args),
+        Command::Compare(args) => return batch::compare(args),
+        Command::StyleProfile(args) => return style::execute(args),
+        Command::Check(args) => return check::execute_check(args),
+        Command::Verify(args) => return check::execute_verify(args),
         Command::Lint(args) => {
             validate_inputs(&args.files)?;
             let config = load_config(args.config.as_deref(), args.no_config)?;
@@ -827,16 +955,13 @@ fn execute(cli: Cli) -> Result<ExitCode, Error> {
             let mut runs = Vec::new();
             for file in &args.files {
                 let text = read_input(file)?;
-                let mut report = lint::analyze(&text, &morphology, genre, args.experimental)?;
-                if let Some(config) = &config {
-                    report.findings.extend(lint::word_rule_findings(
-                        &text,
-                        &morphology,
-                        &config.word_rules,
-                    )?);
-                    report.findings.sort_by_key(|finding| finding.line);
-                }
-                apply_config(&mut report, config.as_ref());
+                let mut report = configured_lint(
+                    &text,
+                    &morphology,
+                    genre,
+                    args.experimental,
+                    config.as_ref(),
+                )?;
                 let baseline = match (&baseline_data, &baseline_map) {
                     (Some((baseline_file, _)), Some(records)) => {
                         if let Some(record) = records.get(file.as_str()) {
@@ -891,7 +1016,9 @@ fn execute(cli: Cli) -> Result<ExitCode, Error> {
                     );
                 }
             }
-            if args.json {
+            if let Some(format) = args.summary {
+                batch::print_summary(&runs, format)?;
+            } else if args.json {
                 let output = runs
                     .iter()
                     .map(|run| LintOutput {
@@ -926,6 +1053,45 @@ fn execute(cli: Cli) -> Result<ExitCode, Error> {
                         .iter()
                         .any(|finding| threshold.matches(&finding.severity))
                 })
+            });
+            return Ok(if failed {
+                ExitCode::from(2)
+            } else {
+                ExitCode::SUCCESS
+            });
+        }
+        Command::Diff(args) => {
+            if args.before == "-" && args.after == "-" {
+                return Err(Error::InvalidArguments(
+                    "標準入力（-）は変更前と変更後の片方だけに指定できます".to_owned(),
+                ));
+            }
+            let morphology = Morphology::new()?;
+            let before = read_input(&args.before)?;
+            let after = read_input(&args.after)?;
+            let report = diff::compare(&before, &after, &morphology)?;
+            if args.json {
+                let output = DiffOutput {
+                    suiko_version: env!("CARGO_PKG_VERSION"),
+                    before: DiffInput {
+                        file: &args.before,
+                        sha256: diff::sha256_hex(&before),
+                    },
+                    after: DiffInput {
+                        file: &args.after,
+                        sha256: diff::sha256_hex(&after),
+                    },
+                    report: &report,
+                };
+                println!("{}", serde_json::to_string_pretty(&output)?);
+            } else {
+                print_diff_human(&args.before, &args.after, &report);
+            }
+            let failed = args.fail_on.is_some_and(|threshold| {
+                report
+                    .findings
+                    .iter()
+                    .any(|finding| threshold.matches(&finding.severity))
             });
             return Ok(if failed {
                 ExitCode::from(2)

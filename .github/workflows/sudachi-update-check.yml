@@ -32,7 +32,7 @@ jobs:
           title="sudachi関連の更新を検出"
           # Markdownのコードフェンスを展開せず、そのまま出力する。
           # shellcheck disable=SC2016
-          body="$(printf '週次チェックで更新を検出した。\n\n```\n%s\n```\n\n更新時はCHANGELOG、THIRD_PARTY_NOTICES、eval/calibration.mdの再測定を忘れない。' "$(cat report.txt)")"
+          body="$(printf '週次チェックで更新を検出した。\n\n```\n%s\n```\n\n更新時はCHANGELOG、THIRD_PARTY_NOTICES、suiko-eval の eval/calibration.md の再測定を忘れない。' "$(cat report.txt)")"
           number="$(gh issue list --state open --search "in:title ${title}" --json number --jq '.[0].number // empty')"
           if [ -n "${number}" ]; then
             gh issue comment "${number}" --body "${body}"

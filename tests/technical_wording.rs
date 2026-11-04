@@ -137,7 +137,7 @@ fn technical_wording_detects_context_and_inflections() {
         ] {
             let report = lint::analyze(body, &morphology, genre, experimental).unwrap();
             assert!(
-                report.findings.iter().all(|f| f.category != category),
+                report.findings.iter().any(|f| f.category == category),
                 "{body}: {genre:?}, {experimental}"
             );
         }
