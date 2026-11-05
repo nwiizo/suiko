@@ -1,13 +1,12 @@
 //! 読解負荷レーン。自然度スコアとは分離した推敲用の指さしを返す。
 
 use std::collections::BTreeMap;
-use std::sync::LazyLock;
 
 use regex::Regex;
 
 use crate::Error;
 use crate::morphology::Morphology;
-use crate::text::{mask_markdown_structure, sentences_with_raw};
+use crate::text::{mask_markdown_structure, reading_length, sentences_with_raw};
 
 use super::morph::{
     buried_list, buried_question_list, long_attributive_span, punctuation_between, tokenize,
@@ -15,26 +14,18 @@ use super::morph::{
 use super::{Finding, ReadingLoadReport, ReadingLoadStats, ReadingLoadThresholds};
 
 // Issue #34 で著者が読みづらいと判断した文は句点を除いて49〜70字（2節・55字を含む）。
-// 30字まで下げても実文書99件で10件しか出ず、45字で3文をすべて残す(eval/calibration.md)。
+// 30字まで下げても実文書99件で10件しか出ず、45字で3文をすべて残す(suiko-eval/eval/calibration.md)。
 // 節の下限は「はいか、」のような選択肢を外し、「〜へ戻るか」(11字)を残す。
 // 並びの下限は、Issue #34 の3文の並び(38〜42字)より少し短く取る。書籍原稿の点検で、
-// 20〜34字の並びは述語がすぐ続き、節ごとに切ると冗長になった(eval/calibration.md)。
+// 20〜34字の並びは述語がすぐ続き、節ごとに切ると冗長になった(suiko-eval/eval/calibration.md)。
 const QUESTION_LIST_SENTENCE_MIN: usize = 45;
 const QUESTION_CLAUSE_MIN: usize = 6;
 const QUESTION_LIST_MIN: usize = 35;
 // 名詞の列挙は、最後の項目より前に並んだ区画が20字以上か、6項目以上のときだけ指す。
 // 書籍原稿2冊と評価コーパスの点検で、20字未満は「仕事、睡眠、食事」のような一語の
-// 並びだった(eval/calibration.md)。
+// 並びだった(suiko-eval/eval/calibration.md)。
 const BURIED_LIST_HELD_MIN: usize = 20;
 const BURIED_LIST_MANY_ITEMS: usize = 6;
-
-// 文ごとに呼ばれるため、正規表現は一度だけコンパイルする。
-static WHITESPACE_RUN: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\s{2,}").expect("valid whitespace regex"));
-
-fn reading_length(text: &str) -> usize {
-    WHITESPACE_RUN.replace_all(text, " ").trim().chars().count()
-}
 
 fn first_negation_modifies_noun(
     tokens: &[crate::morphology::Morpheme],
@@ -141,15 +132,18 @@ pub fn analyze_reading_load_with_thresholds(
     genre: Option<&str>,
     thresholds: ReadingLoadThresholds,
 ) -> Result<ReadingLoadReport, Error> {
-    let masked = mask_markdown_structure(raw);
+    let (prepared, _) = crate::text::prepare_lint_text(raw);
+    let emphasis_masked = crate::markup::mask_review_emphasis(&prepared);
+    let masked = crate::text::mask_english_quotes(&mask_markdown_structure(&emphasis_masked));
     let raw_lines = raw.split('\n').collect::<Vec<_>>();
     let split = sentences_with_raw(&masked, raw);
     let tokenized = tokenize(&split, morphology)?;
+    let genre = super::genre::resolve(genre, &super::genre::features(&tokenized, raw));
     let sentence_max = thresholds
         .sentence_max
         .unwrap_or(if genre == Some("essay") { 110 } else { 90 });
     // 校正時、原稿で目視修正した文の修飾節は31〜76字に分布し、35字では31〜34字の
-    // 文を取り逃した。随筆(青空文庫)でも30字で文の1.5%程度に収まる(eval/calibration.md)。
+    // 文を取り逃した。随筆(青空文庫)でも30字で文の1.5%程度に収まる(suiko-eval/eval/calibration.md)。
     let attributive_span_min = thresholds.attributive_span_min.unwrap_or(30);
     let kanji = Regex::new(r"[一-龿々]{7,}").expect("valid kanji-run regex");
     let conditional_negative =
@@ -161,7 +155,7 @@ pub fn analyze_reading_load_with_thresholds(
         let excerpt = sentence.raw_text.chars().take(40).collect::<String>();
         // 読点ゼロの長文(カタログ B4の下位事例)。読点密度の検出はNO-GO済みだが、
         // 60字以上で読点が1つもない文は統語的な切れ目が示されず、実測でも
-        // 人間文書の誤検知ゼロだった(eval/calibration.md)。日本語の読点診断なので、
+        // 人間文書の誤検知ゼロだった(suiko-eval/eval/calibration.md)。日本語の読点診断なので、
         // URL・引用文献・コード断片のようなLatin優勢の行は対象にしない。
         let japanese_chars = sentence
             .text

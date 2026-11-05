@@ -780,6 +780,7 @@ pub(super) fn low_specificity_analysis(
     let mut findings = Vec::new();
     let mut evaluated = 0;
     let mut fired = 0;
+    let mut observations = Vec::new();
     for paragraph in paragraphs(masked) {
         let first_line = paragraph[0].0;
         let text = paragraph
@@ -820,6 +821,12 @@ pub(super) fn low_specificity_analysis(
         let abstract_ratio = abstract_count as f64 / count;
         let score = proper_density + numeric_density + if has_example { 0.1 } else { 0.0 }
             - abstract_ratio * 1.5;
+        let distance = score - score_threshold;
+        let near_threshold = distance.abs() <= 0.01;
+        observations.push(
+            json!({"line": first_line, "score": score, "threshold": score_threshold,
+            "distance": distance, "near_threshold": near_threshold}),
+        );
         if score < score_threshold {
             fired += 1;
             let excerpt = raw_lines
@@ -836,15 +843,20 @@ pub(super) fn low_specificity_analysis(
                 excerpt,
                 "info",
                 format!(
-                    "段落の具体性スコア={score:.3}（閾値{score_threshold:.2}未満）。固有名詞密度={proper_density:.3}, 数値密度={numeric_density:.3}, 抽象名詞率={abstract_ratio:.3}, 例示マーカー={}。固有名詞・数値・実例が乏しく一般論に留まっている疑い。素材不足のサインであり、文体の修正でなく情報収集を検討する（revision-guide.md の素材不足の分岐を参照）",
-                    if has_example { "あり" } else { "なし" }
+                    "段落の具体性スコア={score:.3}（閾値{score_threshold:.3}、差{distance:+.3}）。固有名詞密度={proper_density:.3}, 数値密度={numeric_density:.3}, 抽象名詞率={abstract_ratio:.3}, 例示マーカー={}。{}",
+                    if has_example { "あり" } else { "なし" },
+                    if near_threshold {
+                        "境界付近の値です。縮約などで語数が変わるだけでも判定が変わるため、この値だけで素材不足と判断せず、前後の内容を読み比べてください。"
+                    } else {
+                        "固有名詞・数値・実例が少ない段落です。必要な説明が欠けている場合に限り、原文や資料から情報を補えるか確認してください。"
+                    }
                 ),
             ));
         }
     }
     Ok((
         findings,
-        json!({"paragraphs_evaluated": evaluated, "paragraphs_fired": fired}),
+        json!({"paragraphs_evaluated": evaluated, "paragraphs_fired": fired, "paragraphs": observations}),
     ))
 }
 

@@ -2,43 +2,20 @@
 //! 抜粋とspanはbyteレイアウトが同一のraw行から作る。
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::LazyLock;
 
 use regex::Regex;
 use serde_json::{Value, json};
 
 use crate::Error;
 use crate::morphology::Morphology;
-use crate::text::{Sentence, excerpt_around, mask_html_comments, numbered_lines};
+use crate::text::{
+    Sentence, excerpt_around, fenced_lines, mask_html_comments, numbered_lines, protected_lines,
+};
 
 use super::{Finding, make_span};
 
 const BULLET_MARKER_PATTERN: &str = r"^\s*(?:[-*+]|[0-9]+[.)])\s+";
-
-pub(super) fn fenced_lines(lines: &[&str]) -> Vec<bool> {
-    let mut fence: Option<(char, usize)> = None;
-    lines
-        .iter()
-        .map(|line| {
-            let trimmed = line.trim_start();
-            let fence_run = trimmed
-                .chars()
-                .next()
-                .filter(|ch| *ch == '`' || *ch == '~')
-                .map(|ch| (ch, trimmed.chars().take_while(|c| c == &ch).count()));
-            if let Some((open_char, open_len)) = fence {
-                if fence_run.is_some_and(|(ch, len)| ch == open_char && len >= open_len) {
-                    fence = None;
-                }
-                true
-            } else if let Some((ch, len)) = fence_run.filter(|(_, len)| *len >= 3) {
-                fence = Some((ch, len));
-                true
-            } else {
-                false
-            }
-        })
-        .collect()
-}
 
 const FORBIDDEN_PHRASES: &[&str] = &[
     "と言えるでしょう",
@@ -89,20 +66,20 @@ const FORBIDDEN_PHRASES: &[&str] = &[
     "言語化する",
     "について見ていく",
     "を探求する",
+    "本記事では",
 ];
 
 /// 語彙の実測(suiko-eval vocab)用の読み取り専用アクセサ。
-pub(crate) fn forbidden_phrase_list() -> &'static [&'static str] {
+pub fn forbidden_phrase_list() -> &'static [&'static str] {
     FORBIDDEN_PHRASES
 }
 
-#[cfg(feature = "evaluation")]
-pub(crate) fn hype_expression_list() -> &'static [&'static str] {
+pub fn hype_expression_list() -> &'static [&'static str] {
     HYPE_EXPRESSIONS
 }
 
 // 「のではないでしょうか」は2026-08-19のvocab実測(現代人間dev 65文書中6文書)で
-// 人間の常用と確認し、弱いシグナルへ落とした(eval/calibration.md)。
+// 人間の常用と確認し、弱いシグナルへ落とした(suiko-eval/eval/calibration.md)。
 const WEAK_FORBIDDEN_PHRASES: &[&str] = &[
     "重要なのは",
     "このように",
@@ -110,6 +87,7 @@ const WEAK_FORBIDDEN_PHRASES: &[&str] = &[
     "ポイントは",
     "さて、",
     "のではないでしょうか",
+    "本記事では",
 ];
 
 const TRANSLATIONESE_PATTERNS: &[&str] = &[
@@ -167,10 +145,24 @@ pub(super) fn forbidden_findings(masked: &str, raw: &str) -> Vec<Finding> {
                 if phrase.ends_with('と') && line[byte_start + phrase.len()..].starts_with('き') {
                     continue;
                 }
-                let weak = WEAK_FORBIDDEN_PHRASES.contains(phrase);
-                let mut detail = format!("禁止語/LLM常套句ヒット: 「{phrase}」");
+                if matches!(*phrase, "いかがでしたか" | "いかがでしょうか")
+                    && has_question_topic(&line[..byte_start])
+                {
+                    continue;
+                }
+                let empty_preview = matches!(*phrase, "重要なのは" | "大切なのは" | "ポイントは")
+                    && empty_evaluation_preview(&line[byte_start + phrase.len()..]);
+                let weak = WEAK_FORBIDDEN_PHRASES.contains(phrase) && !empty_preview;
+                let mut detail = format!(
+                    "「{phrase}」という定型表現があります。評価・留保・話題のつながりを担っているなら残し、なくても意味が変わらない場合だけ省けるか確認してください。"
+                );
                 if weak {
-                    detail.push_str("（コーパス校正で人間側にも一定数出現する弱いシグナルと判定、severity低下）");
+                    detail.push_str(
+                        "人が書いた文章にも見られる表現なので、出現だけで不自然とは判断しません。",
+                    );
+                }
+                if empty_preview {
+                    detail = "評価の中身を示さず、次の説明だけを予告しています。何を重視するかを本文で述べるか、直後の説明から始められるか確認してください。".into();
                 }
                 findings.push(spanned_line_finding(
                     &raw_lines,
@@ -185,6 +177,33 @@ pub(super) fn forbidden_findings(masked: &str, raw: &str) -> Vec<Finding> {
         }
     }
     findings
+}
+
+fn empty_evaluation_preview(after: &str) -> bool {
+    static PREVIEW: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(
+            r"^[\s、]*(?:以下|次|下記)の(?:点|こと|とおり|通り)(?:です|だ|である)?[。！!：:\s]*$",
+        )
+        .expect("valid empty preview regex")
+    });
+    let sentence = after
+        .split_inclusive(['。', '！', '!'])
+        .next()
+        .unwrap_or(after);
+    PREVIEW.is_match(sentence)
+}
+
+/// 「見積もりは、いかがでしたか」のように質問の対象を明示した文は残す。
+/// 文をまたいだ照応や、対象を省略した問いかけの意図までは判定しない。
+fn has_question_topic(before: &str) -> bool {
+    let head = before
+        .rsplit(['。', '！', '？', '!', '?'])
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches(|ch: char| ch.is_whitespace() || ch == '、');
+    head.strip_suffix('は')
+        .or_else(|| head.strip_suffix("について"))
+        .is_some_and(|topic| !topic.trim().is_empty())
 }
 
 /// 同じ語の左右を別々に比較し、媒体による空白の方針を決めつけない。
@@ -480,7 +499,7 @@ pub(super) fn english_syntax_findings(masked: &str, raw: &str, split: &[Sentence
                         .get(found.start()..found.end())
                         .unwrap_or(found.as_str()),
                     "info",
-                    "無生物主語+他動詞的述語（表層パターン、英語統語の直訳調の可能性、要人間判断）",
+                    "主語が何を指すか、述語との関係が読み取れるか確認してください。事実やデータが結果を示す客観的な説明なら、そのまま残せます。無生物主語だけを理由に人の主語へ変えないでください。",
                 );
                 finding.span = make_span(&raw_lines, line_no, found.start(), line_no, found.end());
                 findings.push(finding);
@@ -618,6 +637,47 @@ fn is_emoji_symbol(ch: char) -> bool {
         || matches!(ch, '⭐' | '✅' | '❌' | '❗' | '❓')
 }
 
+pub(super) fn technical_surface_findings(raw: &str, genre: Option<&str>) -> Vec<Finding> {
+    let raw_lines = raw.split('\n').collect::<Vec<_>>();
+    let masked = mask_html_comments(raw);
+    let protected = protected_lines(&raw_lines);
+    let mut findings = Vec::new();
+    for (index, line) in masked.split('\n').enumerate() {
+        if protected[index] {
+            continue;
+        }
+        if genre == Some("tech")
+            && let Some((_, title)) = crate::text::heading(line)
+            && title.chars().next().is_some_and(is_emoji_symbol)
+        {
+            let start = line.find(&title).unwrap_or(0);
+            let end = start + title.split_whitespace().next().unwrap_or_default().len();
+            findings.push(spanned_line_finding(&raw_lines, index + 1, start, end, "heading_emoji", "info", "見出し先頭の絵文字が情報の識別に必要か確認してください。製品名や正式な題名に含まれる場合は残せます。".to_owned()));
+        }
+        let visible = crate::text::mask_inline_spans(line);
+        for (start, ch) in visible.char_indices() {
+            if !matches!(ch, '\u{200b}' | '\u{200c}' | '\u{200d}' | '\u{feff}')
+                || index == 0 && start == 0 && ch == '\u{feff}'
+            {
+                continue;
+            }
+            if matches!(ch, '\u{200c}' | '\u{200d}') {
+                let previous = visible[..start].chars().next_back();
+                let next = visible[start + ch.len_utf8()..].chars().next();
+                let japanese = |c: char| matches!(c, 'ぁ'..='ん' | 'ァ'..='ヶ' | '一'..='鿿');
+                if previous.is_some_and(is_emoji_symbol)
+                    || next.is_some_and(is_emoji_symbol)
+                    || !previous.is_some_and(japanese) && !next.is_some_and(japanese)
+                {
+                    continue;
+                }
+            }
+            findings.push(spanned_line_finding(&raw_lines, index + 1, start, start + ch.len_utf8(), "invisible_character", "info", format!("見えない文字 U+{:04X} があります。コピーや検索を妨げる混入なら削除してください。意図した改行・結合制御なら残せます。", ch as u32)));
+        }
+    }
+    findings
+}
+
 /// 短い文書や一箇所だけ強く目立つAI記述パターンを、文書全体の密度とは
 /// 独立に検出する。密度カテゴリ(high_bullet_ratio等)と同じ箇所を指す場合も
 /// 双方を報告する。答える問いが「文書の均一さ」と「局所の記述」で異なるため、
@@ -652,7 +712,15 @@ pub(super) fn local_pattern_findings(
             if let Some(found) = bold_label.find(&line[marker.end()..])
                 && found.start() == 0
             {
-                bold_hits.push((line_no, marker.end(), marker.end() + found.end()));
+                let label = found.as_str().split("**").nth(1).unwrap_or_default();
+                let identifier = label.starts_with('`') && label.ends_with('`')
+                    || (!label.is_empty()
+                        && label.chars().all(|ch| {
+                            ch.is_ascii_alphanumeric() || matches!(ch, '/' | '-' | '_' | '.' | ':')
+                        }));
+                if !identifier {
+                    bold_hits.push((line_no, marker.end(), marker.end() + found.end()));
+                }
             }
             if line[marker.end()..]
                 .chars()
@@ -685,7 +753,7 @@ pub(super) fn local_pattern_findings(
                             || next_trimmed.starts_with("~~~")
                             || next_trimmed.starts_with('|')
                     });
-                if !label.is_empty() && label.chars().count() <= 40 && next_block_starts {
+                if !label.is_empty() && next_block_starts {
                     let tokens = morphology.tokenize(label)?;
                     let predicate_ending = tokens
                         .iter()
@@ -701,7 +769,7 @@ pub(super) fn local_pattern_findings(
                             "predicate_colon_lead",
                             raw_line.trim().chars().take(40).collect::<String>(),
                             "info",
-                            "述語の直後にコロンを置いてブロックへ接続する構成。教科書的なAI生成文に多い。「使用方法:」のような名詞ラベル、または「次を実行します。」のような文への言い換えを検討する",
+                            "述語の直後にコロンを置いてブロックへ接続しています。「使用方法:」のような名詞ラベル、または「次を実行します。」のような文に整えられるか確認してください。",
                         );
                         finding.span = make_span(&raw_lines, line_no, start, line_no, end);
                         findings.push(finding);
@@ -755,7 +823,7 @@ pub(super) fn local_pattern_findings(
             raw_line.trim().chars().take(40).collect::<String>(),
             "info",
             format!(
-                "{description}が{}行ある。文書単位の集約finding。教科書的なAI生成文に多い装飾で、密度カテゴリ(high_bullet_ratio等)とは独立の局所パターンとして報告する。対応箇所: {related}",
+                "{description}が{}行あります。項目の区別に役立つ名称や方式の説明は残せます。装飾だけのラベルが続く場合に見直してください。対応箇所: {related}",
                 lines_hit.len()
             ),
         );
@@ -886,4 +954,197 @@ pub(super) fn uniform_bullet_structure_findings(
     finding.related_lines = Some(related_lines);
     finding.span = make_span(&raw_lines, first.0, first.1, last.0, last.2);
     Ok(vec![finding])
+}
+
+// ---- 太字が表示されない書き方 ----
+
+fn is_markdown_whitespace(ch: Option<char>) -> bool {
+    ch.is_none_or(char::is_whitespace)
+}
+
+/// 太字の内側が句読点・括弧・記号で、外側が文字に接しているため、GitHub等の
+/// CommonMark系レンダラーで`**`がそのまま表示される箇所。コードブロックと
+/// インラインコードの中は見ない。
+pub(super) fn bold_not_rendered_findings(raw: &str, raw_lines: &[&str]) -> Vec<Finding> {
+    let protected = protected_lines(raw_lines);
+    let mut findings = Vec::new();
+    for (line_no, line) in numbered_lines(raw) {
+        if protected[line_no - 1] {
+            continue;
+        }
+        let unrendered = crate::text::mask_emphasis_delimiters(line);
+        for bold in crate::markup::bold_ranges(line) {
+            if unrendered[bold.start..bold.start + 2] == *"  "
+                && unrendered[bold.end - 2..bold.end] == *"  "
+            {
+                continue;
+            }
+            let text = &line[bold.clone()];
+            let underscore = text.starts_with('_');
+            let inner = text.trim_matches(['*', '_']);
+            let previous = line[..bold.start].chars().next_back();
+            let next = line[bold.end..].chars().next();
+            if crate::markup::bold_renders(
+                previous,
+                inner.chars().next(),
+                inner.chars().next_back(),
+                next,
+                underscore,
+            ) && unrendered == line
+            {
+                continue;
+            }
+            let detail = if is_markdown_whitespace(inner.chars().next())
+                || is_markdown_whitespace(inner.chars().next_back())
+            {
+                "太字の内側が空白で始まるか終わるため、CommonMark系の表示では太字にならず記号がそのまま出ます。空白を太字の外へ出してください。"
+            } else if underscore {
+                "`__`は語の途中では強調になりません。日本語の文字に接する場合は`**`を使うか、両側に半角空白を置いてください。"
+            } else {
+                "太字の内側が括弧や記号で、外側が文字に接しているため、GitHubなどCommonMark系の表示では太字にならず`**`がそのまま出ます。括弧や記号を太字の外へ出すか、文字に接する側に半角空白を置いてください。"
+            };
+            let mut finding = Finding::new(line_no, "bold_not_rendered", text, "warn", detail);
+            finding.span = make_span(raw_lines, line_no, bold.start, line_no, bold.end);
+            findings.push(finding);
+        }
+    }
+    findings
+}
+
+pub(super) fn duplicate_comma_findings(masked: &str, raw_lines: &[&str]) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    let mut ranges = crate::markup::duplicate_commas(masked)
+        .into_iter()
+        .peekable();
+    let mut offset = 0;
+    for (line_no, line) in numbered_lines(masked) {
+        while ranges
+            .peek()
+            .is_some_and(|range| range.start < offset + line.len())
+        {
+            let range = ranges.next().expect("peeked comma range");
+            findings.push(spanned_line_finding(raw_lines, line_no, range.start - offset, range.end - offset,
+                "duplicate_comma", "warn", "読点が連続しています。入力や修正時の重複であれば一つにしてください。意図した間や表記の例は残せます。".into()));
+        }
+        offset += line.len() + 1;
+    }
+    findings
+}
+
+// ---- 書き手への指示や作業報告の残り ----
+
+static RESIDUE_OPENER: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^(?:この記事|本記事|本稿|この文書|本文書|このブログ|ここ|以下|今回)(?:では|は)")
+        .expect("valid residue opener regex")
+});
+static RESIDUE_STYLE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(concat!(
+        r"(?:トーン|文体|口調|調子)(?:で|を意識|に)|",
+        r"(?:専門用語|箇条書き|難しい言葉|カタカナ語)を(?:できるだけ|なるべく|極力)?(?:使わず|用いず|避け|控え)|",
+        r"(?:AI|ＡＩ)(?:っぽさ|らしさ)|飾らない言葉で|語り口で|",
+        r"[0-9０-９]+(?:文字|字)(?:程度|以内|前後|ほど)?で|",
+        r"(?:です・ます調|だ・である調|敬体|常体)(?:で|に)",
+    ))
+    .expect("valid residue style regex")
+});
+static RESIDUE_WRITE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?:書き|説明し|紹介し|解説し|まとめ|お伝えし|述べ|お届けし|話し|語り)(?:ます|ていきます|ていく|ましょう)$")
+        .expect("valid residue write regex")
+});
+static RESIDUE_RESULT: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(concat!(
+        r"(?:推敲|改稿|校正|添削|リライト|書き換え|書き直し|修正)(?:後|版|案|結果)の",
+        r"(?:文章|本文|原稿|テキスト)(?:は|を)?(?:以下|次)(?:の|に)?(?:とおり|通り|示し|掲載|記載)",
+    ))
+    .expect("valid residue result regex")
+});
+static RESIDUE_REQUEST: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?:ご要望|ご指示|ご依頼|指示|要望)(?:のとおり|の通り|に沿って|どおり|通り|に従い|に従って|を踏まえ)")
+        .expect("valid residue request regex")
+});
+static RESIDUE_SOURCE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(concat!(
+        r"(?:原文|元の文章|元の文|元の原稿)(?:の(?:意味|内容|構成|趣旨|ニュアンス))?(?:は|を)",
+        r"(?:保ち|保っ|保持し|変えず|維持し|損なわず|崩さず)",
+    ))
+    .expect("valid residue source regex")
+});
+static RESIDUE_EDIT_DONE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(concat!(
+        r"(?:推敲|改稿|校正|添削|リライト|書き換え|書き直し|修正|統一|調整|整理|整え)",
+        r"(?:しました|いたしました|を行いました|を加えました|しています|しております|済みです)",
+    ))
+    .expect("valid residue edit regex")
+});
+static RESIDUE_MARKER_LINE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^\s*【?(?:修正|推敲|改稿|校正|添削)(?:後|版|案|結果)】?\s*[:：]?\s*$")
+        .expect("valid residue marker regex")
+});
+static RESIDUE_MARKER_INLINE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"【要確認】|\[要確認\]|（要確認）|\(要確認\)|<<<")
+        .expect("valid residue inline regex")
+});
+
+const RESIDUE_DETAIL: &str = "書き手への指示や推敲の作業報告が本文に残っている可能性があります。読者に向けた文でなければ、公開前に取り除いてください。";
+
+/// 依頼文の書き方の条件を本文で述べ直した文、推敲の作業報告、修正版の見出しや
+/// 確認メモの印。コード・引用・箇条書きの中は見ない。
+pub(super) fn instruction_residue_findings(split: &[Sentence], raw_lines: &[&str]) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    for sentence in split {
+        let text = sentence.text.as_str();
+        let instruction = RESIDUE_OPENER.is_match(text)
+            && RESIDUE_STYLE.is_match(text)
+            && RESIDUE_WRITE.is_match(text);
+        let report = RESIDUE_RESULT.is_match(text)
+            || ((RESIDUE_REQUEST.is_match(text) || RESIDUE_SOURCE.is_match(text))
+                && RESIDUE_EDIT_DONE.is_match(text));
+        if !(instruction || report) {
+            continue;
+        }
+        let start = sentence.line_byte_start;
+        findings.push(spanned_line_finding(
+            raw_lines,
+            sentence.line,
+            start,
+            start + text.len(),
+            "instruction_residue",
+            "info",
+            RESIDUE_DETAIL.to_owned(),
+        ));
+    }
+    let protected = protected_lines(raw_lines);
+    for (index, line) in raw_lines.iter().enumerate() {
+        let line_no = index + 1;
+        if protected[index] || line.trim_start().starts_with('>') {
+            continue;
+        }
+        if RESIDUE_MARKER_LINE.is_match(line) {
+            let start = line.len() - line.trim_start().len();
+            let end = line.trim_end().len();
+            let mut finding = Finding::new(
+                line_no,
+                "instruction_residue",
+                line.trim(),
+                "info",
+                RESIDUE_DETAIL,
+            );
+            finding.span = make_span(raw_lines, line_no, start, line_no, end);
+            findings.push(finding);
+            continue;
+        }
+        for marker in RESIDUE_MARKER_INLINE.find_iter(line) {
+            findings.push(spanned_line_finding(
+                raw_lines,
+                line_no,
+                marker.start(),
+                marker.end(),
+                "instruction_residue",
+                "info",
+                RESIDUE_DETAIL.to_owned(),
+            ));
+        }
+    }
+    findings.sort_by_key(|finding| (finding.line, finding.span.map(|span| span.start_byte)));
+    findings
 }

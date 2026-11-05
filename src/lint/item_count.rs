@@ -1,6 +1,6 @@
 //! 宣言した項目数と直後の箇条書きの項目数の照合。
 //! 「次の3点」のような限定した宣言だけを拾い、直後のリストの同じ階層の
-//! 項目を数える。確実に数えられない形は判定しない（eval/six-axis-morphology-design.md）。
+//! 項目を数える。確実に数えられない形は判定しない（suiko-eval/eval/six-axis-morphology-design.md）。
 
 use std::sync::LazyLock;
 
@@ -8,8 +8,8 @@ use regex::Regex;
 
 use crate::text::{excerpt_around, is_heading, is_list_item};
 
-use super::patterns::fenced_lines;
 use super::{Finding, make_span};
+use crate::text::fenced_lines;
 
 const CATEGORY: &str = "declared_item_count_mismatch";
 
@@ -43,7 +43,7 @@ struct Declaration {
     label: String,
 }
 
-fn parse_number(text: &str) -> Option<usize> {
+pub(super) fn parse_number(text: &str) -> Option<usize> {
     if text
         .chars()
         .all(|ch| ch.is_ascii_digit() || ('０'..='９').contains(&ch))

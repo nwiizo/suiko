@@ -142,7 +142,8 @@ pub(crate) fn word_rule_findings(
     if rules.is_empty() {
         return Ok(Vec::new());
     }
-    let (masked, _) = mask_markdown_structure_with_stats(raw);
+    let (prepared, _) = crate::text::prepare_lint_text(raw);
+    let (masked, _) = mask_markdown_structure_with_stats(&prepared);
     let tokenized = morph::tokenize(&sentences_with_raw(&masked, raw), morphology)?;
     let raw_lines = raw.split('\n').collect::<Vec<_>>();
     let mut findings = Vec::new();

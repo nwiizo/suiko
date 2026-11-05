@@ -1,13 +1,19 @@
 pub mod academic;
 pub mod cli;
-#[cfg(feature = "evaluation")]
-pub mod evaluation;
+pub mod diff;
+pub mod fact_gaps;
 pub mod lexical;
 pub mod lint;
+mod markup;
+pub mod materials;
+pub mod meaning;
 pub mod morphology;
 pub mod outline;
 pub mod terms;
 mod text;
+
+/// 評価（suiko-eval）が語彙の出現を数えるとき、検査と同じ範囲だけを見るためのマスク。
+pub use text::mask_markdown_structure;
 
 use std::path::Path;
 

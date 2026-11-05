@@ -48,6 +48,35 @@ impl Morpheme {
     pub fn normalized(&self) -> &str {
         known(&self.normalized).unwrap_or(self.surface.as_str())
     }
+
+    /// 五段・一段の規則的な可能形の語幹。実際に可能の意味かは文脈側で確認する。
+    pub(crate) fn potential_stem(&self) -> Option<String> {
+        if self.pos(0) != "動詞" {
+            return None;
+        }
+        let dictionary = self.dictionary_form();
+        let last = dictionary.chars().next_back()?;
+        let stem = &dictionary[..dictionary.len() - last.len_utf8()];
+        if self.pos(4).starts_with("五段") {
+            let ending = match last {
+                'う' => 'え',
+                'く' => 'け',
+                'ぐ' => 'げ',
+                'す' => 'せ',
+                'つ' => 'て',
+                'ぬ' => 'ね',
+                'ぶ' => 'べ',
+                'む' => 'め',
+                'る' => 'れ',
+                _ => return None,
+            };
+            Some(format!("{stem}{ending}"))
+        } else if self.pos(4).contains("一段") && last == 'る' {
+            Some(format!("{stem}られ"))
+        } else {
+            None
+        }
+    }
 }
 
 pub struct Morphology {
