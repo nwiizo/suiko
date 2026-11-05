@@ -14,6 +14,8 @@ enum Agent {
     Time,
     /// 冷たさ・白さなど、物の性質。
     Property,
+    /// 雨・雪・風など、天気。降る・吹く等の字義どおりの動きが多いため、共通の動作だけを見る。
+    Weather,
 }
 
 fn agent(tokens: &[&Morpheme], index: usize) -> Option<(Agent, usize)> {
@@ -42,10 +44,11 @@ fn agent(tokens: &[&Morpheme], index: usize) -> Option<(Agent, usize)> {
         | "鍋" | "釜" | "薬缶" | "やかん" | "フライパン" | "茶碗" | "急須" | "コップ"
         | "グラス" | "瓶" | "箸" | "スプーン" | "鞄" | "かばん" | "財布" | "靴" | "靴箱"
         | "万年筆" | "鉛筆" | "ノート" | "手帳" | "ランプ" => Agent::Object,
-        "光" | "灯り" | "明かり" | "空気" | "気配" | "香り" | "匂い" | "影" => {
-            Agent::Sense
-        }
-        "午後" | "夜" | "朝" | "昼間" | "夕方" | "一日" => Agent::Time,
+        "光" | "灯り" | "明かり" | "空気" | "気配" | "香り" | "匂い" | "影" | "音" | "雨音"
+        | "足音" | "物音" | "波音" | "湯気" => Agent::Sense,
+        "午後" | "夜" | "朝" | "昼間" | "夕方" | "一日" | "時間" | "年月" | "歳月" | "日々"
+        | "季節" => Agent::Time,
+        "雨" | "雪" | "風" | "霧" => Agent::Weather,
         "温もり" | "ぬくもり" | "凹凸" | "冷気" => Agent::Property,
         _ => return None,
     };
@@ -90,7 +93,10 @@ fn relative_clause_end(tokens: &[&Morpheme], verb: usize) -> Option<usize> {
         end += 1;
     }
     (tokens[end].pos(5).starts_with("連体形")
-        && tokens.get(end + 1).is_some_and(|t| t.pos(0) == "名詞"))
+        // 「火の番をしてくれる誰か」のように代名詞を修飾する節も飛ばす。
+        && tokens
+            .get(end + 1)
+            .is_some_and(|t| matches!(t.pos(0), "名詞" | "代名詞")))
     .then_some(end)
 }
 
@@ -124,14 +130,40 @@ fn main_verb(tokens: &[&Morpheme], start: usize) -> Option<usize> {
                 return None;
             }
             "補助記号" if token.pos(1) != "読点" => return None,
+            // 「風が強く、傘をたたんだ」の「強く、」は主語の述語で、後の動詞は別の動作主のもの。
+            "形容詞"
+                if token.pos(5).starts_with("終止形")
+                    || tokens
+                        .get(index + 1)
+                        .is_some_and(|next| next.pos(1) == "読点") =>
+            {
+                return None;
+            }
             _ => index += 1,
         }
     }
     None
 }
 
+/// 人や動物だけがする動作。物・感覚・時間・性質・天気のどの類が主語でも、擬人化として示す。
+/// 類ごとの動詞表と掛け合わせず一つにまとめ、類の語と動詞の両方が表にある組だけを拾う疎さを減らす。
+const ANIMATE_ACTIONS: &[&str] = &["寄り添う", "育てる", "畳む", "座る", "預かる"];
+
 fn mismatched_action(tokens: &[&Morpheme], kind: Agent, verb: usize) -> Option<&'static str> {
     let action = tokens[verb].normalized();
+    // 「椅子が座りやすい」の「座りやすい」は物の性質で、物の動作ではない。
+    let ease = tokens.get(verb + 1).is_some_and(|next| {
+        matches!(
+            next.normalized(),
+            "易い" | "やすい" | "難い" | "にくい" | "づらい" | "辛い" | "心地"
+        )
+    });
+    if ANIMATE_ACTIONS.contains(&action) && !ease {
+        return Some(match kind {
+            Agent::Object => "explanatory_metaphor",
+            _ => "sensory_role_mismatch",
+        });
+    }
     let previous = verb.checked_sub(2).map(|i| tokens[i].normalized());
     let object_is =
         |noun: &str| verb >= 2 && tokens[verb - 1].surface == "を" && previous == Some(noun);
@@ -164,7 +196,15 @@ fn mismatched_action(tokens: &[&Morpheme], kind: Agent, verb: usize) -> Option<&
             if asleep
                 || matches!(
                     action,
-                    "見送る" | "待つ" | "起きる" | "拭き取る" | "受け止める" | "抱える" | "眠る"
+                    "見送る"
+                        | "待つ"
+                        | "起きる"
+                        | "拭き取る"
+                        | "受け止める"
+                        | "抱える"
+                        | "眠る"
+                        | "積もる"
+                        | "降り積もる"
                 ) =>
         {
             Some("sensory_role_mismatch")
@@ -206,6 +246,9 @@ fn detail(kind: Agent) -> &'static str {
         }
         Agent::Property => {
             "冷たさ・温もり・凹凸のような性質が、物のように移動したり包んだりしています。熱を運ぶ空気や物、触れている面と、そこから感じる性質を区別できるか確認してください。意図した比喩は残せます。"
+        }
+        Agent::Weather => {
+            "雨・雪・風が、人のように寄り添う・座る・たたむ等の動作をしています。天気の様子と、それを受け取った人や周りの物の動きを区別できるか確認してください。意図した擬人化は残せます。"
         }
     }
 }
