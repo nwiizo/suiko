@@ -151,6 +151,9 @@ pub(super) struct CompareArgs {
     config: Option<PathBuf>,
     #[arg(long, conflicts_with = "config")]
     no_config: bool,
+    /// 個別の指摘をJSONに含める（new・resolved・persisting・all）。継続には対応づけの根拠を付ける
+    #[arg(long, value_enum, requires = "json")]
+    findings: Option<FindingFilter>,
 }
 
 fn invalid(message: impl Into<String>) -> Error {
@@ -251,55 +254,116 @@ struct Lanes {
     reading_load: ChangeCounts,
 }
 
-fn changes(
-    before: &[lint::Finding],
-    after: &mut [lint::Finding],
-    categories: &mut BTreeMap<String, Lanes>,
-    reading: bool,
-) -> Result<ChangeCounts, Error> {
-    let baseline = lint::apply_baseline(after, &json!({"findings": before}), String::new())
-        .map_err(invalid)?;
-    for finding in before {
-        let lanes = categories.entry(finding.category.clone()).or_default();
-        let counts = if reading {
-            &mut lanes.reading_load
-        } else {
-            &mut lanes.natural
-        };
-        counts.before += 1;
-    }
-    for finding in after.iter() {
-        let lanes = categories.entry(finding.category.clone()).or_default();
-        let counts = if reading {
-            &mut lanes.reading_load
-        } else {
-            &mut lanes.natural
-        };
-        counts.after += 1;
-        if finding.status.as_deref() == Some("persisting") {
-            counts.persisting += 1;
-        } else {
-            counts.new += 1;
+/// 個別の指摘を一覧に含める状態。`--findings`で選ぶ。
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub(super) enum FindingFilter {
+    New,
+    Resolved,
+    Persisting,
+    All,
+}
+
+impl FindingFilter {
+    fn includes(self, status: &str) -> bool {
+        match self {
+            Self::All => true,
+            Self::New => status == "new",
+            Self::Resolved => status == "resolved",
+            Self::Persisting => status == "persisting",
         }
     }
-    for finding in &baseline.resolved {
-        let lanes = categories
-            .entry(finding["category"].as_str().unwrap_or_default().to_owned())
-            .or_default();
-        let counts = if reading {
+}
+
+/// 一方の版の本文と指摘。
+struct Side<'a> {
+    text: &'a str,
+    findings: &'a [lint::Finding],
+}
+
+fn keys(findings: &[lint::Finding]) -> Vec<lint::matching::MatchKey<'_>> {
+    findings.iter().map(Into::into).collect()
+}
+
+/// 前後の指摘を文の対応で照合し、カテゴリ別に数え、`filter`に合う個別の指摘を`items`へ足す。
+fn changes(
+    before: Side,
+    after: Side,
+    categories: &mut BTreeMap<String, Lanes>,
+    reading: bool,
+    filter: Option<FindingFilter>,
+    items: &mut Vec<serde_json::Value>,
+) -> ChangeCounts {
+    let matches = lint::matching::match_findings(
+        &keys(before.findings),
+        &keys(after.findings),
+        Some((before.text, after.text)),
+    );
+    let lane = if reading { "reading_load" } else { "natural" };
+    fn lane_counts<'c>(
+        categories: &'c mut BTreeMap<String, Lanes>,
+        category: &str,
+        reading: bool,
+    ) -> &'c mut ChangeCounts {
+        let lanes = categories.entry(category.to_owned()).or_default();
+        if reading {
             &mut lanes.reading_load
         } else {
             &mut lanes.natural
-        };
-        counts.resolved += 1;
+        }
     }
-    Ok(ChangeCounts {
-        before: before.len(),
-        after: after.len(),
-        resolved: baseline.summary.resolved,
-        new: baseline.summary.new,
-        persisting: baseline.summary.persisting,
-    })
+    for finding in before.findings {
+        lane_counts(categories, &finding.category, reading).before += 1;
+    }
+    for finding in after.findings {
+        lane_counts(categories, &finding.category, reading).after += 1;
+    }
+    let mut push = |status: &str,
+                    old: Option<&lint::Finding>,
+                    new: Option<&lint::Finding>,
+                    basis: Option<&str>| {
+        if filter.is_some_and(|filter| filter.includes(status)) {
+            let finding = new.or(old).expect("either side exists");
+            items.push(json!({
+                "lane": lane,
+                "status": status,
+                "category": finding.category,
+                "severity": finding.severity,
+                "before_line": old.map(|f| f.line),
+                "after_line": new.map(|f| f.line),
+                "before_excerpt": old.map(|f| &f.excerpt),
+                "after_excerpt": new.map(|f| &f.excerpt),
+                "basis": basis,
+                "detail": finding.detail,
+            }));
+        }
+    };
+    for pair in &matches.persisting {
+        let (old, new) = (&before.findings[pair.before], &after.findings[pair.after]);
+        lane_counts(categories, &new.category, reading).persisting += 1;
+        push(
+            "persisting",
+            Some(old),
+            Some(new),
+            Some(pair.basis.as_str()),
+        );
+    }
+    for &index in &matches.new {
+        let new = &after.findings[index];
+        lane_counts(categories, &new.category, reading).new += 1;
+        push("new", None, Some(new), None);
+    }
+    for &index in &matches.resolved {
+        let old = &before.findings[index];
+        lane_counts(categories, &old.category, reading).resolved += 1;
+        push("resolved", Some(old), None, None);
+    }
+    ChangeCounts {
+        before: before.findings.len(),
+        after: after.findings.len(),
+        resolved: matches.resolved.len(),
+        new: matches.new.len(),
+        persisting: matches.persisting.len(),
+    }
 }
 
 pub(super) fn compare(args: CompareArgs) -> Result<ExitCode, Error> {
@@ -435,7 +499,7 @@ pub(super) fn compare(args: CompareArgs) -> Result<ExitCode, Error> {
             args.experimental,
             config.as_ref(),
         )?;
-        let mut after = configured_lint(
+        let after = configured_lint(
             &after_text,
             &morphology,
             genre,
@@ -446,18 +510,35 @@ pub(super) fn compare(args: CompareArgs) -> Result<ExitCode, Error> {
         let mut after_reading = lint::analyze_reading_load(&after_text, &morphology, genre)?;
         apply_reading_load_config(&mut before_reading, config.as_ref());
         apply_reading_load_config(&mut after_reading, config.as_ref());
+        let mut items = Vec::new();
         let natural = changes(
-            &before.findings,
-            &mut after.findings,
+            Side {
+                text: &before_text,
+                findings: &before.findings,
+            },
+            Side {
+                text: &after_text,
+                findings: &after.findings,
+            },
             &mut categories,
             false,
-        )?;
+            args.findings,
+            &mut items,
+        );
         let reading_load = changes(
-            &before_reading.findings,
-            &mut after_reading.findings,
+            Side {
+                text: &before_text,
+                findings: &before_reading.findings,
+            },
+            Side {
+                text: &after_text,
+                findings: &after_reading.findings,
+            },
             &mut categories,
             true,
-        )?;
+            args.findings,
+            &mut items,
+        );
         failed |= fail_on.is_some_and(|threshold| {
             after
                 .findings
@@ -476,7 +557,11 @@ pub(super) fn compare(args: CompareArgs) -> Result<ExitCode, Error> {
         } else {
             "matched"
         };
-        files.push(json!({"file": file, "before_file": before_exists.then_some(before_file), "file_status": status, "natural": natural, "reading_load": reading_load}));
+        let mut entry = json!({"file": file, "before_file": before_exists.then_some(before_file), "file_status": status, "natural": natural, "reading_load": reading_load});
+        if args.findings.is_some() {
+            entry["findings"] = json!(items);
+        }
+        files.push(entry);
     }
     if args.json || matches!(args.summary, Some(SummaryFormat::Json)) {
         println!(

@@ -9,9 +9,11 @@ mod exceptions;
 mod genre;
 mod hollow;
 mod item_count;
+pub mod matching;
 mod metrics;
 mod morph;
 mod patterns;
+mod priority;
 mod quantities;
 mod reading_load;
 mod relations;
@@ -33,6 +35,7 @@ use crate::text::{mask_html_comments, mask_markdown_structure_with_stats, senten
 pub use baseline::{BaselineReport, BaselineSummary, apply_baseline, baseline_added};
 pub(crate) use morph::FORMAL_NOUNS;
 pub use patterns::{forbidden_phrase_list, hype_expression_list};
+pub use priority::{Confidence, FIRST_FIX_LIMIT, FirstFix, confidence, first_fixes};
 pub use reading_load::{analyze_reading_load, analyze_reading_load_with_thresholds};
 pub(crate) use word_rules::{WordRule, validate_word_rules, word_rule_findings};
 

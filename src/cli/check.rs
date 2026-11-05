@@ -137,9 +137,15 @@ struct FindingKey {
     category: String,
     line: usize,
     excerpt: String,
+    /// 残った指摘の、原文での行。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    before_line: Option<usize>,
+    /// 残ったと判定した根拠（same_sentence・edited_sentence・moved・document）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    basis: Option<&'static str>,
 }
 
-/// 指摘を（カテゴリ, 抜粋）で突き合わせる。行番号は改稿で動くため照合に使わない。
+/// 指摘を compare・--baseline と同じ文の対応づけで突き合わせる。
 #[derive(Serialize)]
 struct FindingChanges {
     resolved: Vec<FindingKey>,
@@ -148,34 +154,39 @@ struct FindingChanges {
 }
 
 impl FindingChanges {
-    fn compare<'a>(
-        before: impl Iterator<Item = &'a lint::Finding>,
-        after: impl Iterator<Item = &'a lint::Finding>,
+    fn compare(
+        before_text: &str,
+        before: &[&lint::Finding],
+        after_text: &str,
+        after: &[&lint::Finding],
     ) -> Self {
+        fn keys<'a>(findings: &[&'a lint::Finding]) -> Vec<lint::matching::MatchKey<'a>> {
+            findings.iter().copied().map(Into::into).collect()
+        }
         let key = |finding: &lint::Finding| FindingKey {
             category: finding.category.clone(),
             line: finding.line,
             excerpt: finding.excerpt.clone(),
+            before_line: None,
+            basis: None,
         };
-        let mut remaining = before.map(key).collect::<Vec<_>>();
-        let mut kept = Vec::new();
-        let mut introduced = Vec::new();
-        for finding in after.map(key) {
-            match remaining
-                .iter()
-                .position(|old| old.category == finding.category && old.excerpt == finding.excerpt)
-            {
-                Some(index) => {
-                    remaining.remove(index);
-                    kept.push(finding);
-                }
-                None => introduced.push(finding),
-            }
-        }
+        let matches = lint::matching::match_findings(
+            &keys(before),
+            &keys(after),
+            Some((before_text, after_text)),
+        );
         Self {
-            resolved: remaining,
-            kept,
-            introduced,
+            resolved: matches.resolved.iter().map(|&b| key(before[b])).collect(),
+            kept: matches
+                .persisting
+                .iter()
+                .map(|pair| FindingKey {
+                    before_line: Some(before[pair.before].line),
+                    basis: Some(pair.basis.as_str()),
+                    ..key(after[pair.after])
+                })
+                .collect(),
+            introduced: matches.new.iter().map(|&a| key(after[a])).collect(),
         }
     }
 }
@@ -297,8 +308,18 @@ fn analyze(
             let mut old_load = lint::analyze_reading_load(before, &morphology, genre)?;
             apply_reading_load_config(&mut old_load, config);
             Ok(FindingChanges::compare(
-                old_lint.findings.iter().chain(&old_load.findings),
-                lint.findings.iter().chain(&reading_load.findings),
+                before,
+                &old_lint
+                    .findings
+                    .iter()
+                    .chain(&old_load.findings)
+                    .collect::<Vec<_>>(),
+                final_text,
+                &lint
+                    .findings
+                    .iter()
+                    .chain(&reading_load.findings)
+                    .collect::<Vec<_>>(),
             ))
         })
         .transpose()?;
@@ -617,7 +638,14 @@ fn print_report(report: &CheckReport) {
         );
         for (label, keys) in [("残存", &changes.kept), ("新規", &changes.introduced)] {
             for key in keys {
-                println!("  {label} L{} [{}] {}", key.line, key.category, key.excerpt);
+                let origin = match (key.before_line, key.basis) {
+                    (Some(line), Some(basis)) => format!(" ← 原文L{line}（{basis}）"),
+                    _ => String::new(),
+                };
+                println!(
+                    "  {label} L{} [{}] {}{origin}",
+                    key.line, key.category, key.excerpt
+                );
             }
         }
     }

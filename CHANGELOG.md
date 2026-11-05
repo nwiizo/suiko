@@ -4,6 +4,13 @@ Suikoの公開リリースを記録する。日付はJSTで、各項目は実測
 
 ## [Unreleased]
 
+### 指摘の対応づけと「まず直す候補」
+
+- `compare`・`lint --baseline`・`check --before`が、同じ方法（`lint::matching`）で前後の指摘を対応づけるようにした。本文がある場合は、両方に一度だけ現れる行を目印に行を対応づけ、変更行を文字bigramの近さ（Dice 0.5以上）で組む。継続の根拠は`same_sentence`・`edited_sentence`・`moved`・`document`の順に判定し、根拠のない組は解消と新規に分ける。抜粋の先頭20文字が変わるだけで「解消＋新規」になっていた問題（N1）を直した。本文のないbaselineは、抜粋全体→先頭20文字の一致と行の近さで照合する（従来は先頭20文字と出現順）。
+- `compare --json --findings new|resolved|persisting|all`を追加した（N2）。レーン・状態・前後の行と抜粋・根拠・詳細を返し、集計と件数が一致する。`--findings`なしのJSONは従来のまま。
+- `check --before`の`finding_changes.kept`に、原文での行（`before_line`）と根拠（`basis`）を追加した。
+- lintの出力に「まず直す候補」（JSONは`first_fixes`）を追加した。重大度→規則の確度→行の順に5件まで、同じ規則からは2件まで。確度はsuiko-evalの品質表（2026-11-03・04）に基づき、人間の文書にほとんど付かず標本の条件を満たした15規則と表記・記法の誤りをhigh、人間の文書の多くに付く9規則・実験規則・文書全体の統計をlowとした。指摘がない場合は出力しない。
+
 ### 評価CLIと評価データの分離
 
 - `suiko-eval`と評価データ（`eval/`のコーパス・ラベル付き標本・校正記録・外部文書のlock）を別リポジトリ[suiko-eval](https://github.com/nwiizo/suiko-eval)へ移した。suikoから`evaluation` feature、`src/evaluation`、`tests/evaluation.rs`と、評価だけが使っていた依存（encoding_rs、jiff、実行時のureq）を外した。`--features evaluation`を指定していたビルドは失敗する。

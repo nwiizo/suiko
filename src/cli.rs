@@ -409,6 +409,9 @@ struct LintOutput<'a> {
     file: &'a str,
     suiko_version: &'static str,
     stats: &'a LintStats,
+    /// まず直す候補。重大度と規則の確度で並べた上位数件。
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    first_fixes: Vec<lint::FirstFix>,
     findings: &'a [Finding],
     #[serde(skip_serializing_if = "Option::is_none")]
     baseline: Option<&'a lint::BaselineReport>,
@@ -772,6 +775,24 @@ fn print_lint_human(run: &LintRun) {
             println!("(baselineに対応recordがないファイルのため、全findingを新規として扱う)");
         }
     }
+    let first_fixes = lint::first_fixes(&report.findings, lint::FIRST_FIX_LIMIT);
+    if !first_fixes.is_empty() {
+        println!(
+            "まず直す候補（重大度と規則の確度で上位{}件）:",
+            first_fixes.len()
+        );
+        for fix in &first_fixes {
+            let confidence = match fix.confidence {
+                lint::Confidence::High => "確度高",
+                lint::Confidence::Medium => "確度中",
+                lint::Confidence::Low => "確度低",
+            };
+            println!(
+                "  {}. L{} ({}・{confidence}) {}",
+                fix.rank, fix.line, fix.category, fix.excerpt
+            );
+        }
+    }
     println!();
     if report.findings.is_empty() {
         println!("検出なし。");
@@ -1025,6 +1046,7 @@ fn execute(cli: Cli) -> Result<ExitCode, Error> {
                         file: &run.file,
                         suiko_version: env!("CARGO_PKG_VERSION"),
                         stats: &run.report.stats,
+                        first_fixes: lint::first_fixes(&run.report.findings, lint::FIRST_FIX_LIMIT),
                         findings: &run.report.findings,
                         baseline: run.baseline.as_ref(),
                         reading_load: run.reading_load.as_ref(),

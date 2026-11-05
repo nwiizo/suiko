@@ -72,12 +72,17 @@ suiko lint draft.md --genre tech --json
 suiko lint docs/*.md --genre tech
 suiko lint docs/*.md --genre tech --summary tsv
 suiko compare --rev HEAD docs/*.md --genre tech --json
+suiko compare --rev HEAD docs/*.md --genre tech --json --findings new
 
 # 標準入力は - で受け取る
 printf '重要なのは、結論です。\n' | suiko lint - --json
 ```
 
 `--genre`には`essay`、`tech`、`business`を指定でき、ジャンル別の閾値を使います。一部のルールはジャンルを明示した場合だけ有効です。各指摘（finding）にはカテゴリ、対象行、抜粋、理由、重要度が付きます。必要な比較や意図した反復は、そのまま残せます。
+
+指摘があると、lintは最初に「まず直す候補」を5件まで示します（JSONでは`first_fixes`）。重大度の高い順に、同じ重大度では規則の確度（high・medium・low）の高い順に並べ、一つの規則からは2件までにします。確度は[suiko-eval](https://github.com/nwiizo/suiko-eval)の品質表で、人間の文書にほとんど付かず、ラベル付き標本の条件を満たした規則をhigh、人間の文書の多くに付く規則・実験規則・文書全体の統計をlowとしています。確度は規則の傾向で、個々の指摘が正しいかは本文で確かめてください。
+
+`compare`・`lint --baseline`・`check --before`は、同じ方法で前後の指摘を対応づけます。本文がある`compare`と`check`は、両方に一度だけ現れる行を目印に行を対応づけ、変更した行は文字の近さで組みます。そのうえで、同じ文に同じ抜粋が残った（`same_sentence`）、書き換えた文に同じ規則の指摘が残った（`edited_sentence`）、同じ抜粋が別の位置へ移った（`moved`）、文書全体の統計が残った（`document`）の順に継続と判定します。根拠のない組は継続にせず、解消と新規に分けます。本文のないbaselineは、抜粋の一致と行の近さだけで照合します。`compare --json --findings new|resolved|persisting|all`は、個別の指摘を前後の行・抜粋・根拠付きで返します。
 
 散文の検出では、コード、見出し、箇条書き、引用行、表、参考文献などを除外します。見出しや箇条書き自体を扱う構造ルールは、それぞれの対象を調べます。front matter、リンクURL、HTMLタグ・コメント、コード注釈行（`#A …`）も本文と区別します。参考文献行とコード注釈行の除外数は`stats.masking`で確認できます。
 
