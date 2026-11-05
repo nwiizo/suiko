@@ -16,6 +16,8 @@ const OPPOSITES: &[(&str, &str)] = &[
     ("埋まる", "空く"),
     ("片付く", "散らかる"),
     ("乾く", "濡れる"),
+    ("眠る", "起きる"),
+    ("寝る", "起きる"),
 ];
 
 const EXCEPTION_LEADS: &[&str] = &[
@@ -43,7 +45,11 @@ fn negated_after(tokens: &[Morpheme], verb: usize) -> bool {
 /// 全称の語と、それに続く肯定の動詞。
 fn universal_state(tokens: &[Morpheme]) -> Option<(usize, &str)> {
     let universal = tokens.iter().enumerate().position(|(index, token)| {
-        (token.pos(0) == "名詞" && matches!(token.normalized(), "全部" | "全て"))
+        (matches!(token.pos(0), "名詞" | "代名詞")
+            && matches!(
+                token.normalized(),
+                "全部" | "全て" | "全員" | "皆" | "みんな"
+            ))
             || (matches!(token.surface.as_str(), "どれ" | "いずれ")
                 && tokens
                     .get(index + 1)
@@ -56,6 +62,16 @@ fn universal_state(tokens: &[Morpheme]) -> Option<(usize, &str)> {
         .iter()
         .any(|token| matches!(token.normalized(), "ない" | "無い" | "ぬ" | "ず" | "ん"));
     (!negated).then_some((universal, tokens[verb].normalized()))
+}
+
+/// 「右の扉だけが」「窓際の席だけは」のように、「だけ」が主語を限る形。
+fn restricted_subject(tokens: &[Morpheme]) -> bool {
+    tokens.windows(2).any(|pair| {
+        pair[0].surface == "だけ"
+            && pair[0].pos(1) == "副助詞"
+            && pair[1].pos(0) == "助詞"
+            && matches!(pair[1].surface.as_str(), "が" | "は")
+    })
 }
 
 /// 例外の文で、全称の述語を否定するか、反対の状態を述べる動詞の位置。
@@ -80,7 +96,7 @@ fn contradicting_state(tokens: &[Morpheme], state: &str) -> Option<usize> {
     })
 }
 
-// nwiizo-coding-style: 隣接する2文と、反対語の表に載った状態だけを扱う;
+// nwiizo-coding-style: 隣接する2文と、反対語の表に載った状態だけを扱う。2文目は逆接の接続詞で始まるか、「だけが・だけは」で主語を限る例外に限る;
 // 「全員来た。ただ、田中だけ遅れた」のような別の述語の例外は矛盾と見なさない。
 pub(super) fn findings(tokenized: &[TokenizedSentence], raw_lines: &[&str]) -> Vec<Finding> {
     // 括弧の内側が複数の文にまたがる場合も、引用・台詞として除く。
@@ -105,12 +121,14 @@ pub(super) fn findings(tokenized: &[TokenizedSentence], raw_lines: &[&str]) -> V
     let mut findings = Vec::new();
     for (index, pair) in tokenized.windows(2).enumerate() {
         let (whole, exception) = (&pair[0], &pair[1]);
+        // 接続詞のない文は、「だけが」「だけは」で主語を限る形に限る（「右の扉だけ、鍵が開いていた」は除く）。
+        let led = EXCEPTION_LEADS
+            .iter()
+            .any(|lead| exception.text.trim_start().starts_with(lead));
         if exception.line > whole.line + 1
             || quoted[index]
             || quoted[index + 1]
-            || !EXCEPTION_LEADS
-                .iter()
-                .any(|lead| exception.text.trim_start().starts_with(lead))
+            || !(led || restricted_subject(&exception.tokens))
         {
             continue;
         }

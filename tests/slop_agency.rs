@@ -111,6 +111,32 @@ fn agents_point_at_the_subject_and_its_action() {
             "explanatory_metaphor",
             "ハンガーだけが袖の形を覚え",
         ),
+        // 家具・台所用品・文具の語。副詞の「〜と」を越えて述語を探す。
+        (
+            "古いソファが、帰ってくる主人を待っている。",
+            "explanatory_metaphor",
+            "ソファが、帰ってくる主人を待っ",
+        ),
+        (
+            "台所のやかんが、冷めた会話を抱えていた。",
+            "explanatory_metaphor",
+            "やかんが、冷めた会話を抱え",
+        ),
+        (
+            "本棚がぼんやりと首を振った。",
+            "explanatory_metaphor",
+            "本棚がぼんやりと首を振っ",
+        ),
+        (
+            "白いコップが、しっかりと私の話を受け止めた。",
+            "explanatory_metaphor",
+            "コップが、しっかりと私の話を受け止め",
+        ),
+        (
+            "使い古した万年筆が、旅立つ友を見送った。",
+            "explanatory_metaphor",
+            "万年筆が、旅立つ友を見送っ",
+        ),
     ] {
         assert_single(body, &morphology, category, excerpt, false);
     }
@@ -137,6 +163,12 @@ fn agents_keep_literal_motion_people_and_other_clauses() {
         "棚は私の手を待っていない。",
         "「鏡が声を受け止めた」と書いた。",
         "鏡の前で彼は客を待っていた。",
+        "ソファで、父が主人を待っている。",
+        "やかんを抱えて台所を出た。",
+        "彼はぼんやりと首を振った。",
+        "ソファが届くのを待っている。",
+        "コップが割れたので、新しいものを待っている。",
+        "本棚はゆっくりと倒れた。",
     ] {
         assert!(
             findings(body, &morphology, true).is_empty(),

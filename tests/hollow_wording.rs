@@ -66,6 +66,7 @@ fn hollow_sentences_are_reported_once_with_their_excerpt() {
             "calque_phrase",
             "同じページにい",
         ),
+        ("まずは水を試そう。", "calque_phrase", "水を試そ"),
         (
             "もちろん、速いです。",
             "short_concession",
@@ -115,6 +116,8 @@ fn natural_or_grounded_sentences_stay_quiet() {
         "本体の質感も上質ですが、角の仕上げは粗い。",
         "質感が上質になりました。",
         "意味をなさない。",
+        // 「試しに」は試行の副詞で、水温を確かめる英語の句ではない。
+        "コップの水を試しに飲んでみた。",
         "大きな絵を描いて、額に飾った。",
         "ドアの番を頼んだ。",
         "もちろん、大丈夫です。",

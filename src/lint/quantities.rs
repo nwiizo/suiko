@@ -173,7 +173,9 @@ fn shaped_count_end(tokens: &[&Morpheme], start: usize) -> Option<usize> {
 
 fn quantity_predicate(tokens: &[&Morpheme], end: usize, quantity: Quantity) -> Option<usize> {
     let particle = tokens.get(end + 1)?;
-    if particle.pos(0) != "助詞" || particle.surface != "を" {
+    // 状態は「疲れが一枚ずつ剥がれる」のように主語でも数えられる。測定量・力は目的語だけを見る。
+    let subject = matches!(quantity, Quantity::State) && particle.surface == "が";
+    if particle.pos(0) != "助詞" || !(particle.surface == "を" || subject) {
         return None;
     }
     let start = match quantity {
@@ -241,7 +243,7 @@ fn asserted_quantity_predicate(tokens: &[&Morpheme], predicate: usize) -> bool {
     true
 }
 
-// nwiizo-coding-style: 測定量＋数える、力＋一つ＋抜く、状態＋形のある物の助数詞に限定し、意味全般は推論しない;
+// nwiizo-coding-style: 測定量＋数える、力＋一つ＋抜く、状態（を・が）＋形のある物の助数詞に限定し、意味全般は推論しない;
 // 拡張する際は可算な語義、否定、引用、別の述語へ係る用例を対照に加える。
 pub(super) fn quantity_predicate_findings(
     tokenized: &[TokenizedSentence],

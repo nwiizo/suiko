@@ -12,7 +12,7 @@ Suikoを実行して見つかった未解決の問題と、診断品質を上げ
 
 ### 規則の品質を評価で確かめる（P1）
 
-- [ ] **品質表でfix_ruleになった4規則を直す。** suiko-evalの評価専用標本（2026-11-04）で、`explanatory_metaphor`は正例0/5（物の語彙が閉じた表で、椅子・食器棚・鍋・茶碗を拾わない。「ゆっくりと」の「と」で述語の探索が止まる）、`quantity_predicate_mismatch`は3/5、`universal_exception_conflict`は2/5、`calque_phrase`は反例「水を試しに」に誤検知した。修正は評価標本とは別の調整用の作例で行い、評価標本で再測定する。
+- [ ] **直した4規則を新しい評価専用標本で測り直す。** `explanatory_metaphor`・`quantity_predicate_mismatch`・`universal_exception_conflict`・`calque_phrase`は2026-11-06に直し、2026-11-04の標本で正例をすべて拾い、反例の誤検知は0件になった。ただしこの標本は外れた例を見てから直したため評価専用ではない。修正後に書いた標本（反例は各10件以上）で測り、keepに進めるかを決める。
 - [ ] **降格候補9規則の扱いを決める。** `forbidden_phrase`・`translationese_morph`・`redundant_light_verb`等は人間95文書の多くに付く。AIらしさの手がかりか一般的な推敲候補かを分け、既定に残すか、確度lowのまま優先度の下位に置くかを決める（`first_fixes`では確度lowとして下位に並ぶ）。
 - [ ] **標本不足の50規則に評価専用の標本を足す。** 正例・反例を各5件以上（反例は誤検知0件なら9件以上）。生成したslop文を使う場合は、調整に使ったtodesking 257例と分ける。
 
