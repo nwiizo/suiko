@@ -231,7 +231,7 @@ pub struct Finding {
 }
 
 impl Finding {
-    fn new(
+    pub(crate) fn new(
         line: usize,
         category: &str,
         excerpt: impl Into<String>,

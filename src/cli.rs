@@ -13,6 +13,7 @@ use crate::{Error, academic, diff, lexical, lint, outline, read_source, terms};
 mod batch;
 mod check;
 mod fix;
+mod meaning;
 mod style;
 
 #[derive(Debug, Parser)]
@@ -52,6 +53,8 @@ enum Command {
     Check(check::CheckArgs),
     /// 検査記録と現在の本文・資料・設定・実行ファイルを照合する
     Verify(check::VerifyArgs),
+    /// 精読で意味が定まらない表現を、指定したLLMのコマンドで確認する（任意・非決定的）
+    Meaning(meaning::MeaningArgs),
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq, ValueEnum)]
@@ -929,6 +932,7 @@ fn execute(cli: Cli) -> Result<ExitCode, Error> {
         Command::StyleProfile(args) => return style::execute(args),
         Command::Check(args) => return check::execute_check(args),
         Command::Verify(args) => return check::execute_verify(args),
+        Command::Meaning(args) => return meaning::execute(args),
         Command::Lint(args) => {
             validate_inputs(&args.files)?;
             let config = load_config(args.config.as_deref(), args.no_config)?;

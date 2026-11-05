@@ -21,6 +21,7 @@
 | 読者に必要な用語説明を確かめたい | `terms`で専門用語候補と初出付近の説明の手掛かりを確認する。`--audit`で複数ファイルの表記揺れを集計する |
 | チームの語彙・表現方針を原稿に反映したい | `lexical-audit`で参照データと照合し、`lint`の独自ルール・個別許可・CI出力でレビューを共有する |
 | 学術稿と提出ファイルの整合を確かめたい | `academic`で、記録した方針と論証・引用・DOCX/PDFを照合する |
+| 精読すると意味が定まらない比喩・標語を見つけたい | `meaning`で、指定したLLMのコマンドに確認させる（任意・非決定的） |
 
 まず `suiko lint draft.md` で箇所を確認します。指摘ごとに原文と前後を読み、直すか、理由を付けて残すかを判断してください。書き手が説明したつもりでも、対象や条件が原稿にないことがあります。読み手が自分の経験で補わないと判断できない箇所を直し、事実や意図が保たれているかを通読して確かめます。[公開前の点検から改稿まで](https://github.com/nwiizo/suiko/blob/main/docs/revision-workflow.md)に、実行例と改稿時の判断をまとめています。
 
@@ -80,7 +81,7 @@ printf '重要なのは、結論です。\n' | suiko lint - --json
 
 `--genre`には`essay`、`tech`、`business`を指定でき、ジャンル別の閾値を使います。一部のルールはジャンルを明示した場合だけ有効です。各指摘（finding）にはカテゴリ、対象行、抜粋、理由、重要度が付きます。必要な比較や意図した反復は、そのまま残せます。
 
-指摘があると、lintは最初に「まず直す候補」を5件まで示します（JSONでは`first_fixes`）。重大度の高い順に、同じ重大度では規則の確度（high・medium・low）の高い順に並べ、一つの規則からは2件までにします。確度は[suiko-eval](https://github.com/nwiizo/suiko-eval)の品質表で、人間の文書にほとんど付かず、ラベル付き標本の条件を満たした規則をhigh、人間の文書の多くに付く規則・実験規則・文書全体の統計をlowとしています。確度は規則の傾向で、個々の指摘が正しいかは本文で確かめてください。
+指摘があると、lintは最初に「まず直す候補」を5件まで示します（JSONでは`first_fixes`）。重大度の高い順に、同じ重大度では規則の確度（high・medium・low）の高い順に並べ、一つの規則からは2件までにします。確度は[suiko-eval](https://github.com/nwiizo/suiko-eval)の品質表で、人間の文書にほとんど付かず、ラベル付き標本の条件を満たした規則をhigh、人間の文書の多くに付く規則・実験規則・文書全体の統計をlowとしています。生成文の評価で注釈と重ならなかった`sensory_role_mismatch`は、条件を満たしていてもmediumにしています。確度は規則の傾向で、個々の指摘が正しいかは本文で確かめてください。
 
 `compare`・`lint --baseline`・`check --before`は、同じ方法で前後の指摘を対応づけます。本文がある`compare`と`check`は、両方に一度だけ現れる行を目印に行を対応づけ、変更した行は文字の近さで組みます。そのうえで、同じ文に同じ抜粋が残った（`same_sentence`）、書き換えた文に同じ規則の指摘が残った（`edited_sentence`）、同じ抜粋が別の位置へ移った（`moved`）、文書全体の統計が残った（`document`）の順に継続と判定します。根拠のない組は継続にせず、解消と新規に分けます。本文のないbaselineは、抜粋の一致と行の近さだけで照合します。`compare --json --findings new|resolved|persisting|all`は、個別の指摘を前後の行・抜粋・根拠付きで返します。
 
@@ -270,6 +271,22 @@ suiko diff before.md after.md --fail-on warn
 JSONは`suiko_version`、`before`と`after`（`file`と本文の`sha256`）、`stats`、`findings`を持ちます。`sha256`は検査した本文と最終稿が同じかを照らすための値で、最終稿の`shasum -a 256`と比べられます。各findingは`category`、`severity`、`before_line`、`after_line`、`before_excerpt`、`after_excerpt`、`detail`を持ち、片側にしかない文では反対側の行が`null`になります。終了コードは`lint`と同じく、実行エラーが1、`--fail-on`到達が2です。
 
 上の表に出ない変化もあります。語ごと言い換えた否定、引用符のない発言の変更、述語ごとの否定の範囲、節の途中の受身・使役の変化は拾いません。可能動詞は五段動詞の対になる他動詞・自動詞（入れる、進める、伝える等）を一覧で除いていますが、一覧にない語では可能と誤って読むことがあります。
+
+## 意味が定まらない表現をLLMで確認する
+
+「小さな水槽の月のように光っていた」のように比喩の対応が成り立たない文や、前後で補えない標語は、形態素の並びでは判定できません（[suiko-evalの生成文評価](https://github.com/nwiizo/suiko-eval/blob/main/eval/slop-2026-11-06/README.md)では、既定の規則が拾えたのは注釈の数%でした）。`meaning`は、[todesking「スロップ表現100連発」](https://zenn.dev/todesking/articles/5bc43f449ecdf6)の意味破綻型・過剰圧縮型を基準にした依頼文と本文を、`--` の後に指定したコマンドの標準入力へ渡します。
+
+```sh
+suiko meaning draft.md -- claude -p --model sonnet --tools "" --disable-slash-commands
+suiko meaning draft.md --json -- codex exec -m gpt-6.1-sol -s read-only --ephemeral --skip-git-repo-check --enable omit_skill_descriptions -
+```
+
+- コマンドはJSON（`{"items":[{"text","kind","pattern","reason"}]}`）を標準出力へ返すものを指定します。suikoはAPIの鍵も通信も持たず、コマンドの認証と費用は利用者の環境に従います。
+- 返った抜き出しは、本文に一度だけ改行なしで現れるものだけを`semantic_breakdown`・`over_compression`の指摘（`info`）にします。本文にない・複数回現れる・形式が不正な抜き出しは「照合できなかった抜き出し」として件数と理由を示します。
+- 結果は実行ごとに変わり得るため、`lint`・`check`・`verify`には含めません。JSONは`"deterministic": false`と使ったコマンドを記録します。
+- コマンドにはツールやスキルを使わせない指定（例: `--tools ""`）を付けてください。文書を読む以外の操作をさせる必要はありません。
+- 依頼文は、残してよい比喩（読み取れる比喩、後の文で理由を述べる比喩、働きが一読で分かる擬人化）を[yomiyasu](https://github.com/nanaism/yomiyasu)から取り入れ、候補ごとに精読した読みを書かせます。読みを書けた候補は、意味が定まっているとして捨てます。
+- suiko-evalの生成文180文書（Sonnet）では、注釈50件のうち13件を拾い、文体の指定のない対照の文書には指摘が付きませんでした。人間の文書21本では5本に計6件付き、どれも書き手が選んだ比喩でした。指摘は「意味が一つに定まるか」を確かめる候補で、AIが書いたかどうかの判定には使えません（[評価の記録](https://github.com/nwiizo/suiko-eval/blob/main/eval/slop-2026-11-06/README.md)）。
 
 ## 最終稿と資料をまとめて検査する
 

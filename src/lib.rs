@@ -6,6 +6,7 @@ pub mod lexical;
 pub mod lint;
 mod markup;
 pub mod materials;
+pub mod meaning;
 pub mod morphology;
 pub mod outline;
 pub mod terms;

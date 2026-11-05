@@ -21,7 +21,9 @@ const HIGH_CONFIDENCE: &[&str] = &[
     "heading_colon",
     "redundant_heading_bracket",
     "repeated_explanation_preview",
-    "sensory_role_mismatch",
+    // sensory_role_mismatch は品質表では keep だが、suiko-eval の生成文評価（2026-11-06）で
+    // 注釈者が自然とした擬人化（光が待つ、冷たさが這い上がる）に当たり、注釈とは重ならなかった。
+    // 作例と人間文書の条件だけでは確度を上げない（medium）。
     "short_concession",
     "te_nominal_stop",
     "technical_jargon_metaphor",
@@ -171,6 +173,7 @@ mod tests {
         assert_eq!(confidence("vague_loanword"), Confidence::Low);
         assert_eq!(confidence("thin_evaluation"), Confidence::High);
         assert_eq!(confidence("calque_phrase"), Confidence::Medium);
+        assert_eq!(confidence("sensory_role_mismatch"), Confidence::Medium);
         assert!(first_fixes(&[], 5).is_empty());
     }
 }
