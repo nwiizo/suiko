@@ -14,7 +14,7 @@ use crate::Error;
 use crate::lint::FORMAL_NOUNS;
 use crate::morphology::{Morpheme, Morphology};
 use crate::text::{
-    fenced_lines, heading, inline_code_ranges, is_list_item, mask_inline_spans,
+    fenced_lines, fenced_ranges, heading, inline_code_ranges, is_list_item, mask_inline_spans,
     mask_markdown_structure_with_stats, protected_lines, sentences_with_raw, strip_line_prefix,
 };
 
@@ -2461,27 +2461,16 @@ fn content_word_findings(before: &[&Unit], after: &[&Unit], findings: &mut Vec<D
 // ---- 文書全体で比べる保護範囲 ----
 
 fn fenced_blocks(raw: &str) -> Vec<LinedText> {
-    let lines = raw.split('\n').collect::<Vec<_>>();
-    let fenced = fenced_lines(&lines);
-    let mut blocks = Vec::new();
-    let mut current: Option<(usize, Vec<&str>)> = None;
-    for (index, line) in lines.iter().enumerate() {
-        match (&mut current, fenced[index]) {
-            (None, true) => current = Some((index + 1, vec![line])),
-            (Some((_, body)), true) => {
-                body.push(line);
-                if body.len() > 1 && line.trim_start().starts_with(['`', '~']) {
-                    let (start, body) = current.take().expect("open block");
-                    blocks.push((start, body.join("\n")));
-                }
-            }
-            _ => {}
-        }
-    }
-    if let Some((start, body)) = current {
-        blocks.push((start, body.join("\n")));
-    }
-    blocks
+    // 改行コードだけの違い（LFとCRLF）は、コードの変更として数えない。
+    let lines = raw
+        .split('\n')
+        .map(|line| line.strip_suffix('\r').unwrap_or(line))
+        .collect::<Vec<_>>();
+    // 散文の検査と同じ規則で開きと閉じを決め、内側の短いフェンスでブロックを分けない。
+    fenced_ranges(&lines)
+        .into_iter()
+        .map(|range| (range.start + 1, lines[range].join("\n")))
+        .collect()
 }
 
 fn table_rows(raw: &str) -> Vec<LinedText> {
@@ -2582,7 +2571,7 @@ fn table_findings(before: &str, after: &str) -> Vec<DiffFinding> {
     let (lost_rows, added_rows) = lined_diff(&table_rows(before), &table_rows(after));
     let mut findings = Vec::new();
     let mut used = vec![false; added_rows.len()];
-    let mut unpaired_lost = 0;
+    let mut unpaired_lost = Vec::new();
     for (before_line, before_row) in &lost_rows {
         let best = added_rows
             .iter()
@@ -2592,7 +2581,7 @@ fn table_findings(before: &str, after: &str) -> Vec<DiffFinding> {
             .filter(|(_, score)| *score >= PAIR_SIMILARITY)
             .max_by(|left, right| left.1.total_cmp(&right.1).then(right.0.cmp(&left.0)));
         let Some((index, _)) = best else {
-            unpaired_lost += 1;
+            unpaired_lost.push((*before_line, before_row));
             continue;
         };
         used[index] = true;
@@ -2628,13 +2617,9 @@ fn table_findings(before: &str, after: &str) -> Vec<DiffFinding> {
         });
     }
     let unpaired_added = used.iter().filter(|used| !**used).count();
-    if unpaired_lost > 0 || unpaired_added > 0 {
-        let first_lost = lost_rows.iter().find(|(_, row)| {
-            !added_rows
-                .iter()
-                .enumerate()
-                .any(|(index, (_, candidate))| used[index] && candidate == row)
-        });
+    if !unpaired_lost.is_empty() || unpaired_added > 0 {
+        // 対応がついた行ではなく、対応のない最初の行を示す。
+        let first_lost = unpaired_lost.first();
         let first_added = added_rows
             .iter()
             .zip(&used)
@@ -2645,10 +2630,13 @@ fn table_findings(before: &str, after: &str) -> Vec<DiffFinding> {
             severity: "info".to_owned(),
             before_line: first_lost.map(|(line, _)| *line),
             after_line: first_added.map(|(line, _)| *line),
-            before_excerpt: first_lost.map(|(_, row)| row.clone()).unwrap_or_default(),
+            before_excerpt: first_lost
+                .map(|(_, row)| String::clone(row))
+                .unwrap_or_default(),
             after_excerpt: first_added.map(|(_, row)| row.clone()).unwrap_or_default(),
             detail: format!(
-                "表の行が増減しました（対応のない行: 消えた{unpaired_lost}行、増えた{unpaired_added}行）。消えた行の値や条件が本文に移っているか確認してください。"
+                "表の行が増減しました（対応のない行: 消えた{}行、増えた{unpaired_added}行）。消えた行の値や条件が本文に移っているか確認してください。",
+                unpaired_lost.len()
             ),
         });
     }
@@ -2847,32 +2835,41 @@ static ADDRESSEE: LazyLock<Regex> = LazyLock::new(|| {
         .expect("valid addressee regex")
 });
 
-/// 冒頭5行の宛名（「田中様」「営業部御中」）。メールや手紙で書き換えてはいけない値。
-fn addressees(text: &str) -> Vec<String> {
+/// 冒頭5行の宛名（「田中様」「営業部御中」）と、その行番号（1始まり）。
+/// メールや手紙で書き換えてはいけない値。
+fn addressees(text: &str) -> Vec<(usize, String)> {
     text.lines()
-        .filter(|line| !line.trim().is_empty())
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
         .take(5)
-        .filter_map(|line| {
+        .filter_map(|(index, line)| {
             ADDRESSEE
                 .captures(line)
-                .map(|captures| captures[1].to_owned())
+                .map(|captures| (index + 1, captures[1].to_owned()))
         })
         .collect()
 }
 
 fn addressee_findings(before: &str, after: &str) -> Vec<DiffFinding> {
     let (old, new) = (addressees(before), addressees(after));
-    if old.is_empty() || old == new {
+    fn names(items: &[(usize, String)]) -> Vec<&str> {
+        items.iter().map(|(_, name)| name.as_str()).collect()
+    }
+    if names(&old) == names(&new) {
         return Vec::new();
     }
+    let detail = if old.is_empty() {
+        "改稿で冒頭に宛名が加わりました。原文にない宛先・敬称を書き足していないか、宛先が正しいか確認してください。"
+    } else {
+        "冒頭の宛名が変わりました。名前・敬称・部署名は原文のとおりに残してください。"
+    };
     vec![DiffFinding {
         category: "addressee_changed".to_owned(),
         severity: "warn".to_owned(),
-        before_line: Some(1),
-        after_line: Some(1),
-        before_excerpt: old.join(" / "),
-        after_excerpt: new.join(" / "),
-        detail: "冒頭の宛名が変わりました。名前・敬称・部署名は原文のとおりに残してください。"
-            .to_owned(),
+        before_line: old.first().map(|(line, _)| *line),
+        after_line: new.first().map(|(line, _)| *line),
+        before_excerpt: names(&old).join(" / "),
+        after_excerpt: names(&new).join(" / "),
+        detail: detail.to_owned(),
     }]
 }

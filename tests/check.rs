@@ -361,3 +361,45 @@ fn code_comment_edits_remain_protected_even_inside_lint_ignore_regions() {
         after
     );
 }
+
+#[test]
+fn the_same_material_given_twice_is_checked_once_with_a_warning() {
+    let dir = drafts();
+    fs::write(
+        dir.path().join("material.md"),
+        "本番環境の応答時間は未測定です。\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("final.md"),
+        "本番環境の応答時間は300msです。\n",
+    )
+    .unwrap();
+    let output = cargo_bin_cmd!("suiko")
+        .current_dir(dir.path())
+        .args(["check", "final.md", "--json", "--no-config"])
+        .args(["--material", "material.md", "--material", "./material.md"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("重複"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["check"]["materials"].as_array().unwrap().len(), 1);
+    let materials = &report["check"]["report"]["materials"];
+    assert_eq!(materials["source_count"], 1);
+    let caveats = materials["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|f| f["category"] == "material_caveat")
+        .count();
+    assert_eq!(caveats, 1, "{materials}");
+}

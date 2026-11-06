@@ -116,6 +116,16 @@ fn marks(text: &str, patterns: &[Regex]) -> BTreeSet<usize> {
         .collect()
 }
 
+/// 効果・保証の語そのもの（改善・短縮・保証）。対象の語の比較から外し、`claims`だけで扱う。
+/// 「安定性」のように語の一部が当たるだけの名詞は対象の語として残す。
+fn is_claim_word(word: &str) -> bool {
+    CLAIMS.iter().any(|pattern| {
+        pattern
+            .find(word)
+            .is_some_and(|found| found.len() == word.len())
+    })
+}
+
 fn statements(raw: &str, morphology: &Morphology) -> Result<Vec<Statement>, Error> {
     let visible = text::revision_text(raw);
     text::sentences_with_raw(&visible, raw)
@@ -132,6 +142,7 @@ fn statements(raw: &str, morphology: &Morphology) -> Result<Vec<Statement>, Erro
                             *word,
                             "こと" | "もの" | "ため" | "今回" | "結果" | "必要" | "場合" | "環境"
                         )
+                        && !is_claim_word(word)
                 })
                 .map(str::to_owned)
                 .collect();

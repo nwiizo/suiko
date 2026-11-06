@@ -612,29 +612,43 @@ pub fn excerpt_around(
 
 /// 各行がフェンス付きコードブロックの中（開始・終了の行を含む）かを返す。
 pub(crate) fn fenced_lines(lines: &[&str]) -> Vec<bool> {
-    let mut fence: Option<(char, usize)> = None;
-    lines
-        .iter()
-        .map(|line| {
-            let trimmed = line.trim_start();
-            let fence_run = trimmed
-                .chars()
-                .next()
-                .filter(|ch| *ch == '`' || *ch == '~')
-                .map(|ch| (ch, trimmed.chars().take_while(|c| c == &ch).count()));
-            if let Some((open_char, open_len)) = fence {
+    let mut fenced = vec![false; lines.len()];
+    for range in fenced_ranges(lines) {
+        fenced[range].fill(true);
+    }
+    fenced
+}
+
+/// フェンス付きコードブロックごとの行の範囲（0始まり、開きと閉じのフェンスを含む）。
+/// 開きと同じ文字で、開き以上の長さのフェンスで閉じる。閉じがなければ文書の終わりまで。
+pub(crate) fn fenced_ranges(lines: &[&str]) -> Vec<std::ops::Range<usize>> {
+    let mut ranges = Vec::new();
+    let mut open: Option<(usize, char, usize)> = None;
+    for (index, line) in lines.iter().enumerate() {
+        let trimmed = line.trim_start();
+        let fence_run = trimmed
+            .chars()
+            .next()
+            .filter(|ch| *ch == '`' || *ch == '~')
+            .map(|ch| (ch, trimmed.chars().take_while(|c| c == &ch).count()));
+        match open {
+            Some((start, open_char, open_len)) => {
                 if fence_run.is_some_and(|(ch, len)| ch == open_char && len >= open_len) {
-                    fence = None;
+                    ranges.push(start..index + 1);
+                    open = None;
                 }
-                true
-            } else if let Some((ch, len)) = fence_run.filter(|(_, len)| *len >= 3) {
-                fence = Some((ch, len));
-                true
-            } else {
-                false
             }
-        })
-        .collect()
+            None => {
+                if let Some((ch, len)) = fence_run.filter(|(_, len)| *len >= 3) {
+                    open = Some((index, ch, len));
+                }
+            }
+        }
+    }
+    if let Some((start, _, _)) = open {
+        ranges.push(start..lines.len());
+    }
+    ranges
 }
 
 /// 散文の検査が読み飛ばす行。フェンス付きコードブロックと、先頭のfront matter（閉じの`---`まで。

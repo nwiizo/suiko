@@ -477,3 +477,56 @@ fn reversed_contrast_added_feelings_causes_and_promises_are_reported() {
         );
     }
 }
+
+#[test]
+fn unpaired_table_rows_point_at_the_row_without_a_counterpart() {
+    let morphology = Morphology::new().unwrap();
+    let before = "| 項目 | 値 |\n|---|---|\n| 上限 | 10件 |\n| 期限 | 3日 |\n";
+    let after = "| 項目 | 値 |\n|---|---|\n| 上限 | 20件 |\n";
+    let report = diff::compare(before, after, &morphology).unwrap();
+    let unpaired = report
+        .findings
+        .iter()
+        .find(|finding| finding.category == "table_changed" && finding.after_line.is_none())
+        .expect("unpaired row finding");
+    // 書き換えて対応がついた「上限」の行ではなく、消えた「期限」の行を指す。
+    assert_eq!(unpaired.before_line, Some(4), "{unpaired:?}");
+    assert_eq!(unpaired.before_excerpt, "| 期限 | 3日 |");
+}
+
+#[test]
+fn line_ending_changes_alone_do_not_change_code_blocks() {
+    let morphology = Morphology::new().unwrap();
+    let lf = "本文。\n\n```sh\necho hi\nls\n```\n";
+    let crlf = lf.replace('\n', "\r\n");
+    let found = categories(lf, &crlf, &morphology);
+    assert!(!has(&found, "protected_changed"), "{found:?}");
+    // 中身を変えた場合は引き続き示す。
+    let edited = crlf.replace("echo hi", "echo bye");
+    assert!(has(
+        &categories(lf, &edited, &morphology),
+        "protected_changed"
+    ));
+}
+
+#[test]
+fn a_longer_fence_keeps_inner_fences_in_one_code_block() {
+    let morphology = Morphology::new().unwrap();
+    let before = "本文。\n\n````md\n```sh\necho hi\n```\n````\n";
+    let after = before.replace("echo hi", "echo bye");
+    let report = diff::compare(before, &after, &morphology).unwrap();
+    let changed = report
+        .findings
+        .iter()
+        .find(|finding| finding.category == "protected_changed")
+        .expect("protected_changed");
+    // 内側の ``` で区切らず、外側の ```` から閉じまでを1件として示す。
+    assert_eq!(
+        (changed.before_line, changed.after_line),
+        (Some(3), Some(3))
+    );
+    assert!(
+        changed.detail.contains("消えた1件、増えた1件"),
+        "{changed:?}"
+    );
+}

@@ -220,3 +220,32 @@ fn check_records_fact_gaps_and_finding_changes_without_counting_gaps_for_fail_on
     let essay = run_check(&dir, &["--fact-gaps", "--genre", "essay"]);
     assert_eq!(essay["check"]["report"]["fact_gaps"]["skipped"], "essay");
 }
+
+#[test]
+fn addressee_changes_point_at_the_addressee_line_and_include_added_addressees() {
+    let morphology = Morphology::new().unwrap();
+    let report = diff::compare(
+        "件名: 連絡\n\n田中様\n\n本文です。\n",
+        "件名: 連絡\n\n田中部長様\n\n本文です。\n",
+        &morphology,
+    )
+    .unwrap();
+    let changed = report
+        .findings
+        .iter()
+        .find(|finding| finding.category == "addressee_changed")
+        .expect("addressee_changed");
+    assert_eq!(
+        (changed.before_line, changed.after_line),
+        (Some(3), Some(3))
+    );
+
+    let added = diff::compare("本文です。\n", "佐藤様\n\n本文です。\n", &morphology).unwrap();
+    let added = added
+        .findings
+        .iter()
+        .find(|finding| finding.category == "addressee_changed")
+        .expect("added addressee");
+    assert_eq!((added.before_line, added.after_line), (None, Some(1)));
+    assert_eq!(added.after_excerpt, "佐藤様");
+}

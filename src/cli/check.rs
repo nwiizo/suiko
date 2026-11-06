@@ -547,11 +547,25 @@ fn changed_inputs(record: &Record) -> Vec<Change> {
 pub(super) fn execute_check(args: CheckArgs) -> Result<ExitCode, Error> {
     let final_file = load_file(&args.file)?;
     let before = args.before.as_deref().map(load_file).transpose()?;
-    let sources = args
-        .material
-        .iter()
-        .map(|path| load_file(path))
-        .collect::<Result<Vec<_>, _>>()?;
+    // 同じ資料を重ねて指定しても、照合と記録は1回にする（./a.md と a.md、リンク先も同じとみなす）。
+    let mut seen = std::collections::HashSet::new();
+    let mut sources = Vec::new();
+    for path in &args.material {
+        let file = load_file(path)?;
+        let identity = file
+            .input
+            .path
+            .canonicalize()
+            .unwrap_or_else(|_| file.input.path.clone());
+        if seen.insert(identity) {
+            sources.push(file);
+        } else {
+            eprintln!(
+                "警告: 同じ資料が重複して指定されたため、1回だけ照合します: {}",
+                path.display()
+            );
+        }
+    }
     let (configuration, config) = load_configuration(&args)?;
     let options = Options {
         genre: args.genre.or_else(|| config.as_ref().and_then(|c| c.genre)),

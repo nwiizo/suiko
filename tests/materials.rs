@@ -104,3 +104,32 @@ fn markdown_metadata_examples_comments_and_references_are_not_claims() {
     let target = "---\ncount: 999\n---\n\n# 手順\nログを保存します。\n\n> 性能は必ず99倍です。\n\n`最大999件`\n\n<!-- 最大999件 -->\n\n~~~md\n| 件数 | 999件 |\n~~~\n\n## 参考文献\n- 計測手法 2026年版\n";
     assert!(categories("ログを保存します。", target, &morphology).is_empty());
 }
+
+#[test]
+fn an_added_effect_word_is_checked_as_a_claim_not_as_a_different_subject() {
+    let morphology = Morphology::new().unwrap();
+    let found = categories(
+        "本番環境の応答時間は平均120msでした。",
+        "本番環境の応答時間は平均120msに改善しました。",
+        &morphology,
+    );
+    // 効果の語は material_claim_unmatched で示し、同じ値の対象の違いとしては重ねない。
+    assert!(
+        found.iter().any(|c| c == "material_claim_unmatched"),
+        "{found:?}"
+    );
+    assert!(
+        !found.iter().any(|c| c == "material_value_context"),
+        "{found:?}"
+    );
+    // 効果の語を含む別の名詞（安定性）は、対象の語として比べ続ける。
+    let found = categories(
+        "応答時間は300msです。",
+        "安定性の指標の応答時間は300msです。",
+        &morphology,
+    );
+    assert!(
+        found.iter().any(|c| c == "material_value_context"),
+        "{found:?}"
+    );
+}
