@@ -210,6 +210,9 @@ fn agents_keep_literal_motion_people_and_other_clauses() {
         // 人間の文書（eval corpus natural.md）にあった、物の性質を言う複合語
         "この椅子がすごく座りやすい。",
         "このソファは座り心地がいい。",
+        // 受け身の主語は動作を受ける側
+        "傘が畳まれていた。",
+        "ベッドが畳まれて隅にあった。",
     ] {
         assert!(
             findings(body, &morphology, true).is_empty(),

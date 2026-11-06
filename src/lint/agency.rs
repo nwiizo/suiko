@@ -158,7 +158,11 @@ fn mismatched_action(tokens: &[&Morpheme], kind: Agent, verb: usize) -> Option<&
             "易い" | "やすい" | "難い" | "にくい" | "づらい" | "辛い" | "心地"
         )
     });
-    if ANIMATE_ACTIONS.contains(&action) && !ease {
+    // 「傘が畳まれていた」のような受け身では、主語は動作を受ける側で、動作主ではない。
+    let passive = tokens.get(verb + 1).is_some_and(|next| {
+        next.pos(0) == "助動詞" && matches!(next.normalized(), "れる" | "られる")
+    });
+    if ANIMATE_ACTIONS.contains(&action) && !ease && !passive {
         return Some(match kind {
             Agent::Object => "explanatory_metaphor",
             _ => "sensory_role_mismatch",
