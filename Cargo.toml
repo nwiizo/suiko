@@ -38,7 +38,7 @@ evaluation = [
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
 encoding_rs = { version = "0.8", optional = true }
-jiff = { version = "0.2", default-features = false, features = ["std"], optional = true }
+jiff = { version = "1.0", default-features = false, features = ["std"], optional = true }
 pdf-extract = "0.12"
 quick-xml = "0.42"
 regex = "1"
