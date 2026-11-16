@@ -530,3 +530,350 @@ fn a_longer_fence_keeps_inner_fences_in_one_code_block() {
         "{changed:?}"
     );
 }
+
+fn severity_of(found: &[(String, String)], category: &str) -> Option<String> {
+    found
+        .iter()
+        .find(|(name, _)| name == category)
+        .map(|(_, severity)| severity.clone())
+}
+
+#[test]
+fn avoidance_rephrased_as_negation_is_not_a_negation_flip() {
+    let morphology = Morphology::new().unwrap();
+    // 「防ぐ」「なくなる」を「〜ない（ようにする）」で言い直しても、文末の述語の向きは変わらない。
+    for (before, after) in [
+        (
+            "再配信による二重処理を防ぐ。\n",
+            "再配信されても二重に処理しないようにする。\n",
+        ),
+        (
+            "第三に、データベース更新とメッセージ発行の不整合を防ぐ。\n",
+            "第三に、データベースの更新とメッセージの発行がずれないようにする。\n",
+        ),
+        (
+            "これでDBだけ更新されて通知が消える不整合がなくなる。\n",
+            "DBだけ更新されて通知が送られない不整合は、これで起きなくなる。\n",
+        ),
+        (
+            "ジョブにはトークン単位の冪等キーを付与し、重複登録を防止している。\n",
+            "ジョブにはトークンごとの冪等キーを付け、重複して登録されないようにしている。\n",
+        ),
+        (
+            "14:42に正常化を確認した。\n",
+            "14:42にはタイムアウトが出なくなったことを確認した。\n",
+        ),
+        (
+            "毒メッセージがキューを詰まらせる事故は、これで防げる。\n",
+            "こうすれば、処理できない毒メッセージが先頭に残ってキューが進まなくなる事故を防げる。\n",
+        ),
+    ] {
+        let found = categories(before, after, &morphology);
+        assert!(
+            !has(&found, "negation_changed"),
+            "{before} -> {after}: {found:?}"
+        );
+    }
+    // 回避の語そのものを打ち消した場合と、文末の肯定・否定を入れ替えた場合は示す。
+    for (before, after) in [
+        (
+            "重複送信による二重課金を防ぐ。\n",
+            "重複送信による二重課金を防がない。\n",
+        ),
+        // 文末は同じでも、両方にある語（確認）の打ち消しが外れた。
+        (
+            "内容を確認せずにファイルを保存する。\n",
+            "内容を確認してファイルを保存する。\n",
+        ),
+        (
+            "設定は3日ごとに保存します。\n",
+            "設定は3日ごとに保存しません。\n",
+        ),
+    ] {
+        let found = categories(before, after, &morphology);
+        assert!(
+            has(&found, "negation_changed"),
+            "{before} -> {after}: {found:?}"
+        );
+    }
+}
+
+#[test]
+fn choosing_one_versus_all_is_reported() {
+    let morphology = Morphology::new().unwrap();
+    for (before, after) in [
+        (
+            "AまたはBのどちらかが必要です。\n",
+            "AとBの両方が必要です。\n",
+        ),
+        (
+            "どちらか一方を選んでください。\n",
+            "両方を選んでください。\n",
+        ),
+        ("AとBのすべてを提出する。\n", "AとBのいずれかを提出する。\n"),
+    ] {
+        let found = categories(before, after, &morphology);
+        assert_eq!(
+            severity_of(&found, "choice_changed").as_deref(),
+            Some("warn"),
+            "{before} -> {after}: {found:?}"
+        );
+    }
+    for (before, after) in [
+        (
+            "AかBのいずれかを選ぶ。\n",
+            "AかBのいずれかを選んでください。\n",
+        ),
+        ("両方の設定を確認する。\n", "両方の設定を見直す。\n"),
+        ("AまたはBを選ぶ。\n", "AかBのどちらかを選ぶ。\n"),
+    ] {
+        let found = categories(before, after, &morphology);
+        assert!(
+            !has(&found, "choice_changed"),
+            "{before} -> {after}: {found:?}"
+        );
+    }
+}
+
+#[test]
+fn a_relation_strengthened_into_a_cause_is_a_warning() {
+    let morphology = Morphology::new().unwrap();
+    for after in [
+        "障害はリトライが原因だ。\n",
+        "障害はリトライによって引き起こされた。\n",
+    ] {
+        let found = categories("障害はリトライと関連している。\n", after, &morphology);
+        assert_eq!(
+            severity_of(&found, "causal_changed").as_deref(),
+            Some("warn"),
+            "{after}: {found:?}"
+        );
+    }
+    // 関連を述べていない文に因果を足しただけなら、従来どおり info。
+    let found = categories(
+        "障害が起きた。\n",
+        "設定の誤りのため、障害が起きた。\n",
+        &morphology,
+    );
+    assert_eq!(
+        severity_of(&found, "causal_changed").as_deref(),
+        Some("info")
+    );
+}
+
+#[test]
+fn a_negated_noun_predicate_turned_into_an_action_is_a_negation_flip() {
+    let morphology = Morphology::new().unwrap();
+    for (before, after) in [
+        ("この機能は未実装です。\n", "この機能を実装します。\n"),
+        ("その設定は不要だ。\n", "その設定は必要だ。\n"),
+    ] {
+        let found = categories(before, after, &morphology);
+        assert!(
+            has(&found, "negation_changed"),
+            "{before} -> {after}: {found:?}"
+        );
+    }
+    // 「未満」は打ち消しではない。
+    let found = categories("10件未満です。\n", "10件未満となります。\n", &morphology);
+    assert!(!has(&found, "negation_changed"), "{found:?}");
+}
+
+#[test]
+fn hedges_of_the_same_strength_are_interchangeable() {
+    let morphology = Morphology::new().unwrap();
+    for (before, after) in [
+        ("負荷が原因と思われます。\n", "負荷が原因の見込みです。\n"),
+        (
+            "負荷が原因かもしれません。\n",
+            "負荷が原因である恐れがあります。\n",
+        ),
+        ("おそらく負荷が原因だろう。\n", "負荷が原因と考えられる。\n"),
+    ] {
+        let found = categories(before, after, &morphology);
+        assert!(
+            !has(&found, "certainty_changed"),
+            "{before} -> {after}: {found:?}"
+        );
+    }
+    // 推量を外して言い切った書き換えは示す。
+    let found = categories(
+        "負荷が原因かもしれません。\n",
+        "負荷が原因です。\n",
+        &morphology,
+    );
+    assert_eq!(
+        severity_of(&found, "certainty_changed").as_deref(),
+        Some("warn"),
+        "{found:?}"
+    );
+}
+
+#[test]
+fn an_added_guarantee_is_a_warning_and_polite_promises_stay_info() {
+    let morphology = Morphology::new().unwrap();
+    for after in [
+        "データは暗号化されることを保証する。\n",
+        "データの暗号化は担保されている。\n",
+    ] {
+        let found = categories("データは暗号化される。\n", after, &morphology);
+        assert_eq!(
+            severity_of(&found, "promise_added").as_deref(),
+            Some("warn"),
+            "{after}: {found:?}"
+        );
+    }
+    let found = categories("資料を送る。\n", "資料をお送りいたします。\n", &morphology);
+    assert_eq!(
+        severity_of(&found, "promise_added").as_deref(),
+        Some("info"),
+        "{found:?}"
+    );
+}
+
+#[test]
+fn comparison_signs_weekdays_and_durations_are_compared_as_values() {
+    let morphology = Morphology::new().unwrap();
+    for (before, after) in [
+        ("p<0.05で有意だった。\n", "p>0.05で有意だった。\n"),
+        (
+            "月曜から金曜まで対応する。\n",
+            "月曜から土曜まで対応する。\n",
+        ),
+    ] {
+        let found = categories(before, after, &morphology);
+        assert!(
+            has(&found, "number_changed"),
+            "{before} -> {after}: {found:?}"
+        );
+    }
+    // かっこで書いた曜日と「土曜日」は同じ値。
+    let found = categories(
+        "10月3日(土)に作業する。\n",
+        "10月3日土曜日に作業する。\n",
+        &morphology,
+    );
+    assert!(!has(&found, "number_changed"), "{found:?}");
+    // 「30日」→「30日間」は期間の言い換えが多いので info。「3日」は日付とも読めるため示しは残す。
+    for (before, after) in [
+        ("ログを30日保持する。\n", "ログを30日間保持する。\n"),
+        ("2年運用した。\n", "2年間運用した。\n"),
+    ] {
+        let found = categories(before, after, &morphology);
+        assert_eq!(
+            severity_of(&found, "number_changed").as_deref(),
+            Some("info"),
+            "{before} -> {after}: {found:?}"
+        );
+    }
+    // ほかの値も変わっていれば warn のまま。
+    let found = categories(
+        "ログを30日保持する。\n",
+        "ログを60日間保持する。\n",
+        &morphology,
+    );
+    assert_eq!(
+        severity_of(&found, "number_changed").as_deref(),
+        Some("warn"),
+        "{found:?}"
+    );
+}
+
+#[test]
+fn frequency_changes_are_reported() {
+    let morphology = Morphology::new().unwrap();
+    for (before, after) in [
+        ("毎日バックアップする。\n", "毎週バックアップする。\n"),
+        ("ときどき失敗する。\n", "いつも失敗する。\n"),
+        ("定期的にログを確認する。\n", "ログを確認する。\n"),
+    ] {
+        let found = categories(before, after, &morphology);
+        assert_eq!(
+            severity_of(&found, "frequency_changed").as_deref(),
+            Some("warn"),
+            "{before} -> {after}: {found:?}"
+        );
+    }
+    let found = categories(
+        "毎日バックアップを取る。\n",
+        "毎日バックアップする。\n",
+        &morphology,
+    );
+    assert!(!has(&found, "frequency_changed"), "{found:?}");
+}
+
+#[test]
+fn dropping_an_example_marker_closes_the_list() {
+    let morphology = Morphology::new().unwrap();
+    let found = categories(
+        "PDFなどの形式に対応する。\n",
+        "PDFの形式に対応する。\n",
+        &morphology,
+    );
+    assert_eq!(
+        severity_of(&found, "condition_changed").as_deref(),
+        Some("warn"),
+        "{found:?}"
+    );
+    // 例示の言い方を替えただけなら示さない。
+    let found = categories(
+        "PDFやCSVなどの形式に対応する。\n",
+        "PDFやCSVといった形式に対応する。\n",
+        &morphology,
+    );
+    assert!(!has(&found, "condition_changed"), "{found:?}");
+}
+
+#[test]
+fn equivalent_frequency_and_example_wordings_are_not_reported() {
+    let morphology = Morphology::new().unwrap();
+    for (before, after, category) in [
+        (
+            "確認に毎回モックが要る。\n",
+            "確認するたびにモックが要る。\n",
+            "frequency_changed",
+        ),
+        // 「冪等」の「等」は例示ではない。
+        (
+            "冪等性を保証する仕組みを入れる。\n",
+            "処理済みかを確かめる仕組みを入れる。\n",
+            "condition_changed",
+        ),
+    ] {
+        let found = categories(before, after, &morphology);
+        assert!(!has(&found, category), "{before} -> {after}: {found:?}");
+    }
+    // 例示の語が1つ残っていれば、一覧は閉じていない。
+    let found = categories(
+        "AなどのファイルとBなどの形式に対応する。\n",
+        "AのファイルとBなどの形式に対応する。\n",
+        &morphology,
+    );
+    assert_ne!(
+        severity_of(&found, "condition_changed").as_deref(),
+        Some("warn"),
+        "{found:?}"
+    );
+}
+
+#[test]
+fn proper_nouns_missing_from_the_original_are_warnings() {
+    let morphology = Morphology::new().unwrap();
+    let found = categories(
+        "来週の会議で方針を決めます。\n",
+        "来週の会議で、佐藤部長と大阪支社の方針を決めます。\n",
+        &morphology,
+    );
+    assert_eq!(
+        severity_of(&found, "proper_noun_added").as_deref(),
+        Some("warn"),
+        "{found:?}"
+    );
+    // 元の文書の別の文にある名前を移しただけなら、足した事実ではない。
+    let found = categories(
+        "佐藤さんが担当します。\n\n来週に決めます。\n",
+        "担当は決まっています。\n\n来週、佐藤さんと決めます。\n",
+        &morphology,
+    );
+    assert!(!has(&found, "proper_noun_added"), "{found:?}");
+}

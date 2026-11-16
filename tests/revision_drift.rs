@@ -249,3 +249,27 @@ fn addressee_changes_point_at_the_addressee_line_and_include_added_addressees() 
     assert_eq!((added.before_line, added.after_line), (None, Some(1)));
     assert_eq!(added.after_excerpt, "佐藤様");
 }
+
+#[test]
+fn title_lines_ending_with_a_word_like_shiyou_are_not_addressees() {
+    let morphology = Morphology::new().unwrap();
+    for title in [
+        "Webhook受信のリトライ制御とDLQ仕様",
+        "前回と同様",
+        "当日の模様",
+    ] {
+        let report = diff::compare(
+            "**資料（ドラフト）**\n\n本文です。\n",
+            &format!("{title}\n\n本文です。\n"),
+            &morphology,
+        )
+        .unwrap();
+        assert!(
+            report
+                .findings
+                .iter()
+                .all(|finding| finding.category != "addressee_changed"),
+            "{title}"
+        );
+    }
+}

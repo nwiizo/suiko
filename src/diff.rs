@@ -102,9 +102,10 @@ pub fn compare(before: &str, after: &str, morphology: &Morphology) -> Result<Dif
     let pairs = align(&before_units, &after_units);
     let (regions, moved) = regions(&before_units, &after_units, &pairs);
     // 文書全体にある値は、別の文へ移しただけでも増減として数えない。
-    let document_numbers = DocumentNumbers {
-        before: numbers_in(&before_units),
-        after: numbers_in(&after_units),
+    let document_values = DocumentValues {
+        numbers_before: numbers_in(&before_units),
+        numbers_after: numbers_in(&after_units),
+        text_before: before_units.iter().map(|unit| unit.text.as_str()).collect(),
     };
 
     let mut findings = Vec::new();
@@ -119,12 +120,7 @@ pub fn compare(before: &str, after: &str, morphology: &Morphology) -> Result<Dif
             .iter()
             .map(|index| &after_units[*index])
             .collect::<Vec<_>>();
-        analyze_region(
-            &before_block,
-            &after_block,
-            &document_numbers,
-            &mut findings,
-        );
+        analyze_region(&before_block, &after_block, &document_values, &mut findings);
     }
     findings.extend(protected_findings(before, after));
     let document_register = register_findings(&before_units, &after_units);
@@ -799,10 +795,23 @@ fn block_raw(units: &[&Unit]) -> String {
         .join("\n")
 }
 
-/// 文書全体に現れる数値の種類。
-struct DocumentNumbers {
-    before: BTreeSet<String>,
-    after: BTreeSet<String>,
+/// 文書全体に現れる数値と、変更前の本文。
+struct DocumentValues {
+    numbers_before: BTreeSet<String>,
+    numbers_after: BTreeSet<String>,
+    text_before: String,
+}
+
+/// 人名と地名。「固有名詞・一般」にはDB・フロントエンドのような一般の語も入るので数えない。
+fn proper_nouns(tokens: &[Morpheme]) -> impl Iterator<Item = String> + '_ {
+    tokens
+        .iter()
+        .filter(|token| {
+            token.pos(0) == "名詞"
+                && token.pos(1) == "固有名詞"
+                && matches!(token.pos(2), "人名" | "地名")
+        })
+        .map(|token| token.surface.clone())
 }
 
 fn numbers_in(units: &[Unit]) -> BTreeSet<String> {
@@ -812,7 +821,7 @@ fn numbers_in(units: &[Unit]) -> BTreeSet<String> {
 fn analyze_region(
     before: &[&Unit],
     after: &[&Unit],
-    document_numbers: &DocumentNumbers,
+    document_values: &DocumentValues,
     findings: &mut Vec<DiffFinding>,
 ) {
     if before.is_empty() {
@@ -878,8 +887,9 @@ fn analyze_region(
     }
     feeling_findings(&kept_before, &kept_after, findings);
     promise_findings(&kept_before, &kept_after, findings);
-    number_findings(&kept_before, &kept_after, document_numbers, findings);
+    number_findings(&kept_before, &kept_after, document_values, findings);
     certainty_findings(&kept_before, &kept_after, findings);
+    frequency_findings(&kept_before, &kept_after, findings);
     condition_findings(&kept_before, &kept_after, findings);
     identifier_findings(&kept_before, &kept_after, findings);
     quotation_findings(&kept_before, &kept_after, findings);
@@ -887,6 +897,7 @@ fn analyze_region(
     subject_added_findings(&kept_before, &kept_after, findings);
     recipient_added_findings(&kept_before, &kept_after, findings);
     nominalization_added_findings(&kept_before, &kept_after, findings);
+    proper_noun_findings(&kept_before, &kept_after, document_values, findings);
     content_word_findings(&kept_before, &kept_after, findings);
     actor_narrowed_findings(&kept_before, &kept_after, findings);
 }
@@ -951,6 +962,7 @@ fn join_items(items: &[String]) -> String {
 // 数値。桁区切りと全角・半角の違いは同じ値として扱い、約・最大・以上などの修飾を含めて比べる。
 static NUMBER: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(concat!(
+        r"(?:[<>＜＞≦≧≤≥]=?[ \t]*)?",
         r"(?:約|およそ|おおよそ|最大|最小|最低|最高|最長|最短|少なくとも|せいぜい|合計|延べ)?",
         r"[-−－+＋]?[0-9０-９][0-9０-９,，]*(?:[.．][0-9０-９]+)*",
         r"(?:[万億兆])?",
@@ -965,6 +977,11 @@ static KANJI_NUMBER: LazyLock<Regex> = LazyLock::new(|| {
     )
     .expect("valid kanji number regex")
 });
+// 曜日は値として比べる（「金曜」→「土曜」）。「金曜日」「金曜」「3日(金)」は同じ値。
+static WEEKDAY: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"([月火水木金土日])曜|[0-9０-９]日[（(]([月火水木金土日])(?:・祝)?[）)]")
+        .expect("valid weekday regex")
+});
 
 fn normalize_number(text: &str) -> String {
     text.chars()
@@ -975,19 +992,42 @@ fn normalize_number(text: &str) -> String {
             '％' => '%',
             '−' | '－' => '-',
             '＋' => '+',
+            '＜' => '<',
+            '＞' => '>',
+            '≦' => '≤',
+            '≧' => '≥',
             other => other,
         })
-        .collect()
+        .collect::<String>()
+        .replace("<=", "≤")
+        .replace(">=", "≥")
+}
+
+/// 期間を表す「間」を外した値（「30日間」→「30日」）。
+fn without_period(value: &str) -> String {
+    [("日間", "日"), ("年間", "年"), ("週間", "週")]
+        .iter()
+        .find_map(|(long, short)| {
+            value
+                .strip_suffix(long)
+                .map(|head| format!("{head}{short}"))
+        })
+        .unwrap_or_else(|| value.to_owned())
 }
 
 pub(crate) fn numbers(text: &str) -> Vec<String> {
     let mut found = Vec::new();
     for found_match in NUMBER.find_iter(text) {
         let head = &text[..found_match.start()];
-        let preceded_by_ascii = head
-            .chars()
-            .next_back()
-            .is_some_and(|ch| ch.is_ascii_alphanumeric() || ch == '.');
+        // 「p<0.05」の「p」のように、比較の記号の前の英字は識別子の一部ではない。
+        let starts_with_sign = found_match
+            .as_str()
+            .starts_with(['<', '>', '＜', '＞', '≦', '≧', '≤', '≥']);
+        let preceded_by_ascii = !starts_with_sign
+            && head
+                .chars()
+                .next_back()
+                .is_some_and(|ch| ch.is_ascii_alphanumeric() || ch == '.');
         // 脚注・引用番号の [1] や [^2] は引用の印として別に比べる。
         let bracketed = (head.ends_with('[') || head.ends_with("[^"))
             && text[found_match.end()..].starts_with(']');
@@ -1000,6 +1040,12 @@ pub(crate) fn numbers(text: &str) -> Vec<String> {
             .find_iter(text)
             .map(|found_match| found_match.as_str().to_owned()),
     );
+    found.extend(WEEKDAY.captures_iter(text).filter_map(|captures| {
+        captures
+            .get(1)
+            .or_else(|| captures.get(2))
+            .map(|day| format!("{}曜", day.as_str()))
+    }));
     found
 }
 
@@ -1036,7 +1082,7 @@ fn distinct(items: Vec<String>) -> Vec<String> {
 fn number_findings(
     before: &[&Unit],
     after: &[&Unit],
-    document_numbers: &DocumentNumbers,
+    document_values: &DocumentValues,
     findings: &mut Vec<DiffFinding>,
 ) {
     let (lost, added) = multiset_diff(
@@ -1045,17 +1091,39 @@ fn number_findings(
     );
     let lost = lost
         .into_iter()
-        .filter(|value| !document_numbers.after.contains(value))
+        .filter(|value| !document_values.numbers_after.contains(value))
         .collect::<Vec<_>>();
     let added = added
         .into_iter()
-        .filter(|value| !document_numbers.before.contains(value))
+        .filter(|value| !document_values.numbers_before.contains(value))
         .collect::<Vec<_>>();
-    findings.extend(item_change("number_changed", "warn", before, after, &lost, &added, |lost, added| {
-        format!(
-            "数値や単位の表現が変わりました。消えた値: {lost} / 増えた値: {added}。約・最大・以上などの修飾を含めて、値と範囲が原文と同じか確認してください。"
-        )
-    }));
+    // 「30日」→「30日間」のように「間」の有無だけが違う場合は、同じ期間の言い換えが多いので info にする。
+    // 「3日」は日付とも読めるため、同じ値とはみなさない。
+    let periods = |values: &[String]| {
+        let mut keys = values
+            .iter()
+            .map(|value| without_period(value))
+            .collect::<Vec<_>>();
+        keys.sort();
+        keys
+    };
+    let period_only = !lost.is_empty() && periods(&lost) == periods(&added);
+    findings.extend(item_change(
+        "number_changed",
+        if period_only { "info" } else { "warn" },
+        before,
+        after,
+        &lost,
+        &added,
+        |lost, added| {
+            let note = if period_only {
+                "期間を表す「間」の有無だけが違います。日付と期間を読み違えないか確認してください。"
+            } else {
+                "約・最大・以上などの修飾を含めて、値と範囲が原文と同じか確認してください。"
+            };
+            format!("数値や単位の表現が変わりました。消えた値: {lost} / 増えた値: {added}。{note}")
+        },
+    ));
 }
 
 // 否定。義務・推量・限定などの慣用句は否定の数に入れない。
@@ -1138,15 +1206,187 @@ fn tail_negated(unit: &Unit) -> bool {
         .any(|found| !matches!(found.as_str(), "未来" | "未明" | "未満"))
 }
 
-/// 対になった文で否定の数が違い、字面がほぼ同じ（否定だけを変えた）か文末の肯定・否定が
-/// 入れ替わった場合に示す。文全体を書き直して否定の数が変わっただけの文は、内容語の変化として読む。
+// 起きることを打ち消す向きの語（回避・消失・停止）。「防ぐ」を「しないようにする」と言い直しても文末の向きは同じとみなす。
+const AVOIDANCE_WORDS: &[&str] = &[
+    "防ぐ",
+    "防げる",
+    "避ける",
+    "妨げる",
+    "免れる",
+    "防止",
+    "回避",
+    "阻止",
+    "抑止",
+    "無くなる",
+    "なくなる",
+    "止まる",
+    "止める",
+    "途絶える",
+];
+
+fn is_negative_token(token: &Morpheme) -> bool {
+    match token.pos(0) {
+        "助動詞" => matches!(token.dictionary_form(), "ない" | "ぬ" | "ず"),
+        "形容詞" => matches!(token.dictionary_form(), "ない" | "無い"),
+        _ => false,
+    }
+}
+
+/// 文末の述語（最後の動詞・形容詞と、続く助動詞・接続助詞・補助の語）が打ち消しの向きか。
+/// 否定の語と回避の語を合わせた数が奇数なら打ち消しの向きとする（防がない は肯定の向き）。
+/// 文末の述語の向き。`avoidance` は回避・消失・停止の語を含むか。
+struct PredicatePolarity {
+    negated: bool,
+    avoidance: bool,
+}
+
+fn predicate_polarity(unit: &Unit) -> PredicatePolarity {
+    let idioms = NEGATION_IDIOMS
+        .find_iter(&unit.text)
+        .map(|found| found.range())
+        .collect::<Vec<_>>();
+    let mut predicate: Vec<&Morpheme> = Vec::new();
+    let mut rest = unit.tokens.iter().rev().peekable();
+    while let Some(token) = rest.next() {
+        // 「未実装です」「不要だ」のように、名詞に「だ・です」が付いただけの述語。
+        let copula_only = !predicate.is_empty()
+            && predicate.iter().all(|token| {
+                matches!(token.pos(0), "補助記号" | "空白")
+                    || (token.pos(0) == "助詞" && token.pos(1) == "終助詞")
+                    || (token.pos(0) == "助動詞"
+                        && matches!(token.dictionary_form(), "だ" | "です" | "である"))
+            });
+        let keep = match token.pos(0) {
+            "補助記号" | "空白" => predicate.is_empty(),
+            "動詞" | "形容詞" | "助動詞" | "形状詞" | "接尾辞" => true,
+            "助詞" => matches!(token.pos(1), "接続助詞" | "終助詞"),
+            // 「確認した」「防止する」のように、サ変の名詞は続く「する」と1つの述語にする。
+            "名詞" => {
+                copula_only
+                    || predicate.last().is_some_and(|next| {
+                        matches!(next.dictionary_form(), "する" | "できる" | "出来る")
+                    })
+            }
+            _ => false,
+        };
+        if !keep {
+            break;
+        }
+        predicate.push(token);
+        if token.pos(0) == "名詞" {
+            // 「未」「不」が別の形態素に分かれた場合も、名詞と1つの述語にする。
+            if let Some(prefix) = rest.next_if(|previous| previous.pos(0) == "接頭辞") {
+                predicate.push(prefix);
+            }
+            break;
+        }
+    }
+    let avoidance = |token: &&Morpheme| AVOIDANCE_WORDS.contains(&token.dictionary_form());
+    // 名詞と、前に付いた「未」「不」などの形態素をつないだ字面で、打ち消しの接頭辞を探す。
+    let nominal = predicate
+        .iter()
+        .rev()
+        .filter(|token| matches!(token.pos(0), "名詞" | "接頭辞"))
+        .map(|token| token.surface.as_str())
+        .collect::<String>();
+    let prefixed = NEGATION_PREFIX
+        .find_iter(&nominal)
+        .filter(|found| !matches!(found.as_str(), "未来" | "未明" | "未満"))
+        .count();
+    let turns = prefixed
+        + predicate
+            .iter()
+            .filter(|token| {
+                !idioms.iter().any(|range| range.contains(&token.byte_start))
+                    && (is_negative_token(token)
+                        || avoidance(token)
+                        || (!matches!(token.pos(0), "名詞" | "接頭辞")
+                            && NEGATION_PREFIX.is_match(&token.surface)))
+            })
+            .count();
+    PredicatePolarity {
+        negated: turns % 2 == 1,
+        avoidance: predicate.iter().any(avoidance),
+    }
+}
+
+/// 打ち消された語（否定の語の前の内容語）の正規化表記。「仕様がない」の「ない」のように
+/// 直前が助詞なら、ある・ないを述べる「ない」として語を持たない（None）。
+fn negated_words(unit: &Unit) -> Vec<Option<String>> {
+    let idioms = NEGATION_IDIOMS
+        .find_iter(&unit.text)
+        .map(|found| found.range())
+        .collect::<Vec<_>>();
+    let mut words = Vec::new();
+    for (index, token) in unit.tokens.iter().enumerate() {
+        if !is_negative_token(token) || idioms.iter().any(|range| range.contains(&token.byte_start))
+        {
+            continue;
+        }
+        let word = unit.tokens[..index]
+            .iter()
+            .rev()
+            .find(|previous| {
+                // 「送られ」「処理し」「でき」のような助動詞・軽い動詞は飛ばして、その前の語を見る。
+                !(previous.pos(0) == "助動詞"
+                    || (previous.pos(0) == "動詞"
+                        && (previous.pos(1) == "非自立可能"
+                            || LIGHT_VERBS.contains(&previous.dictionary_form()))))
+            })
+            .filter(|previous| content_lemmas(std::slice::from_ref(previous)).len() == 1)
+            .map(|previous| previous.normalized().to_owned());
+        words.push(word);
+    }
+    words
+}
+
+fn prefix_marks(unit: &Unit) -> usize {
+    negation_marks(unit)
+        .iter()
+        .filter(|mark| NEGATION_PREFIX.is_match(mark))
+        .count()
+}
+
+/// 前後の両方にある語の打ち消しが増減したか。「通知が消える→通知が送られない」のように、
+/// 原文にない語を打ち消して言い直しただけなら false。
+fn shared_word_negation_changed(before: &Unit, after: &Unit) -> bool {
+    let (before_words, after_words) = (negated_words(before), negated_words(after));
+    let count = |words: &[Option<String>], word: &str| {
+        words.iter().filter(|w| w.as_deref() == Some(word)).count()
+    };
+    before_words
+        .iter()
+        .chain(&after_words)
+        .flatten()
+        .any(|word| {
+            before.lemmas.contains(word)
+                && after.lemmas.contains(word)
+                && count(&before_words, word) != count(&after_words, word)
+        })
+        || prefix_marks(before) != prefix_marks(after)
+}
+
+/// 対になった文で否定の数が違い、文末の述語の肯定・否定が入れ替わった場合と、字面がほぼ同じで
+/// 両方にある語の打ち消しが増減した場合に示す。文全体を書き直して否定の数が変わっただけの文と、
+/// 回避の語を「〜ない（ようにする）」で言い直した文は、内容語の変化として読む。
 fn negation_findings(before: &Unit, after: &Unit, findings: &mut Vec<DiffFinding>) {
     let before_marks = negation_marks(before);
     let after_marks = negation_marks(after);
-    if before_marks.len() == after_marks.len()
-        || (similarity(before, after) < NEGATION_SIMILARITY
-            && tail_negated(before) == tail_negated(after))
-    {
+    if before_marks.len() == after_marks.len() {
+        return;
+    }
+    let (before_predicate, after_predicate) =
+        (predicate_polarity(before), predicate_polarity(after));
+    let predicate_flipped = before_predicate.negated != after_predicate.negated;
+    // 「重複登録を防止する→重複して登録されないようにする」は、回避の語が否定に置き換わっただけ。
+    let avoidance_rephrased =
+        !predicate_flipped && (before_predicate.avoidance || after_predicate.avoidance);
+    let reported = if similarity(before, after) < NEGATION_SIMILARITY {
+        predicate_flipped && tail_negated(before) != tail_negated(after)
+    } else {
+        predicate_flipped || (!avoidance_rephrased && shared_word_negation_changed(before, after))
+    };
+    if !reported {
         return;
     }
     findings.push(finding(
@@ -1175,7 +1415,6 @@ const WEAKENERS: &[&str] = &[
     "確認中",
     "対応中",
     "作業中",
-    "見込み",
     "予定",
     "暫定",
     "仮に",
@@ -1187,10 +1426,6 @@ const WEAKENERS: &[&str] = &[
     "一部",
     "原則として",
     "基本的に",
-    "おそらく",
-    "恐らく",
-    "たぶん",
-    "多分",
     "おおむね",
     "概ね",
     "場合がある",
@@ -1214,6 +1449,25 @@ const STRENGTHENERS: &[&str] = &[
     "確実に",
     "完全に",
 ];
+// 推量の言い方。同じ強さの留保として1つにまとめ、互いの言い換え（かもしれない→恐れがある）は示さない。
+const HEDGES: &[&str] = &[
+    "かもしれ",
+    "かも知れ",
+    "と思われ",
+    "と考えられ",
+    "と見られ",
+    "見込み",
+    "恐れがあ",
+    "おそれがあ",
+    "可能性があ",
+    "だろう",
+    "でしょう",
+    "おそらく",
+    "恐らく",
+    "たぶん",
+    "多分",
+];
+const HEDGE: &str = "推量の言い方";
 
 /// `start`から始まる連続した形態素の表層が`word`と一致するか。「正常に」の中の「常に」のように
 /// 語の途中から一致する形を除くため、文字列検索ではなく形態素の境界で照合する。
@@ -1231,11 +1485,12 @@ fn phrase_at(tokens: &[Morpheme], start: usize, word: &str) -> bool {
     false
 }
 
-fn certainty_words(units: &[&Unit]) -> Vec<String> {
+/// 形態素の境界で一致した語を、出現ごとに並べる。
+fn phrases(units: &[&Unit], words: &[&str]) -> Vec<String> {
     let mut found = Vec::new();
     for unit in units {
         for start in 0..unit.tokens.len() {
-            for word in WEAKENERS.iter().chain(STRENGTHENERS) {
+            for word in words {
                 if phrase_at(&unit.tokens, start, word) {
                     found.push((*word).to_owned());
                 }
@@ -1245,14 +1500,28 @@ fn certainty_words(units: &[&Unit]) -> Vec<String> {
     found
 }
 
+fn certainty_words(units: &[&Unit]) -> Vec<String> {
+    let mut found = phrases(units, WEAKENERS);
+    found.extend(phrases(units, STRENGTHENERS));
+    // 「おそらく〜だろう」のように重ねても、1文の推量は1つと数える。
+    found.extend(
+        units
+            .iter()
+            .filter(|unit| HEDGES.iter().any(|hedge| unit.text.contains(hedge)))
+            .map(|_| HEDGE.to_owned()),
+    );
+    found
+}
+
 fn certainty_findings(before: &[&Unit], after: &[&Unit], findings: &mut Vec<DiffFinding>) {
     let (lost, added) = multiset_diff(&certainty_words(before), &certainty_words(after));
     if lost.is_empty() && added.is_empty() {
         return;
     }
+    let weakener = |word: &&String| WEAKENERS.contains(&word.as_str()) || *word == HEDGE;
     let stronger = lost
         .iter()
-        .filter(|word| WEAKENERS.contains(&word.as_str()))
+        .filter(weakener)
         .chain(
             added
                 .iter()
@@ -1262,7 +1531,7 @@ fn certainty_findings(before: &[&Unit], after: &[&Unit], findings: &mut Vec<Diff
         .collect::<Vec<_>>();
     let weaker = added
         .iter()
-        .filter(|word| WEAKENERS.contains(&word.as_str()))
+        .filter(weakener)
         .chain(
             lost.iter()
                 .filter(|word| STRENGTHENERS.contains(&word.as_str())),
@@ -1282,10 +1551,86 @@ fn certainty_findings(before: &[&Unit], after: &[&Unit], findings: &mut Vec<Diff
     ));
 }
 
-// 条件と限定。言い換え（場合→とき）は同じ種類として数える。
-fn condition_markers(tokens: &[Morpheme]) -> (Vec<String>, Vec<String>) {
-    let mut conditional = Vec::new();
-    let mut restrictive = Vec::new();
+// 頻度と周期。「常に」は確度の語として別に比べる。
+const FREQUENCY_WORDS: &[&str] = &[
+    "毎回",
+    "毎時",
+    "毎日",
+    "毎朝",
+    "毎晩",
+    "毎週",
+    "毎月",
+    "毎年",
+    "隔日",
+    "隔週",
+    "隔月",
+    "常時",
+    "随時",
+    "都度",
+    "いつも",
+    "ときどき",
+    "時々",
+    "時折",
+    "たまに",
+    "まれに",
+    "稀に",
+    "しばしば",
+    "頻繁に",
+    "定期的に",
+    "一度だけ",
+];
+// 同じ頻度の言い換え。比べる前に左の語を右の語にそろえる。
+const FREQUENCY_SYNONYMS: &[(&str, &str)] = &[
+    ("都度", "毎回"),
+    ("時々", "ときどき"),
+    ("稀に", "まれに"),
+    ("常時", "いつも"),
+];
+
+/// 頻度の語が替わった・消えた書き換えは、実行や発生の回数が変わるので warn、増えただけなら info。
+fn frequency_findings(before: &[&Unit], after: &[&Unit], findings: &mut Vec<DiffFinding>) {
+    let frequencies = |units: &[&Unit]| {
+        phrases(units, FREQUENCY_WORDS)
+            .into_iter()
+            .map(|word| {
+                FREQUENCY_SYNONYMS
+                    .iter()
+                    .find(|(synonym, _)| *synonym == word)
+                    .map_or(word, |(_, canonical)| (*canonical).to_owned())
+            })
+            .collect::<Vec<_>>()
+    };
+    let (mut lost, mut added) = multiset_diff(&frequencies(before), &frequencies(after));
+    // 「毎回確認する」→「確認するたびに」は同じ頻度。「たびに」だけを足した文は条件の言い方として数えない。
+    let every = |units: &[&Unit]| !phrases(units, &["たびに", "度に"]).is_empty();
+    if every(after) {
+        lost.retain(|word| word != "毎回");
+    }
+    if every(before) {
+        added.retain(|word| word != "毎回");
+    }
+    findings.extend(item_change(
+        "frequency_changed",
+        if lost.is_empty() { "info" } else { "warn" },
+        before,
+        after,
+        &lost,
+        &added,
+        |lost, added| {
+            format!(
+                "頻度や周期を表す語が変わりました。消えた語: {lost} / 増えた語: {added}。実行や発生の回数が原文と同じか確認してください。"
+            )
+        },
+    ));
+}
+
+// 条件・限定・例示。言い換え（場合→とき、など→といった）は同じ種類として数える。
+const CONDITION_KINDS: [&str; 3] = ["条件を表す語", "限定・例外を表す語", "例示を表す語"];
+const EXAMPLE: usize = 2;
+
+/// 条件・限定・例示の語を、`CONDITION_KINDS`の順に集める。
+fn condition_markers(tokens: &[Morpheme]) -> [Vec<String>; 3] {
+    let [mut conditional, mut restrictive, mut example] = [Vec::new(), Vec::new(), Vec::new()];
     for (index, token) in tokens.iter().enumerate() {
         let surface = token.surface.as_str();
         let previous = index.checked_sub(1).map(|index| &tokens[index]);
@@ -1329,49 +1674,62 @@ fn condition_markers(tokens: &[Morpheme]) -> (Vec<String>, Vec<String>) {
         };
         if is_restrictive {
             restrictive.push(surface.to_owned());
+            continue;
+        }
+        // 「PDFなど」の「など」が消えると、例の一覧が全部の一覧に変わる。
+        // 「冪等」の「等」のように語の一部になる字は数えない。
+        if token.pos(0) == "助詞" && surface == "など" {
+            example.push(surface.to_owned());
+        } else if let Some(word) = ["といった", "をはじめ"]
+            .iter()
+            .find(|word| phrase_at(tokens, index, word))
+        {
+            example.push((*word).to_owned());
         }
     }
-    (conditional, restrictive)
+    [conditional, restrictive, example]
 }
 
 fn condition_findings(before: &[&Unit], after: &[&Unit], findings: &mut Vec<DiffFinding>) {
     let collect = |units: &[&Unit]| {
-        let mut conditional = Vec::new();
-        let mut restrictive = Vec::new();
+        let mut kinds: [Vec<String>; 3] = Default::default();
         for unit in units {
-            let (c, r) = condition_markers(&unit.tokens);
-            conditional.extend(c);
-            restrictive.extend(r);
+            for (all, found) in kinds.iter_mut().zip(condition_markers(&unit.tokens)) {
+                all.extend(found);
+            }
         }
-        (conditional, restrictive)
+        kinds
     };
-    let (before_conditional, before_restrictive) = collect(before);
-    let (after_conditional, after_restrictive) = collect(after);
+    let (before_kinds, after_kinds) = (collect(before), collect(after));
     let mut changes = Vec::new();
-    if before_conditional.len() != after_conditional.len() {
+    let mut lost = false;
+    for (kind, ((label, before_words), after_words)) in CONDITION_KINDS
+        .iter()
+        .zip(&before_kinds)
+        .zip(&after_kinds)
+        .enumerate()
+    {
+        if before_words.len() == after_words.len() {
+            continue;
+        }
+        // 例示は、例の語がすべて消えて一覧が閉じたときだけ範囲が変わったとみなす（など→といった、2つ→1つは数えない）。
+        lost |= if kind == EXAMPLE {
+            after_words.is_empty()
+        } else {
+            before_words.len() > after_words.len()
+        };
         changes.push(format!(
-            "条件を表す語 {}→{}（前: {} / 後: {}）",
-            before_conditional.len(),
-            after_conditional.len(),
-            join_items(&before_conditional),
-            join_items(&after_conditional)
-        ));
-    }
-    if before_restrictive.len() != after_restrictive.len() {
-        changes.push(format!(
-            "限定・例外を表す語 {}→{}（前: {} / 後: {}）",
-            before_restrictive.len(),
-            after_restrictive.len(),
-            join_items(&before_restrictive),
-            join_items(&after_restrictive)
+            "{label} {}→{}（前: {} / 後: {}）",
+            before_words.len(),
+            after_words.len(),
+            join_items(before_words),
+            join_items(after_words)
         ));
     }
     if changes.is_empty() {
         return;
     }
-    // 条件や限定が消えた変化は適用範囲が広がるので warn、増えただけなら info。
-    let lost = before_conditional.len() > after_conditional.len()
-        || before_restrictive.len() > after_restrictive.len();
+    // 条件・限定・例示が消えた変化は適用範囲が変わるので warn、増えただけなら info。
     findings.push(finding(
         "condition_changed",
         if lost { "warn" } else { "info" },
@@ -1949,6 +2307,7 @@ fn pair_findings(
         }
         structure_findings(b_unit, last_unit, findings);
         contrast_findings(b_unit, last_unit, findings);
+        choice_findings(b_unit, last_unit, findings);
         causal_findings(b_unit, last_unit, findings);
         if b_unit.kind != UnitKind::Heading
             && last_unit.kind != UnitKind::Heading
@@ -2147,20 +2506,63 @@ fn causal_markers(tokens: &[Morpheme]) -> Vec<String> {
     marks
 }
 
+// 選ぶ範囲。どれか一つを選ぶ言い方と、全部を求める言い方。
+const ONE_OF_WORDS: &[&str] = &[
+    "または",
+    "もしくは",
+    "あるいは",
+    "いずれか",
+    "どちらか",
+    "どれか",
+];
+const ALL_OF_WORDS: &[&str] = &["両方", "すべて", "全て", "いずれも", "どちらも", "全部"];
+
+fn choice_scope(unit: &Unit) -> (bool, bool) {
+    let has = |words: &[&str]| words.iter().any(|word| unit.text.contains(word));
+    (has(ONE_OF_WORDS), has(ALL_OF_WORDS))
+}
+
+/// 「AまたはBのどちらか」が「AとBの両方」になった（逆も）文を示す。片側に両方の言い方がある文は比べない。
+fn choice_findings(before: &Unit, after: &Unit, findings: &mut Vec<DiffFinding>) {
+    let direction = match (choice_scope(before), choice_scope(after)) {
+        ((true, false), (false, true)) => {
+            "どれか一つを選ぶ言い方が、全部を求める言い方になりました"
+        }
+        ((false, true), (true, false)) => {
+            "全部を求める言い方が、どれか一つを選ぶ言い方になりました"
+        }
+        _ => return,
+    };
+    findings.push(finding(
+        "choice_changed",
+        "warn",
+        &[before],
+        &[after],
+        format!("{direction}。求める範囲が原文どおりか確認してください。"),
+    ));
+}
+
 fn causal_findings(before: &Unit, after: &Unit, findings: &mut Vec<DiffFinding>) {
     let before_marks = causal_markers(&before.tokens);
     let after_marks = causal_markers(&after.tokens);
     if before_marks.len() == after_marks.len() {
         return;
     }
-    let direction = if after_marks.len() > before_marks.len() {
+    // 関連・相関だけを述べた文を因果にした書き換えは、主張が強まるので warn にする。
+    let strengthened = after_marks.len() > before_marks.len()
+        && ["関連", "相関", "関係"]
+            .iter()
+            .any(|word| before.text.contains(word) && !after.text.contains(word));
+    let direction = if strengthened {
+        "関連・相関を述べた文が、因果を述べる文になりました"
+    } else if after_marks.len() > before_marks.len() {
         "原文にない因果のつながりが増えました"
     } else {
         "因果のつながりが減りました"
     };
     findings.push(finding(
         "causal_changed",
-        "info",
+        if strengthened { "warn" } else { "info" },
         &[before],
         &[after],
         format!(
@@ -2222,9 +2624,15 @@ const FEELING_WORDS: &[&str] = &[
 static PROMISE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(concat!(
         r"いたします|致します|てまいります|て参ります|徹底します|お約束|約束します|二度と|",
-        r"再発防止に努め|努めます|努めてまいります|取り組んでまいります|保証します|お詫び",
+        r"再発防止に努め|努めます|努めてまいります|取り組んでまいります|お詫び|",
+        r"(?:保証|担保)(?:します|する|され|いたし|でき)",
     ))
     .expect("valid promise regex")
+});
+// 約束のうち、原文にない保証や再発防止の誓いは事実の主張を変えるので warn にする。
+static GUARANTEE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^(?:お約束|約束します|二度と|再発防止に努め|(?:保証|担保).+)$")
+        .expect("valid guarantee regex")
 });
 
 fn phrase_set(units: &[&Unit], words: &[&str]) -> BTreeSet<String> {
@@ -2280,9 +2688,10 @@ fn promise_findings(before: &[&Unit], after: &[&Unit], findings: &mut Vec<DiffFi
     if added.is_empty() {
         return;
     }
+    let guaranteed = added.iter().any(|item| GUARANTEE.is_match(item));
     findings.push(finding(
         "promise_added",
-        "info",
+        if guaranteed { "warn" } else { "info" },
         before,
         after,
         format!(
@@ -2430,6 +2839,28 @@ fn content_lemmas(tokens: &[Morpheme]) -> Vec<String> {
         })
         .map(|token| token.normalized().to_owned())
         .collect()
+}
+
+/// 書き換えた文に、変更前の文書のどこにもない人名・地名が現れたもの。
+/// 別の文から移しただけの名前は数えない。coji/natural-japaneseの`newfacts.py`（MIT）と同じ考え方。
+fn proper_noun_findings(
+    before: &[&Unit],
+    after: &[&Unit],
+    document_values: &DocumentValues,
+    findings: &mut Vec<DiffFinding>,
+) {
+    let mut added = after
+        .iter()
+        .flat_map(|unit| proper_nouns(&unit.tokens))
+        .filter(|name| !document_values.text_before.contains(name.as_str()))
+        .collect::<Vec<_>>();
+    added.sort();
+    added.dedup();
+    findings.extend(item_change("proper_noun_added", "warn", before, after, &[], &added, |_, added| {
+        format!(
+            "変更前の文書にない固有名詞が増えています: {added}。原文や資料にある名前か、書き手が言っていない人・場所・組織を足していないか確認してください。"
+        )
+    }));
 }
 
 fn content_word_findings(before: &[&Unit], after: &[&Unit], findings: &mut Vec<DiffFinding>) {
@@ -2847,8 +3278,14 @@ fn addressees(text: &str) -> Vec<(usize, String)> {
                 .captures(line)
                 .map(|captures| (index + 1, captures[1].to_owned()))
         })
+        // 「仕様」「同様」のように「様」で終わる普通の語だけの行（見出しなど）は宛名にしない。
+        .filter(|(_, name)| !NOT_HONORIFIC_SAMA.iter().any(|word| name.ends_with(word)))
         .collect()
 }
+
+const NOT_HONORIFIC_SAMA: &[&str] = &[
+    "仕様", "同様", "模様", "多様", "異様", "一様", "有様", "両様", "文様", "紋様",
+];
 
 fn addressee_findings(before: &str, after: &str) -> Vec<DiffFinding> {
     let (old, new) = (addressees(before), addressees(after));

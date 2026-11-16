@@ -144,6 +144,12 @@ SHA-256 lock recording, output paths). natural-japanese is MIT-licensed:
 
 The full license text is in the upstream repository's `LICENSE` file.
 
+Later, at commit `840bd400cbcb64c8b64d492a144da54fc05776c5`, three detection
+ideas were reimplemented in Rust (no code copied): the parenthesized-sentence
+pattern of `sentence_in_paren`, the 「調べ」「測り」 entries of
+`wago_nominalization` (added to `renyo_noun`), and the comparison of
+`scripts/newfacts.py` (added to `diff` as `proper_noun_added`).
+
 ## Aozora Bunko evaluation texts (via natural-japanese)
 
 `eval/corpus/aozora/` contains twelve out-of-copyright essays, copied from

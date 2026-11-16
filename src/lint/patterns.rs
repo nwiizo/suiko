@@ -1031,6 +1031,31 @@ pub(super) fn duplicate_comma_findings(masked: &str, raw_lines: &[&str]) -> Vec<
     findings
 }
 
+// ---- 括弧の中の文 ----
+
+static PAREN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[（(]([^（()）\n]{2,200})[)）]").expect("valid paren regex"));
+static QUOTED: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"「[^「」]*」|『[^『』]*』").expect("valid quoted regex"));
+
+/// 句点を含む括弧書き。文分割は句点で切るため、文ではなく行で見る。
+/// 括弧内の引用の句点は数えない。型はcoji/natural-japaneseの`sentence_in_paren`（MIT）。
+pub(super) fn sentence_in_paren_findings(masked: &str, raw_lines: &[&str]) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    for (line_no, line) in numbered_lines(masked) {
+        for paren in PAREN.captures_iter(line) {
+            let inner = QUOTED.replace_all(&paren[1], "");
+            if !inner.contains('。') {
+                continue;
+            }
+            let whole = paren.get(0).expect("whole match");
+            findings.push(spanned_line_finding(raw_lines, line_no, whole.start(), whole.end(),
+                "sentence_in_paren", "info", "括弧の中に文が入っています。括弧の中は読み飛ばされやすいので、本文で伝えるべき内容なら括弧の外の文に出せるか確認してください。補足や出典なら残せます。".into()));
+        }
+    }
+    findings
+}
+
 // ---- 書き手への指示や作業報告の残り ----
 
 static RESIDUE_OPENER: LazyLock<Regex> = LazyLock::new(|| {

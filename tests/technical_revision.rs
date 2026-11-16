@@ -39,6 +39,7 @@ fn technical_nominalizations_are_checked_in_headings_lists_and_cells() {
     let morphology = Morphology::new().unwrap();
     for body in [
         "その確かめは必要です。",
+        "原因の調べを進める。",
         "## 結果の確かめ",
         "- 結果の確かめを行う",
         "| 作業 | 内容 |\n| --- | --- |\n| 手順 | 結果の確かめ |",
@@ -63,6 +64,41 @@ fn technical_nominalizations_are_checked_in_headings_lists_and_cells() {
             report.findings.iter().all(|f| f.category != "renyo_noun"),
             "{body}"
         );
+    }
+}
+
+#[test]
+fn sentences_inside_parentheses_are_a_reading_load_pointer() {
+    let morphology = Morphology::new().unwrap();
+    let paren = |body: &str| {
+        let lane = lint::analyze_reading_load(body, &morphology, Some("tech")).unwrap();
+        let natural = lint::analyze(body, &morphology, Some("tech"), true).unwrap();
+        assert!(
+            natural
+                .findings
+                .iter()
+                .all(|f| f.category != "sentence_in_paren")
+        );
+        lane.findings
+            .iter()
+            .filter(|f| f.category == "sentence_in_paren")
+            .map(|f| {
+                let span = f.span.unwrap();
+                body[span.start_byte..span.end_byte].to_owned()
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        paren("手順を変えた（詳細は別紙に書いた。担当は佐藤さん）。"),
+        ["（詳細は別紙に書いた。担当は佐藤さん）"]
+    );
+    for body in [
+        "設定は既定値のまま（「既定値です。」と表示される）。",
+        "手順を変えた（詳細は別紙）。",
+        "`f(a。b)`を呼ぶ。",
+        "> 手順を変えた（詳細は別紙に書いた。担当は佐藤さん）。",
+    ] {
+        assert!(paren(body).is_empty(), "{body}");
     }
 }
 

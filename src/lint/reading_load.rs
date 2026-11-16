@@ -420,6 +420,9 @@ pub fn analyze_reading_load_with_thresholds(
             }
         }
     }
+    findings.extend(super::patterns::sentence_in_paren_findings(
+        &masked, &raw_lines,
+    ));
     findings.sort_by_key(|finding| finding.line);
     let mut by_category = BTreeMap::new();
     for finding in &findings {

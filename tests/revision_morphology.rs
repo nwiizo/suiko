@@ -34,6 +34,7 @@ fn vocabulary_uses_lemmas_particles_and_local_predicates() {
         "手順の見極めを行います。",
         "設定が黙って破棄されます。",
         "処理が静かに止まりました。",
+        "油断が招く失敗は大きい。",
     ] {
         let found = candidates(body, &morphology);
         assert_eq!(
@@ -79,6 +80,8 @@ fn relations_do_not_cross_clauses_or_assert_negated_and_quoted_actions() {
         "「連休を溶かした。\nジョブを逃がした。」",
         "`ジョブを逃がす`",
         "> 不具合が潜む。",
+        "社長が招く客を迎える。",
+        "油断を招く。",
     ] {
         assert!(
             candidates(body, &morphology).is_empty(),

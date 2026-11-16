@@ -229,4 +229,7 @@ pub(super) const RENYO_FORMS: &[&str] = &[
     "ほどき",
     "繋ぎ",
     "つなぎ",
+    // coji/natural-japaneseの`wago_nominalization`（MIT）から。「知らせ」は「お知らせ」として定着しているので入れない。
+    "調べ",
+    "測り",
 ];

@@ -150,6 +150,7 @@ const RULE_CATEGORIES: &[&str] = &[
     "repeated_syntax_template",
     "respectively_scope",
     "self_labeling_repetition",
+    "sentence_in_paren",
     "sensory_role_mismatch",
     "sentence_too_long",
     "short_object_comma",
@@ -171,6 +172,7 @@ const READING_LOAD_CATEGORIES: &[&str] = &[
     "long_attributive_span",
     "no_chain",
     "no_comma_sentence",
+    "sentence_in_paren",
     "sentence_too_long",
 ];
 
