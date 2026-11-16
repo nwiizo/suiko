@@ -149,7 +149,7 @@ fn closing_detects_only_a_standalone_final_prose_sentence() {
 }
 
 #[test]
-fn editorial_patterns_are_opt_in_and_support_each_genre() {
+fn closing_is_default_while_spacing_is_opt_in_across_genres() {
     let morphology = Morphology::new().unwrap();
     let body = "このAPIを使います。この API を調べます。ぜひ参考にしてみてください。";
     for genre in [None, Some("tech"), Some("business"), Some("essay")] {
@@ -158,7 +158,7 @@ fn editorial_patterns_are_opt_in_and_support_each_genre() {
             for category in ["mixed_latin_spacing", "boilerplate_closing"] {
                 assert_eq!(
                     report.findings.iter().any(|f| f.category == category),
-                    experimental,
+                    experimental || category == "boilerplate_closing",
                     "{genre:?}: {category}"
                 );
             }

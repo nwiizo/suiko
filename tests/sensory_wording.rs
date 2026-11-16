@@ -42,7 +42,7 @@ fn sensory_terms_detect_predicates_and_basis_markers_in_every_genre() {
                 body[..span.start_byte].chars().count() + 1
             );
         }
-        assert!(sensory_findings(body, Some("business"), false).is_empty());
+        assert!(!sensory_findings(body, Some("business"), false).is_empty());
     }
 }
 
@@ -143,7 +143,7 @@ fn copy_fragments_detect_predicate_less_slogans() {
         assert!(findings[0].suggestion.is_none());
         let span = findings[0].span.unwrap();
         assert_eq!(&body[span.start_byte..span.end_byte], excerpt);
-        assert!(copy_findings(body, false).is_empty());
+        assert!(!copy_findings(body, false).is_empty());
     }
 }
 

@@ -4,3 +4,4 @@
 /crates/suiko-sudachi/target/
 /crates/suiko-sudachi/Cargo.lock
 /eval/corpus/external/
+*.suiko-check.json

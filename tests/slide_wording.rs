@@ -7,7 +7,7 @@ fn publication_revision_resolves_both_hints_with_the_same_baseline_settings() {
     let draft = dir.path().join("draft.md");
     std::fs::write(
         &draft,
-        "判断に迷うものは、残さない側に倒します。\n前提を、経路が代わりに添える。\n",
+        "判断に迷うものは、残さない側に倒します。\n条件を、先に示します。\n",
     )
     .unwrap();
     let before = cargo_bin_cmd!("suiko")
@@ -32,7 +32,11 @@ fn publication_revision_resolves_both_hints_with_the_same_baseline_settings() {
     );
     assert_eq!(report["stats"]["by_category"]["short_object_comma"], 1);
     std::fs::write(dir.path().join("before.json"), before).unwrap();
-    std::fs::write(&draft, "採否を判断できない項目は除外します。\n運用者は問い合わせ先に応じた前提条件を参照します。\n").unwrap();
+    std::fs::write(
+        &draft,
+        "採否を判断できない項目は除外します。\n条件を先に示します。\n",
+    )
+    .unwrap();
     let after = cargo_bin_cmd!("suiko")
         .current_dir(dir.path())
         .args([
@@ -59,7 +63,6 @@ fn publication_revision_resolves_both_hints_with_the_same_baseline_settings() {
 fn short_object_comma_marks_only_the_comma_without_rewriting() {
     let morphology = Morphology::new().unwrap();
     for body in [
-        "前提を、経路が代わりに添える。",
         "条件を、先に示す。",
         "この値を、保存する。",
         "入力値を、確認する。",
@@ -67,7 +70,6 @@ fn short_object_comma_marks_only_the_comma_without_rewriting() {
         "確認した。前提を、説明する。",
         // 「を」が経路を示す場合も、読点の要否は断定せず確認候補にする。
         "道を、駅まで歩く。",
-        "空を、鳥が飛ぶ。",
     ] {
         let report = lint::analyze(body, &morphology, Some("tech"), true).unwrap();
         let findings: Vec<_> = report
@@ -96,7 +98,7 @@ fn short_object_comma_marks_only_the_comma_without_rewriting() {
                 .unwrap()
                 .findings
                 .iter()
-                .all(|f| f.category != "short_object_comma")
+                .any(|f| f.category == "short_object_comma")
         );
     }
 }
@@ -105,6 +107,9 @@ fn short_object_comma_marks_only_the_comma_without_rewriting() {
 fn short_object_comma_preserves_clause_and_quotation_boundaries() {
     let morphology = Morphology::new().unwrap();
     for body in [
+        // 目的語や経路の後ろに別の主語がある場合、区切りを残せる。
+        "前提を、経路が代わりに添える。",
+        "空を、鳥が飛ぶ。",
         "入力ファイルを、確認する。",
         "動くのを、確認する。",
         "彼が来るのを、待つ。",
@@ -195,7 +200,7 @@ fn decision_side_metaphor_uses_inflected_action_not_physical_direction() {
             report
                 .findings
                 .iter()
-                .all(|f| f.category != "decision_direction_metaphor")
+                .any(|f| f.category == "decision_direction_metaphor")
         );
     }
 }

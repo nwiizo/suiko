@@ -1050,7 +1050,10 @@ fn zip_entries(path: &Path) -> Result<BTreeMap<String, Vec<u8>>, Error> {
         if entry.is_dir() {
             continue;
         }
-        let name = entry.name().to_owned();
+        let name = entry
+            .name()
+            .map_err(|error| Error::Academic(format!("DOCXのエントリ名を読めません: {error}")))?
+            .into_owned();
         let mut bytes = Vec::new();
         entry
             .read_to_end(&mut bytes)

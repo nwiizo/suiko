@@ -1,4 +1,4 @@
 interface:
   display_name: "Suiko"
-  short_description: "Diagnose and improve natural, readable Japanese prose"
-  default_prompt: "Use $suiko to diagnose and improve this Japanese document while preserving facts and intentional style."
+  short_description: "Revise Japanese prose while preserving meaning and style"
+  default_prompt: "Use $suiko to revise the entire Japanese document and deliver the finished text, checking it against the original and supplied sources while preserving meaning and intentional style."

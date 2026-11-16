@@ -30,21 +30,11 @@ SOFTWARE.
 Rust dependencies retain their respective licenses. See `Cargo.lock` for the
 exact dependency graph.
 
-## yomiyasu
+## Revision guidance
 
-The editorial checks and revision guidance added on 2026-10-01 draw on
-[nanaism/yomiyasu](https://github.com/nanaism/yomiyasu), revision
-`30ee6041c328ce21d38a7963f667e079a93d7a12`: `SKILL.md`,
-`references/gemini-syntax.md`, and `scripts/yomiyasu_lint.py`.
-Suiko implements its own Rust checks with narrower detection conditions;
-the upstream Python program and evaluation corpus are not bundled.
-The adaptation decisions are recorded in `eval/competitive-review-2026-10-01.md`.
-The checks added on 2026-10-07 (`vague_sensory_term`, `copy_fragment`, and the
-additional `technical_jargon_metaphor` patterns) draw on revision
-`8f77b7aa8f19c3f718b511e71a3eee5d06eb3013`: `references/slop-catalog.md`,
-`SKILL.md`, and the explanatory article linked from its README. No upstream
-word list is copied; Suiko matches its own morpheme sequences. Those decisions
-are recorded in `eval/competitive-review-2026-10-07.md`.
+Some editorial examples and revision guidance adapt material by nanaism,
+distributed under the following license. The skill bundle retains the same
+notice in `licenses/nanaism-MIT.txt`. No external checking program is bundled.
 
 ```text
 MIT License
@@ -153,6 +143,12 @@ SHA-256 lock recording, output paths). natural-japanese is MIT-licensed:
 > MIT License. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
 
 The full license text is in the upstream repository's `LICENSE` file.
+
+Later, at commit `840bd400cbcb64c8b64d492a144da54fc05776c5`, three detection
+ideas were reimplemented in Rust (no code copied): the parenthesized-sentence
+pattern of `sentence_in_paren`, the 「調べ」「測り」 entries of
+`wago_nominalization` (added to `renyo_noun`), and the comparison of
+`scripts/newfacts.py` (added to `diff` as `proper_noun_added`).
 
 ## Aozora Bunko evaluation texts (via natural-japanese)
 

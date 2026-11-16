@@ -226,7 +226,7 @@ fn word_rules_reject_invalid_configuration() {
 }
 
 #[test]
-fn short_topic_comma_is_an_opt_in_review_hint() {
+fn short_topic_comma_is_a_default_review_hint() {
     let morphology = Morphology::new().unwrap();
     for (body, expected) in [
         ("要点は、三つです。", 1),
@@ -268,7 +268,7 @@ fn short_topic_comma_is_an_opt_in_review_hint() {
                 .unwrap()
                 .findings
                 .iter()
-                .all(|f| f.category != "short_topic_comma")
+                .any(|f| f.category == "short_topic_comma")
         );
     }
 }
@@ -286,7 +286,6 @@ fn short_topic_comma_preserves_other_boundaries_and_markdown() {
         "「要点は、三つです」と話した。",
         "`要点`は、三つです。",
         "要点は`注釈`、三つです。",
-        "# 要点は、三つです。\n> 条件は、二つです。\n- 結果は、未確定です。\n",
         "```text\n要点は、三つです。\n```\n",
     ] {
         let report = lint::analyze(body, &morphology, Some("tech"), true).unwrap();
@@ -298,6 +297,26 @@ fn short_topic_comma_preserves_other_boundaries_and_markdown() {
             "{body}"
         );
     }
+    let structured = "# 要点は、三つです。\n> 条件は、二つです。\n- 結果は、未確定です。\n";
+    for genre in [None, Some("essay")] {
+        assert!(
+            lint::analyze(structured, &morphology, genre, true)
+                .unwrap()
+                .findings
+                .iter()
+                .all(|finding| finding.category != "short_topic_comma")
+        );
+    }
+    let technical = lint::analyze(structured, &morphology, Some("tech"), true).unwrap();
+    assert_eq!(
+        technical
+            .findings
+            .iter()
+            .filter(|finding| finding.category == "short_topic_comma")
+            .map(|finding| finding.line)
+            .collect::<Vec<_>>(),
+        vec![1, 3]
+    );
 }
 
 #[test]

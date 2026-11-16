@@ -1,11 +1,12 @@
 //! 前回のlint JSONとの比較。findingの解消・新規・継続を分類する。
-
-use std::collections::BTreeMap;
+//! 対応づけは compare・check と同じ matching を使う。baseline JSON には本文がないため、
+//! 抜粋の一致（全体→先頭）と行の近さだけで照合する。
 
 use serde::Serialize;
 use serde_json::Value;
 
 use super::Finding;
+use super::matching::{MatchKey, match_findings};
 
 #[derive(Clone, Debug, Serialize)]
 pub struct BaselineSummary {
@@ -20,30 +21,6 @@ pub struct BaselineReport {
     pub file_status: String,
     pub summary: BaselineSummary,
     pub resolved: Vec<Value>,
-}
-
-fn baseline_key(category: &str, excerpt: &str) -> (String, String) {
-    const CATEGORY_ONLY: &[&str] = &[
-        "antithesis_repetition",
-        "repeated_distinction",
-        "repeated_em_dash",
-        "low_burstiness",
-        "high_length_autocorrelation",
-        "low_sentence_variance",
-        "uniform_paragraph_structure",
-        "nominal_ending",
-        "low_lexical_diversity_ttr",
-        "low_lexical_diversity_mtld",
-    ];
-    if CATEGORY_ONLY.contains(&category) {
-        return (category.to_owned(), String::new());
-    }
-    let normalized = excerpt
-        .chars()
-        .filter(|ch| !ch.is_whitespace())
-        .take(20)
-        .collect::<String>();
-    (category.to_owned(), normalized)
 }
 
 fn summarize(
@@ -81,39 +58,52 @@ pub fn apply_baseline(
     let Some(items) = object.get("findings").and_then(Value::as_array) else {
         return Err("--baseline に 'findings' 配列が見つかりません。baseline比較を無視して通常のlintを実行します。".to_owned());
     };
-    let mut buckets = BTreeMap::<(String, String), Vec<Value>>::new();
-    let mut skipped = 0;
-    for item in items {
-        let Some(category) = item.get("category").and_then(Value::as_str) else {
-            skipped += 1;
-            continue;
-        };
-        let Some(excerpt) = item.get("excerpt").and_then(Value::as_str) else {
-            skipped += 1;
-            continue;
-        };
-        buckets
-            .entry(baseline_key(category, excerpt))
-            .or_default()
-            .push(item.clone());
-    }
+    let valid = items
+        .iter()
+        .filter(|item| {
+            item.get("category").and_then(Value::as_str).is_some()
+                && item.get("excerpt").and_then(Value::as_str).is_some()
+        })
+        .collect::<Vec<_>>();
+    let skipped = items.len() - valid.len();
     if skipped > 0 {
         eprintln!(
             "警告: --baseline の findings 配列内に不正な要素が{skipped}件あったため読み飛ばしました。"
         );
     }
-    for finding in findings.iter_mut() {
-        let key = baseline_key(&finding.category, &finding.excerpt);
-        if let Some(bucket) = buckets.get_mut(&key)
-            && !bucket.is_empty()
-        {
-            bucket.remove(0);
-            finding.status = Some("persisting".to_owned());
-            continue;
-        }
-        finding.status = Some("new".to_owned());
+    let before = valid
+        .iter()
+        .map(|item| MatchKey {
+            line: item
+                .get("line")
+                .and_then(Value::as_u64)
+                .and_then(|line| usize::try_from(line).ok())
+                .unwrap_or(0),
+            category: item["category"].as_str().unwrap_or_default(),
+            excerpt: item["excerpt"].as_str().unwrap_or_default(),
+        })
+        .collect::<Vec<_>>();
+    let after = findings
+        .iter()
+        .map(|finding| MatchKey {
+            line: finding.line,
+            category: &finding.category,
+            excerpt: &finding.excerpt,
+        })
+        .collect::<Vec<_>>();
+    let matches = match_findings(&before, &after, None);
+    let mut persisting = vec![false; findings.len()];
+    for pair in &matches.persisting {
+        persisting[pair.after] = true;
     }
-    let resolved = buckets.into_values().flatten().collect::<Vec<_>>();
+    for (finding, kept) in findings.iter_mut().zip(persisting) {
+        finding.status = Some(if kept { "persisting" } else { "new" }.to_owned());
+    }
+    let resolved = matches
+        .resolved
+        .iter()
+        .map(|&index| valid[index].clone())
+        .collect::<Vec<_>>();
     Ok(summarize(findings, file, "matched", resolved))
 }
 

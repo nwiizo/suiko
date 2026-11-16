@@ -66,7 +66,7 @@ fn download_dictionary(out_dir: &Path) -> PathBuf {
     let mut found = false;
     for index in 0..archive.len() {
         let mut entry = archive.by_index(index).expect("read zip entry");
-        if entry.name() == DICT_ZIP_ENTRY {
+        if entry.name().expect("decode dictionary zip entry name") == DICT_ZIP_ENTRY {
             entry
                 .read_to_end(&mut dictionary)
                 .expect("extract dictionary entry");

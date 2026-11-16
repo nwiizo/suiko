@@ -200,7 +200,7 @@ impl TokenizedSentence {
             .to_owned()
     }
 
-    fn info_finding(
+    pub(super) fn info_finding(
         &self,
         raw_lines: &[&str],
         bytes: std::ops::Range<usize>,
@@ -256,12 +256,27 @@ pub(super) fn short_phrase_comma_findings(
         let Some(comma_index) = tokens.iter().position(|token| token.surface == "、") else {
             continue;
         };
+        // 唯一の読点を外すことで、読点のない60字以上の文を作らない。
+        if sentence.text.matches(['、', '，', ',']).count() == 1
+            && crate::text::reading_length(&sentence.text) > 60
+        {
+            continue;
+        }
         // nwiizo-coding-style: 5文字以内の名詞句＋「は／を」に限定する;
         // 必要な間かどうかは判断せず、節や引用内の読点は対象にしない。
         if comma_index < 2 {
             continue;
         }
         let comma = &tokens[comma_index];
+        // 読点を外すと、記号で始まる太字が前の文字へ接して表示されなくなる。
+        if raw_lines
+            .get(sentence.line - 1)
+            .and_then(|line| line.get(sentence.line_byte_start + comma.byte_end..))
+            .and_then(|tail| tail.strip_prefix("**"))
+            .is_some_and(|inner| crate::markup::is_punctuation(inner.chars().next()))
+        {
+            continue;
+        }
         let particle = &tokens[comma_index - 1];
         let (category, detail) = match (particle.surface.as_str(), particle.pos(1)) {
             ("は", "係助詞") => (
@@ -286,9 +301,11 @@ pub(super) fn short_phrase_comma_findings(
             || !tokens[comma_index + 1..]
                 .iter()
                 .any(|token| CONTENT_POS.contains(&token.pos(0)))
-            || !sentence
-                .raw_text
-                .starts_with(&sentence.text[..comma.byte_end])
+            || !raw_lines
+                .get(sentence.line - 1)
+                .and_then(|line| line.get(sentence.line_byte_start..))
+                .is_some_and(|raw| raw.starts_with(&sentence.text[..comma.byte_end]))
+            || comma_separates_clause(&tokens[comma_index + 1..])
         {
             continue;
         }
@@ -302,6 +319,27 @@ pub(super) fn short_phrase_comma_findings(
         findings.push(finding);
     }
     findings
+}
+
+/// 短い句でも、後ろに別の主語や連体修飾があれば読点が掛かり先を分けうる。
+/// 係り受けは確定できないため、この形には削除を促す候補を出さない。
+fn comma_separates_clause(tokens: &[Morpheme]) -> bool {
+    let end = tokens
+        .iter()
+        .position(|token| matches!(token.pos(0), "補助記号" | "記号"))
+        .unwrap_or(tokens.len());
+    let clause = &tokens[..end];
+    clause.iter().any(|token| {
+        token.pos(0) == "助詞"
+            && matches!(
+                (token.surface.as_str(), token.pos(1)),
+                ("が", "格助詞") | ("は", "係助詞")
+            )
+    }) || clause.windows(2).any(|pair| {
+        matches!(pair[0].pos(0), "動詞" | "形容詞" | "助動詞")
+            && pair[0].pos(5).starts_with("連体形")
+            && pair[1].pos(0) == "名詞"
+    })
 }
 
 pub(super) fn punctuation_between(tokens: &[Morpheme], first: usize, second: usize) -> bool {
@@ -611,7 +649,7 @@ pub(super) struct AttributiveSpan {
 // 「〜する必要がある」「〜する可能性がある」のように述語の枕になる名詞を含む。
 // 削除済みの nested_attributive（連体形の個数）が人間文書で全発火した主因は
 // 「〜すること」「〜したとき」のような結びなので、被修飾名詞を実質名詞に限る。
-const FORMAL_NOUNS: &[&str] = &[
+pub(crate) const FORMAL_NOUNS: &[&str] = &[
     "こと",
     "もの",
     "ため",
@@ -952,6 +990,24 @@ fn token_positions(
     })
 }
 
+/// 直後の否定・引用・連体修飾を、対象の動作の断定として扱わない。
+pub(super) fn affirmative_predicate(tokens: &[&Morpheme], predicate: usize) -> bool {
+    for token in &tokens[predicate + 1..] {
+        if matches!(token.normalized(), "ない" | "無い" | "ぬ" | "ず" | "ん") {
+            return false;
+        }
+        match token.pos(0) {
+            "名詞" | "代名詞" => return false,
+            "助詞" if matches!(token.surface.as_str(), "の" | "と" | "って") => return false,
+            "助動詞" => {}
+            "動詞" if token.pos(1) == "非自立可能" => {}
+            "助詞" if matches!(token.surface.as_str(), "て" | "で") => {}
+            _ => break,
+        }
+    }
+    true
+}
+
 struct AggregateHit {
     line: usize,
     excerpt: String,
@@ -1245,7 +1301,7 @@ pub(super) fn translationese_morph_findings(
                 byte_start..byte_end,
                 "translationese_morph",
                 format!(
-                    "品詞列マッチ: {pattern}。抽象的な内容と「持つ」の組み合わせを読み直す候補"
+                    "「{pattern}」という形で抽象的な内容を表しています。何を決める・考えるのかが分かるか確認してください。「意味を持つ」だけで不自然とは限りません。"
                 ),
             ));
         }
@@ -1277,9 +1333,46 @@ pub(super) fn translationese_morph_findings(
                 raw_lines,
                 start..verb.byte_end,
                 "translationese_morph",
-                "品詞列マッチ: 名詞/動詞+こと+が/は+できる型の翻訳調構文",
+                "「ことができる」を短くできる候補です。可能・能力の意味と文体を保ち、「できます」を「します」や「して構いません」へ変えないでください。",
             );
             finding.suggestion = suru_koto_ga_suggestion(sentence, raw_lines, index, particle);
+            if finding.suggestion.is_none() {
+                finding.review_suggestion = potential_suggestion(sentence, raw_lines, index, verb);
+            }
+            let past = sentence.tokens[index + 3..]
+                .iter()
+                .any(|t| t.pos(0) == "助動詞" && t.dictionary_form() == "た");
+            let personal = [
+                "楽しく",
+                "楽しい",
+                "充実",
+                "嬉し",
+                "うれし",
+                "幸い",
+                "私",
+                "読書",
+                "学び",
+            ]
+            .iter()
+            .any(|cue| sentence.text.contains(cue));
+            let specification = [
+                "旧版",
+                "バージョン",
+                "仕様",
+                "API",
+                "エラー",
+                "設定",
+                "サーバー",
+                "権限",
+            ]
+            .iter()
+            .any(|cue| sentence.text.contains(cue));
+            if past && personal && !specification {
+                finding.category = "evaluative_ability_past".to_owned();
+                finding.detail = "過去の体験や実感を表す可能表現です。達成感や機会を得た意味があるなら、そのまま残してください。".to_owned();
+                finding.suggestion = None;
+                finding.review_suggestion = None;
+            }
             findings.push(finding);
         }
     }
@@ -1462,11 +1555,11 @@ fn technical_wording_start(
 ) -> Option<(usize, &'static str)> {
     let token = &sentence.tokens[index];
     let (prefixes, needs_context, detail): (&[&str], bool, &str) = match token.dictionary_form() {
-        "壊れる" | "失敗" | "捨てる" | "無視" | "失う" | "消える" | "スキップ" | "沈黙" =>
-        {
+        "壊れる" | "失敗" | "捨てる" | "無視" | "失う" | "消える" | "スキップ" | "沈黙"
+        | "破棄" | "止まる" => {
             if matches!(
                 token.dictionary_form(),
-                "失敗" | "無視" | "スキップ" | "沈黙"
+                "失敗" | "無視" | "スキップ" | "沈黙" | "破棄"
             ) && !sentence
                 .tokens
                 .get(index + 1)
@@ -1477,7 +1570,7 @@ fn technical_wording_start(
             (
                 &["静かに", "黙って"],
                 true,
-                "技術的な失敗・破棄・消失を「静かに／黙って」で表す言い回し。エラーが出ない、通知されないなど、利用者が気づけない理由を具体的に書けるか確認してください",
+                "技術的な失敗・破棄・消失を「静かに／黙って」で表しています。気づかなかったことと、通知やエラーを出さない仕様を区別し、資料から分かる動作を書けるか確認してください。仕組みや原因は推測で足さないでください",
             )
         }
         "効く" => (
@@ -1488,7 +1581,7 @@ fn technical_wording_start(
         "溶かす" => (
             &["時間を"],
             false,
-            "時間の消費を物が溶ける動作で表す比喩。費やした作業や時間を具体的に書けるか確認してください",
+            "時間を失った感覚を表す比喩。本人の後悔や実感が伝わるなら残せます。説明する作業が読み取れない場合だけ、原文にある内容で言い換えを検討してください",
         ),
         "倒す" => (
             &["安全側に", "保守側に"],
@@ -1499,6 +1592,19 @@ fn technical_wording_start(
     };
     let before = &sentence.text[..token.byte_start];
     let prefix = prefixes.iter().find(|prefix| before.ends_with(**prefix))?;
+    let predicate_end = if token.pos(0) == "名詞"
+        && sentence
+            .tokens
+            .get(index + 1)
+            .is_some_and(|next| next.dictionary_form() == "する")
+    {
+        index + 1
+    } else {
+        index
+    };
+    if !affirmative_predicate(&sentence.tokens.iter().collect::<Vec<_>>(), predicate_end) {
+        return None;
+    }
     let start = token.byte_start - prefix.len();
     let prefix_index = sentence.tokens[..index]
         .iter()
@@ -1614,7 +1720,14 @@ pub(super) fn copy_fragment_findings(
 ) -> Vec<Finding> {
     let mut findings = Vec::new();
     for sentence in tokenized {
-        if !matches!(sentence.end_mark, Some('。')) || sentence.text.chars().count() > 30 {
+        // 句点のない惹句は、1行だけで書かれた標語の行に限って見る。
+        let standalone = sentence.end_mark.is_none()
+            && raw_lines
+                .get(sentence.line - 1)
+                .is_some_and(|line| line.trim() == sentence.text.trim());
+        if !(matches!(sentence.end_mark, Some('。')) || standalone)
+            || sentence.text.chars().count() > 30
+        {
             continue;
         }
         let tokens = significant_tokens(&sentence.tokens);
@@ -2246,6 +2359,26 @@ fn suru_koto_ga_suggestion(
     })
 }
 
+fn potential_suggestion(
+    sentence: &TokenizedSentence,
+    raw_lines: &[&str],
+    koto_index: usize,
+    ability: &Morpheme,
+) -> Option<Suggestion> {
+    let verb = sentence.tokens.get(koto_index.checked_sub(1)?)?;
+    let potential = verb.potential_stem()?;
+    let span = sentence.span(raw_lines, verb.byte_start, ability.byte_end)?;
+    let preimage = raw_lines
+        .get(sentence.line - 1)?
+        .get(span.start_byte..span.end_byte)?
+        .to_owned();
+    Some(Suggestion {
+        span,
+        preimage,
+        replacement: format!("{potential}{}", ability.surface.strip_prefix("でき")?),
+    })
+}
+
 /// サ変名詞+を+行う型の冗長（「検証を行う」→「検証する」）。
 /// 名詞とを、をと行うが隣接する場合だけ対象にし、受身（行われる）と
 /// 名詞がサ変可能でない場合（「祭りを行う」）は対象外。textlintの
@@ -2468,8 +2601,7 @@ pub(super) fn inanimate_morph_findings(
                 byte_start..verb.byte_end,
                 "inanimate_subject_morph",
                 format!(
-                    "品詞列マッチ: 抽象主語「{subject}」+ {} + 他動詞的述語「{}」（英語統語の直訳調の疑い）",
-                    particle.surface,
+                    "「{subject}」が何を指し、「{}」とどうつながるか確認してください。データや事実が結果を示す客観的な説明は、そのまま残せます。人の主語を推測で足さないでください。",
                     verb.dictionary_form()
                 ),
             ));

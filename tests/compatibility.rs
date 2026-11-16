@@ -13,6 +13,7 @@ fn finding_keeps_its_existing_public_fields_and_json_shape() {
         status: None,
         span: None,
         suggestion: None,
+        review_suggestion: None,
     };
     assert_eq!(
         serde_json::to_value(finding).unwrap(),
@@ -48,21 +49,19 @@ fn calibrated_fixtures_keep_their_finding_counts() {
 
     // 同一範囲の表層・形態素検出2件を形態素側の1件へまとめるため、従来より2件減る。
     assert_eq!(smelly["stats"]["total_findings"], 19);
-    // L12「この事実は、」の読点を実験的な確認候補として1件追加する。
-    assert_eq!(smelly_experimental["stats"]["total_findings"], 29);
-    assert_eq!(
-        smelly_experimental["stats"]["by_category"]["short_topic_comma"],
-        1
-    );
+    // L12「この事実は、」の後ろに「変えること」の連体修飾があるため、
+    // 読点の削除候補を控える。従来の29件から1件減る。
+    assert_eq!(smelly_experimental["stats"]["total_findings"], 28);
+    assert!(smelly_experimental["stats"]["by_category"]["short_topic_comma"].is_null());
     assert_eq!(natural["stats"]["total_findings"], 0);
     assert_eq!(natural_experimental["stats"]["total_findings"], 0);
 }
 
-// 一般校正の担当範囲外であることを固定する。詳細は eval/boundary/README.md。
+// 一般校正の担当範囲外であることを固定する。詳細は tests/fixtures/boundary/README.md。
 #[test]
 fn general_proofreading_problems_stay_out_of_scope() {
     for fixture in ["typo", "misuse", "variant", "keigo", "risk"] {
-        let path = format!("eval/boundary/{fixture}.md");
+        let path = format!("tests/fixtures/boundary/{fixture}.md");
         let mut command = cargo_bin_cmd!("suiko");
         let output = command
             .args(["lint", &path, "--experimental", "--reading-load", "--json"])
@@ -77,11 +76,12 @@ fn general_proofreading_problems_stay_out_of_scope() {
         assert_eq!(json["reading_load"]["stats"]["total"], 0);
     }
 
-    // 公用文の「〜によることができる」だけは、翻訳調の確認候補(info)として発火する。
+    // 公用文では翻訳調に加え、「下さい」「出来」のかな表記を確認候補として示す。
+    // 文体の誤りとは判定せず、すべてinfoにとどめる。
     let output = cargo_bin_cmd!("suiko")
         .args([
             "lint",
-            "eval/boundary/koyobun.md",
+            "tests/fixtures/boundary/koyobun.md",
             "--experimental",
             "--json",
         ])
@@ -89,9 +89,16 @@ fn general_proofreading_problems_stay_out_of_scope() {
         .expect("run suiko lint");
     assert!(output.status.success());
     let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
-    assert_eq!(json["stats"]["total_findings"], 1);
+    assert_eq!(json["stats"]["total_findings"], 3);
     assert_eq!(json["stats"]["by_category"]["translationese_morph"], 1);
-    assert_eq!(json["findings"][0]["severity"], "info");
+    assert_eq!(json["stats"]["by_category"]["auxiliary_kana"], 2);
+    assert!(
+        json["findings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|finding| finding["severity"] == "info")
+    );
 }
 
 #[test]
