@@ -27,7 +27,7 @@
 
 ## インストール
 
-このブランチの追加機能は未リリースです。導入済みCLIの機能は`suiko capabilities --json`で確認できます。未対応版では必要なサブコマンドの`--help`を確認してください。機能の[対応状況](docs/feature-status.md)と、[文書群の検査・Git比較・編集判断の集計](docs/batch-review.md)も参照できます。
+導入済みCLIの機能は`suiko capabilities --json`で確認できます。未対応版では必要なサブコマンドの`--help`を確認してください。機能の[対応状況](docs/feature-status.md)と、[文書群の検査・Git比較・編集判断の集計](docs/batch-review.md)も参照できます。
 
 ### Cargo
 
@@ -43,12 +43,12 @@ suiko --version
 Rustを入れずに使う場合は、[GitHub Releases](https://github.com/nwiizo/suiko/releases)から取得できます。macOS（Apple Silicon / Intel）、Linux（x86_64 / aarch64）、Windows（x86_64）に対応し、各アーカイブにSHA-256ファイルが付きます。
 
 ```sh
-# v0.3.11 / macOS（Apple Silicon）
-curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.3.11/suiko-v0.3.11-aarch64-apple-darwin.tar.gz
-curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.3.11/suiko-v0.3.11-aarch64-apple-darwin.tar.gz.sha256
-shasum -a 256 -c suiko-v0.3.11-aarch64-apple-darwin.tar.gz.sha256
-tar xzf suiko-v0.3.11-aarch64-apple-darwin.tar.gz
-./suiko-v0.3.11-aarch64-apple-darwin/suiko --version
+# v0.4.2 / macOS（Apple Silicon）
+curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.4.2/suiko-v0.4.2-aarch64-apple-darwin.tar.gz
+curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.4.2/suiko-v0.4.2-aarch64-apple-darwin.tar.gz.sha256
+shasum -a 256 -c suiko-v0.4.2-aarch64-apple-darwin.tar.gz.sha256
+tar xzf suiko-v0.4.2-aarch64-apple-darwin.tar.gz
+./suiko-v0.4.2-aarch64-apple-darwin/suiko --version
 ```
 
 以降の例で`suiko`として実行するには、展開した実行ファイルをPATHの通ったディレクトリへ配置してください。
@@ -171,7 +171,7 @@ suiko lint draft.md --json
 suiko lint draft.md --genre tech --json
 ```
 
-`lint`は自然度の診断と同時に、長すぎる一文、読点のない60字以上の一文、埋もれた列挙、疑問節の埋もれた列挙、長い連続漢字、二重否定、格助詞「の」の近接した連鎖、一つの名詞に前置された長い修飾節を確認します。v0.3.10から既定で有効です。結果は`findings`と分けた`reading_load`へ出力し、`--baseline`比較と`--fail-on`判定には含めません。不要な場合は`--no-reading-load`で出力から外せます。v0.3.9以前の`--reading-load`も互換のため受け付けます。
+`lint`は自然度の診断と同時に、長すぎる一文、読点のない60字以上の一文、埋もれた列挙、疑問節の埋もれた列挙、長い連続漢字、二重否定、格助詞「の」の近接した連鎖、一つの名詞に前置された長い修飾節、句点を含む括弧書き（`sentence_in_paren`）を確認します。v0.3.10から既定で有効です。結果は`findings`と分けた`reading_load`へ出力し、`--baseline`比較と`--fail-on`判定には含めません。不要な場合は`--no-reading-load`で出力から外せます。v0.3.9以前の`--reading-load`も互換のため受け付けます。
 
 `long_attributive_span`は、述語を2つ以上含む30字以上の連体修飾節が一つの実質名詞に係り、その名詞句が「が」「を」「は」などで主節の項になっている文を指さします。読み手は名詞が出るまで修飾節全体を保留するため、被修飾名詞か述語を先に出すか、修飾節を独立した文に分けると読みやすくなります。「〜すること」「〜したとき」「〜する必要がある」のような形式名詞・枕の名詞と、「〜という関係である」の述語名詞は対象外です。連体形の個数で判定して人間文書で全発火した旧`nested_attributive`とは異なり、一つの名詞が背負う修飾節の長さと述語数を測ります。v0.3.8で追加し、採用の経緯と実測は[校正記録](https://github.com/nwiizo/suiko/blob/v0.3.8/eval/calibration.md)にまとめています。
 
@@ -241,11 +241,13 @@ suiko diff before.md after.md --fail-on warn
 
 | category | 重要度 | 見る変化 |
 |---|---|---|
-| `number_changed` | warn | 数値と単位・約・最大・以上などの修飾。桁区切りと全角・半角の違いは同じ値として扱い、文書内の別の文へ移した値は数えない |
-| `negation_changed` | warn | 対応する文で「ない」「ず」「ません」「不要」「禁止」などの否定の数が変わり、字面がほぼ同じか文末の肯定・否定が入れ替わった箇所。「かもしれない」「なければならない」「ではなく」などの慣用句は数えない |
+| `number_changed` | warn / info | 数値と単位・約・最大・以上などの修飾、「<」「≥」などの比較の記号、曜日。桁区切りと全角・半角の違いは同じ値として扱い、文書内の別の文へ移した値は数えない。「30日」→「30日間」のように期間を表す「間」の有無だけが違う場合はinfo |
+| `negation_changed` | warn | 対応する文で「ない」「ず」「ません」「不要」「禁止」などの否定の数が変わり、文末の述語の肯定・否定が入れ替わった箇所（「未実装です」→「実装します」のような名詞の述語を含む）と、字面がほぼ同じで両方にある語の打ち消しが増減した箇所。「防ぐ」「避ける」「なくなる」「止まる」などの回避・消失・停止の語は文末で否定と同じ向きに数え、「防ぐ」→「しないようにする」は示さず「防ぐ」→「防がない」は示す。「かもしれない」「なければならない」「ではなく」などの慣用句は数えない |
 | `sentence_function_changed` | warn / info | 対応する文の文末の働き（依頼・禁止・義務・勧め・可能・推量・疑問・過去・体言止め・受身・可能・説明）。「保存できます」→「保存してください」などはwarn、「〜する」→「〜した」のような時制だけの変化と、受身・可能・尊敬のどれにも読める「れる／られる」との行き来はinfo、体言止めを文にした変化は数えない。可能は「できる」のほか、「読める」「使える」のように五段動詞から派生した可能動詞を辞書で確かめて含める |
-| `certainty_changed` | warn | 「予定」「暫定」「一部」「おそらく」などの留保と、「必ず」「全て」「確定」「必須」などの強め。形態素の境界で照合する |
-| `condition_changed` | warn / info | 「ば」「たら」「なら」「場合」「とき」などの条件と、「だけ」「のみ」「以外」「除く」「ただし」などの限定の数。減ればwarn、増えただけならinfo |
+| `certainty_changed` | warn | 「予定」「暫定」「一部」などの留保、「かもしれない」「と思われる」「見込み」「おそらく」などの推量、「必ず」「全て」「確定」「必須」などの強め。形態素の境界で照合する。推量は1文に1つと数え、同じ強さの推量どうしの言い換え（かもしれない→恐れがある）は示さない |
+| `condition_changed` | warn / info | 「ば」「たら」「なら」「場合」「とき」などの条件、「だけ」「のみ」「以外」「除く」「ただし」などの限定、「など」「といった」「をはじめ」の例示の数。条件・限定が減るか、例示の語がすべて消えて一覧が閉じればwarn、それ以外はinfo |
+| `frequency_changed` | warn / info | 「毎日」「毎週」「随時」「ときどき」「いつも」「定期的に」などの頻度の語。替わるか消えればwarn、増えただけならinfo。「毎回」と「〜するたびに」などの同じ頻度の言い換えは示さない |
+| `choice_changed` | warn | 「または」「いずれか」「どちらか」の一つを選ぶ言い方と、「両方」「すべて」「いずれも」の全部を求める言い方が入れ替わった箇所。片側に両方の言い方がある文は比べない |
 | `identifier_changed` | warn | インラインコード、URL、数字や記号を含む英数字の語、大文字の略語 |
 | `quotation_changed` | warn | かぎ括弧の中身。引用符を外しただけで本文に同じ文字列が残る場合は除く |
 | `citation_changed` | warn | `[1]`、`[^note]`、（著者 年）、注番号 |
@@ -256,11 +258,12 @@ suiko diff before.md after.md --fail-on warn
 | `protected_changed` | warn | コードブロックの中身 |
 | `table_changed` | warn / info | 表の行を字面の近さで対応づけ、セルの数値・識別子が変わればwarn、文言だけならinfo。対応のない行は件数を示す |
 | `contrast_changed` | warn / info | 「AではなくB」の向きが逆になればwarn、否定した側Aが消えればinfo |
+| `proper_noun_added` | warn | 書き換えた文に、変更前の文書のどこにもない人名・地名が現れたもの。別の文から移しただけの名前は示さない。DB・フロントエンドのような「固有名詞・一般」は対象外 |
 | `content_words_changed` | info | 書き換えで消えた語と増えた語の一覧 |
 | `structure_changed` | info | 箇条書きと地の文の入れ替わり、見出しの階層の変化 |
-| `causal_changed` | info | 対応する文で「ため」「ので」「により」「そのため」などの因果の接続が増減した箇所 |
+| `causal_changed` | warn / info | 対応する文で「ため」「ので」「により」「原因」などの因果の接続が増減した箇所。「関連」「相関」「関係」だけを述べた文を因果の文にした場合はwarn、それ以外はinfo |
 | `feeling_added` | info | 変更前にない「申し訳」「安心」「ぜひ」「興味深い」などの気持ち・評価の語 |
-| `promise_added` | info | 変更前にない「いたします」「徹底します」「二度と」「努めてまいります」などの書き手の約束 |
+| `promise_added` | warn / info | 変更前にない「いたします」「徹底します」「二度と」「努めてまいります」「保証する」「担保される」などの書き手の約束。保証・担保・再発防止・「二度と」・「約束します」はwarn、それ以外はinfo |
 | `nominalization_added` | info | 「減らせます」→「削減が可能です」のように、「が可能」「の実施」「を担保」などの名詞中心の表現が増えた箇所。正式な文体や定義語を保ちながら、硬くなっていないか読み直す |
 | `register_changed` | info | 文書全体で敬体の割合が20ポイント以上変わった（5文以上の文書） |
 

@@ -161,7 +161,7 @@ suiko lint <file> --genre tech --json > /tmp/suiko-before.json
 suiko lint <file> --genre tech --baseline /tmp/suiko-before.json --json
 ```
 
-同じバージョン・ジャンル・`--experimental`指定・設定・ファイル名で比較する。v0.3.11へ更新したらbaselineを作り直す。`new`と`persisting`は、直すか、意図して残す理由を判断する。`resolved`も意味の改善を保証しないため、変更箇所を読み直す。`reading_load`は比較に含まれないので今回の出力を別に確認する。同じ指摘の往復が続く場合は、文・段落の構造を見直すか理由を付けて残す。
+同じバージョン・ジャンル・`--experimental`指定・設定・ファイル名で比較する。v0.4.2へ更新したらbaselineを作り直す。`new`と`persisting`は、直すか、意図して残す理由を判断する。`resolved`も意味の改善を保証しないため、変更箇所を読み直す。`reading_load`は比較に含まれないので今回の出力を別に確認する。同じ指摘の往復が続く場合は、文・段落の構造を見直すか理由を付けて残す。
 
 `check`に含まれる`diff`で、原文にあった条件・数値・例外の脱落と、原文にない主体・通知先・原因・効果の追加を別々に確かめる。手順や仕様では、依頼・許可・可能・自動動作の区別も保つ。`recipient_added`は通知・報告・依頼の相手の追加を指す。差分だけを見たい場合は`suiko diff <before> <after> --json`も使える。
 
