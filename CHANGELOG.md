@@ -4,6 +4,10 @@ Suikoの公開リリースを記録する。日付はJSTで、各項目は実測
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-11-17
+
+全規則を既定で表示し、規則を7つの族に分けた版。公開時の説明は[リリースノート](docs/releases/v0.4.3.md)にまとめた。
+
 ### 全規則の既定表示と規則の族（ADR-0003）
 
 - `lint`・`check`・`compare`と文書群の集計が、評価中の規則も含めて全規則を既定で検査するようにした。`--experimental`は互換のため受け付け、指定されると不要になったことを標準エラーへ1行で伝える。ライブラリの`lint::analyze(.., experimental)`は変えていない。旧版のbaselineは`stats.experimental`の不一致で止まり、作り直しを案内する。`check`の記録は記録された設定で再検査する。
@@ -20,6 +24,7 @@ Suikoの公開リリースを記録する。日付はJSTで、各項目は実測
   - `src/diff.rs`（約3,300行）は、比較の入口と領域ごとの照合だけを残し、単位の切り出し（`units`）、対応づけ（`align`）、値（`values`）、否定（`negation`）、確度・頻度・条件（`modality`）、主語・目的語と内容語（`arguments`）、文末の働き（`endings`）、構造・対比・因果・選択（`relations`）、文体と宛名（`tone`）、コードブロックと表（`protected`）へ分けた。
   - 同じ箇所の指摘を一つにする範囲の重なりの判定は`Span::overlaps`にまとめた。
   - `lint --help`の「一部の構造検査は --genre essay が必要」を`--genre`の説明へ移した。テストでは、動作を変えなくなった`--experimental`の指定を外した。
+- 配布: リリースのmacOSのバイナリを`macos-15`のランナーで作るようにした。GitHub Actionsが`macos-14`の提供を2026-11-02に終えたため、v0.4.2のリリースにはmacOSのバイナリが付いていない。
 
 互換性: JSONは追加だけ。既定の出力に評価中の規則と新規則が加わるため、件数と`--fail-on info`の終了結果は変わる。旧版のbaselineは作り直す。不要な規則は`.suiko.toml`の`disabled_rules`か理由付きの`allow`で外せる。
 
