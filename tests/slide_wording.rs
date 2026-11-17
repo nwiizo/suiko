@@ -12,14 +12,7 @@ fn publication_revision_resolves_both_hints_with_the_same_baseline_settings() {
     .unwrap();
     let before = cargo_bin_cmd!("suiko")
         .current_dir(dir.path())
-        .args([
-            "lint",
-            "draft.md",
-            "--experimental",
-            "--json",
-            "--fail-on",
-            "info",
-        ])
+        .args(["lint", "draft.md", "--json", "--fail-on", "info"])
         .assert()
         .code(2)
         .get_output()
@@ -42,7 +35,6 @@ fn publication_revision_resolves_both_hints_with_the_same_baseline_settings() {
         .args([
             "lint",
             "draft.md",
-            "--experimental",
             "--json",
             "--fail-on",
             "info",
@@ -70,6 +62,8 @@ fn short_object_comma_marks_only_the_comma_without_rewriting() {
         "確認した。前提を、説明する。",
         // 「を」が経路を示す場合も、読点の要否は断定せず確認候補にする。
         "道を、駅まで歩く。",
+        // v0.4.3から15字以内の名詞句を見る。
+        "入力ファイルを、確認する。",
     ] {
         let report = lint::analyze(body, &morphology, Some("tech"), true).unwrap();
         let findings: Vec<_> = report
@@ -110,7 +104,6 @@ fn short_object_comma_preserves_clause_and_quotation_boundaries() {
         // 目的語や経路の後ろに別の主語がある場合、区切りを残せる。
         "前提を、経路が代わりに添える。",
         "空を、鳥が飛ぶ。",
-        "入力ファイルを、確認する。",
         "動くのを、確認する。",
         "彼が来るのを、待つ。",
         "前提と条件を、確認する。",
@@ -211,14 +204,7 @@ fn short_object_comma_can_be_disabled_and_compared_with_baseline() {
     std::fs::write(dir.path().join("draft.md"), "前提を、確認する。").unwrap();
     let before = cargo_bin_cmd!("suiko")
         .current_dir(dir.path())
-        .args([
-            "lint",
-            "draft.md",
-            "--experimental",
-            "--json",
-            "--fail-on",
-            "info",
-        ])
+        .args(["lint", "draft.md", "--json", "--fail-on", "info"])
         .assert()
         .code(2)
         .get_output()
@@ -239,7 +225,6 @@ fn short_object_comma_can_be_disabled_and_compared_with_baseline() {
             .args([
                 "lint",
                 "draft.md",
-                "--experimental",
                 "--json",
                 "--fail-on",
                 "info",

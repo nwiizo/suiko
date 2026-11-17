@@ -42,6 +42,8 @@ fn comma_candidates_preserve_clause_boundaries_and_modifier_scope() {
         "資料を、担当者が確認した。",
         "私は、彼が戻るまで待った。",
         "設定を、変更したときに記録する。",
+        // 人称だけの句の読点は、文のつながりを示すため候補にしない（v0.4.3）。
+        "私は、設定を保存した。",
     ] {
         let report = lint::analyze(body, &morphology, Some("tech"), true).unwrap();
         let commas = report
@@ -58,7 +60,7 @@ fn comma_candidates_preserve_clause_boundaries_and_modifier_scope() {
     }
     for (body, category) in [
         ("設定を、保存します。", "short_object_comma"),
-        ("私は、設定を保存した。", "short_topic_comma"),
+        ("担当者は、設定を保存した。", "short_topic_comma"),
         ("設定を、会議で説明した。", "short_object_comma"),
     ] {
         let report = lint::analyze(body, &morphology, Some("tech"), true).unwrap();

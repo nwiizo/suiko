@@ -44,14 +44,32 @@ fn capabilities_and_summary_describe_actual_features_and_counts() {
             .any(|c| c["name"] == "compare")
     );
     for category in suiko::lint::rule_categories() {
-        assert!(
-            features["rules"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|r| r["category"] == *category)
-        );
+        let rule = features["rules"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["category"] == *category)
+            .unwrap();
+        // 族・確度・範囲は既存のキーに足したもの。
+        assert!(rule["lane"].is_string() && rule["experimental"].is_boolean());
+        assert!(rule["family"].is_string(), "{rule}");
+        assert!(rule["confidence"].is_string(), "{rule}");
+        assert!(rule["scope"].is_string(), "{rule}");
     }
+    let rule = |category: &str| {
+        features["rules"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["category"] == category)
+            .unwrap()
+            .clone()
+    };
+    assert_eq!(rule("kanji_run")["family"], "reading_load");
+    assert_eq!(rule("kanji_run")["lane"], "reading_load");
+    assert_eq!(rule("low_burstiness")["scope"], "document");
+    assert_eq!(rule("elaborate_simile")["confidence"], "low");
+    assert_eq!(rule("abstract_metaphor")["confidence"], "high");
     fs::write(
         dir.path().join("日本語 a.md"),
         "設定を、保存することができます。\n",

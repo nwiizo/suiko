@@ -423,12 +423,77 @@ fn lexical_audit_keeps_registered_domain_compounds_silent() {
 }
 
 #[test]
-fn lint_help_explains_the_essay_only_experimental_detector() {
+fn lint_help_explains_the_essay_only_detectors() {
     cargo_bin_cmd!("suiko")
         .args(["lint", "--help"])
         .assert()
         .success()
         .stdout(predicate::str::contains("--genre essay"));
+}
+
+// v0.4.3から全規則を既定で表示する（ADR-0003）。--experimentalは受け付けるだけで、出力は変わらない。
+#[test]
+fn lint_shows_former_experimental_rules_by_default() {
+    let (_dir, path) = draft("それは組織の再構築である。\nなぜなら場所に縛られないからだ。\n");
+    let path = path.to_str().expect("UTF-8 path");
+    let default = cargo_bin_cmd!("suiko")
+        .args(["lint", path, "--json", "--no-config"])
+        .output()
+        .expect("run suiko lint");
+    let flagged = cargo_bin_cmd!("suiko")
+        .args(["lint", path, "--json", "--no-config", "--experimental"])
+        .output()
+        .expect("run suiko lint");
+    assert!(default.status.success() && flagged.status.success());
+    let json: Value = serde_json::from_slice(&default.stdout).expect("valid JSON output");
+    assert!(
+        json["findings"]
+            .as_array()
+            .expect("findings array")
+            .iter()
+            .any(|finding| finding["category"] == "english_syntax_cleft_because")
+    );
+    assert_eq!(json["stats"]["experimental"], true);
+    assert_eq!(default.stdout, flagged.stdout);
+    assert!(default.stderr.is_empty());
+    let note = String::from_utf8(flagged.stderr).expect("UTF-8 stderr");
+    assert_eq!(note.lines().count(), 1);
+    assert!(note.contains("--experimental は不要"));
+}
+
+#[test]
+fn lint_json_findings_carry_family_and_confidence() {
+    let (_dir, path) =
+        draft("# 提案\n\n重要なのは、距離を克服することができる点だと言えるでしょう。\n");
+    let output = cargo_bin_cmd!("suiko")
+        .args([
+            "lint",
+            path.to_str().expect("UTF-8 path"),
+            "--json",
+            "--no-config",
+        ])
+        .output()
+        .expect("run suiko lint");
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
+    let findings = json["findings"].as_array().expect("findings array");
+    assert!(!findings.is_empty());
+    for finding in findings {
+        assert!(finding["family"].is_string(), "{finding}");
+        assert!(finding["confidence"].is_string(), "{finding}");
+    }
+    let forbidden = findings
+        .iter()
+        .find(|finding| finding["category"] == "forbidden_phrase")
+        .expect("forbidden_phrase finding");
+    assert_eq!(forbidden["family"], "wording");
+    assert_eq!(forbidden["confidence"], "low");
+    for finding in json["reading_load"]["findings"]
+        .as_array()
+        .expect("reading_load findings")
+    {
+        assert_eq!(finding["family"], "reading_load");
+    }
 }
 
 #[test]
@@ -485,12 +550,7 @@ fn findings_carry_line_column_and_byte_spans() {
     // 複数行にまたがるfinding
     let (_dir2, path2) = draft("それは組織の再構築である。\nなぜなら場所に縛られないからだ。\n");
     let output = cargo_bin_cmd!("suiko")
-        .args([
-            "lint",
-            path2.to_str().expect("UTF-8 path"),
-            "--experimental",
-            "--json",
-        ])
+        .args(["lint", path2.to_str().expect("UTF-8 path"), "--json"])
         .output()
         .expect("run suiko lint");
     assert!(output.status.success());
@@ -638,7 +698,7 @@ fn rhythm_stats_report_sentence_ending_counts_and_runs() {
 }
 
 #[test]
-fn experimental_sentence_mode_and_nominal_runs_are_aggregated() {
+fn sentence_ending_and_nominal_runs_are_aggregated() {
     let body = concat!(
         "この仕組みは入力された記録を順番に比較し、差分を一覧へまとめて表示する設計である。\n",
         "この処理は保存された設定を項目ごとに検査し、不正な値を理由とともに報告する設計である。\n",
@@ -650,25 +710,30 @@ fn experimental_sentence_mode_and_nominal_runs_are_aggregated() {
     let (_dir, path) = draft(body);
 
     let output = cargo_bin_cmd!("suiko")
-        .args([
-            "lint",
-            path.to_str().expect("UTF-8 path"),
-            "--experimental",
-            "--json",
-        ])
+        .args(["lint", path.to_str().expect("UTF-8 path"), "--json"])
         .output()
         .expect("run suiko lint");
     assert!(output.status.success());
     let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
 
+    // 「である」の連続は文末の連続（repeated_sentence_ending）が示し、同じ連続を
+    // repeated_sentence_modeでは重ねない。
     let repeated = json["findings"]
         .as_array()
         .expect("findings array")
         .iter()
-        .find(|finding| finding["category"] == "repeated_sentence_mode")
-        .expect("repeated sentence mode finding");
+        .find(|finding| finding["category"] == "repeated_sentence_ending")
+        .expect("repeated sentence ending finding");
     assert_eq!(repeated["severity"], "info");
+    assert_eq!(repeated["line"], 3);
     assert_eq!(repeated["related_lines"], serde_json::json!([1, 2, 3]));
+    assert!(
+        json["findings"]
+            .as_array()
+            .expect("findings array")
+            .iter()
+            .all(|finding| finding["category"] != "repeated_sentence_mode")
+    );
 
     let nominal = json["findings"]
         .as_array()
@@ -698,12 +763,7 @@ fn experimental_sentence_runs_do_not_cross_blank_lines() {
     let (_dir, path) = draft(body);
 
     let output = cargo_bin_cmd!("suiko")
-        .args([
-            "lint",
-            path.to_str().expect("UTF-8 path"),
-            "--experimental",
-            "--json",
-        ])
+        .args(["lint", path.to_str().expect("UTF-8 path"), "--json"])
         .output()
         .expect("run suiko lint");
     assert!(output.status.success());
@@ -1323,7 +1383,6 @@ fn faq_marker_leads_are_flagged_as_structured_labels() {
             path.to_str().expect("UTF-8 path"),
             "--genre",
             "tech",
-            "--experimental",
             "--json",
         ])
         .output()
@@ -1359,7 +1418,6 @@ fn local_ai_patterns_fire_on_short_documents() {
         .args([
             "lint",
             path.to_str().expect("UTF-8 path"),
-            "--experimental",
             "--genre",
             "tech",
             "--json",
@@ -1378,7 +1436,6 @@ fn local_ai_patterns_fire_on_short_documents() {
         .args([
             "lint",
             path2.to_str().expect("UTF-8 path"),
-            "--experimental",
             "--genre",
             "tech",
             "--json",
@@ -1477,7 +1534,6 @@ fn repeated_leads_skip_noun_topics_but_keep_connective_leads() {
             path.to_str().expect("UTF-8 path"),
             "--genre",
             "essay",
-            "--experimental",
             "--json",
         ])
         .output()
@@ -1504,12 +1560,7 @@ fn repeated_leads_aggregate_per_key_and_flag_label_fields() {
     let (_dir, path) = draft(&format!("{glossary}\nまとめると、以上です。\n"));
 
     let output = cargo_bin_cmd!("suiko")
-        .args([
-            "lint",
-            path.to_str().expect("UTF-8 path"),
-            "--experimental",
-            "--json",
-        ])
+        .args(["lint", path.to_str().expect("UTF-8 path"), "--json"])
         .output()
         .expect("run suiko lint");
 
@@ -2341,11 +2392,22 @@ fn baseline_keeps_document_level_findings_persisting_when_wording_changes() {
 
     assert!(output.status.success());
     let json: Value = serde_json::from_slice(&output.stdout).expect("valid JSON output");
-    assert_eq!(json["baseline"]["summary"]["resolved"], 0);
-    assert_eq!(json["baseline"]["summary"]["new"], 0);
+    // 文書全体の要約は継続し、抜粋が変わった箇所ごとの対比（negated_contrast）は解消と新規に分かれる。
     assert_eq!(json["baseline"]["summary"]["persisting"], 1);
-    assert_eq!(json["findings"][0]["category"], "antithesis_repetition");
-    assert_eq!(json["findings"][0]["status"], "persisting");
+    let findings = json["findings"].as_array().expect("findings array");
+    let antithesis = findings
+        .iter()
+        .find(|finding| finding["category"] == "antithesis_repetition")
+        .expect("antithesis summary");
+    assert_eq!(antithesis["status"], "persisting");
+    let contrasts = findings
+        .iter()
+        .filter(|finding| finding["category"] == "negated_contrast")
+        .collect::<Vec<_>>();
+    assert_eq!(contrasts.len(), 2);
+    assert!(contrasts.iter().all(|finding| finding["status"] == "new"));
+    assert_eq!(json["baseline"]["summary"]["new"], 2);
+    assert_eq!(json["baseline"]["summary"]["resolved"], 2);
 }
 
 #[test]

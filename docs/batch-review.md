@@ -30,7 +30,7 @@ file  natural_before  natural_after  reading_load_before  reading_load_after
 
 比較はGitリポジトリ内のUTF-8の通常ファイルを明示して使う。ディレクトリや標準入力は指定しない。Gitが認識したリネームを使い、ステージ済みのリネーム後に本文を編集した場合も対応づける。Gitが認識できない大幅変更や未追跡の移動は、追加・削除として扱われる場合がある。比較元または作業ツリーのシンボリックリンクとサブモジュールは対象外。入力ファイルとGitの状態は変更しない。
 
-`compare`は`.suiko.toml`、`--config`、`--no-config`、`--genre`、`--experimental`に対応する。`--fail-on`は変更後の自然さと読解負荷の両方を判定し、到達すると2、入力エラーは1、それ以外は0を返す。`lint`の`--fail-on`が自然さだけを見る従来の動作は変わらない。
+`compare`は`.suiko.toml`、`--config`、`--no-config`、`--genre`に対応する。v0.4.3から全規則を既定で比較し、`--experimental`は互換のため受け付けるだけにする。`--fail-on`は変更後の自然さと読解負荷の両方を判定し、到達すると2、入力エラーは1、それ以外は0を返す。`lint`の`--fail-on`が自然さだけを見る従来の動作は変わらない。
 
 ## 除外と修正候補
 

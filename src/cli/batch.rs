@@ -1,4 +1,4 @@
-//! 機能確認、文書群の集計、Gitの版との読み取り専用の比較。
+//! 機能確認と、Gitの版との読み取り専用の比較。集計の出力形式（`--summary`）は`lint`と共有する。
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Component, Path, PathBuf};
@@ -8,7 +8,8 @@ use clap::{Args, CommandFactory, ValueEnum};
 use serde::Serialize;
 use serde_json::json;
 
-use super::{Cli, FailOn, Genre, LintRun, apply_reading_load_config, configured_lint, load_config};
+use super::config::{apply_reading_load_config, configured_lint, load_config};
+use super::{Cli, FailOn, Genre};
 use crate::{Error, lint, morphology::Morphology, read_source};
 
 #[derive(Debug, Args)]
@@ -27,11 +28,17 @@ pub(super) fn capabilities(args: CapabilitiesArgs) -> Result<ExitCode, Error> {
     let commands = Cli::command().get_subcommands().map(|command| {
         json!({"name": command.get_name(), "options": command.get_arguments().filter_map(|a| a.get_long()).collect::<Vec<_>>()})
     }).collect::<Vec<_>>();
-    let rules = lint::rule_categories().iter().map(|category| json!({
-        "category": category,
-        "lane": if lint::reading_load_categories().contains(category) { "reading_load" } else { "natural" },
-        "experimental": lint::is_experimental_rule(category)
-    })).collect::<Vec<_>>();
+    let rules = lint::rule_categories().iter().map(|category| {
+        let rule = lint::rule_of(category);
+        json!({
+            "category": category,
+            "lane": if lint::reading_load_categories().contains(category) { "reading_load" } else { "natural" },
+            "experimental": lint::is_experimental_rule(category),
+            "family": rule.map(|rule| rule.family),
+            "confidence": lint::confidence(category),
+            "scope": rule.map(|rule| rule.scope),
+        })
+    }).collect::<Vec<_>>();
     let result = json!({"schema_version": 1, "suiko_version": env!("CARGO_PKG_VERSION"), "commands": commands, "rules": rules, "check_record": {"format": super::check::RECORD_FORMAT, "schema_version": super::check::RECORD_SCHEMA_VERSION}});
     if args.json {
         println!("{}", serde_json::to_string_pretty(&result)?);
@@ -45,90 +52,12 @@ pub(super) fn capabilities(args: CapabilitiesArgs) -> Result<ExitCode, Error> {
     Ok(ExitCode::SUCCESS)
 }
 
-#[derive(Default, Serialize)]
-struct Counts {
-    natural: usize,
-    reading_load: usize,
-}
-
 pub(super) fn tsv(value: &str) -> String {
     value
         .replace('\\', "\\\\")
         .replace('\t', "\\t")
         .replace('\r', "\\r")
         .replace('\n', "\\n")
-}
-
-pub(super) fn print_summary(runs: &[LintRun], format: SummaryFormat) -> Result<(), Error> {
-    let reading_enabled = runs.iter().any(|run| run.reading_load.is_some());
-    let reading_tsv = |count: usize| {
-        if reading_enabled {
-            count.to_string()
-        } else {
-            String::new()
-        }
-    };
-    let mut total = Counts::default();
-    let mut categories = BTreeMap::<String, Counts>::new();
-    let mut files = Vec::new();
-    for run in runs {
-        let counts = Counts {
-            natural: run.report.findings.len(),
-            reading_load: run.reading_load.as_ref().map_or(0, |r| r.findings.len()),
-        };
-        total.natural += counts.natural;
-        total.reading_load += counts.reading_load;
-        for finding in &run.report.findings {
-            categories
-                .entry(finding.category.clone())
-                .or_default()
-                .natural += 1;
-        }
-        for finding in run.reading_load.iter().flat_map(|r| &r.findings) {
-            categories
-                .entry(finding.category.clone())
-                .or_default()
-                .reading_load += 1;
-        }
-        files.push(json!({"file": run.file, "natural": counts.natural, "reading_load": run.reading_load.as_ref().map(|r| r.findings.len())}));
-    }
-    match format {
-        SummaryFormat::Json => println!(
-            "{}",
-            serde_json::to_string_pretty(&json!({
-                "schema_version": 1, "suiko_version": env!("CARGO_PKG_VERSION"), "reading_load_enabled": reading_enabled, "files": files,
-                "total": {"natural": total.natural, "reading_load": reading_enabled.then_some(total.reading_load)},
-                "categories": categories.iter().map(|(category, counts)| json!({"category": category, "natural": counts.natural, "reading_load": reading_enabled.then_some(counts.reading_load)})).collect::<Vec<_>>()
-            }))?
-        ),
-        SummaryFormat::Tsv => {
-            println!("kind\tfile\tcategory\tnatural\treading_load");
-            for file in files {
-                println!(
-                    "file\t{}\t\t{}\t{}",
-                    tsv(file["file"].as_str().unwrap_or_default()),
-                    file["natural"],
-                    file["reading_load"]
-                        .as_u64()
-                        .map(|n| n.to_string())
-                        .unwrap_or_default()
-                );
-            }
-            for (category, counts) in categories {
-                println!(
-                    "category\t\t{category}\t{}\t{}",
-                    counts.natural,
-                    reading_tsv(counts.reading_load)
-                );
-            }
-            println!(
-                "total\t\t\t{}\t{}",
-                total.natural,
-                reading_tsv(total.reading_load)
-            );
-        }
-    }
-    Ok(())
 }
 
 #[derive(Debug, Args)]
@@ -143,6 +72,7 @@ pub(super) struct CompareArgs {
     summary: Option<SummaryFormat>,
     #[arg(long, value_enum)]
     genre: Option<Genre>,
+    /// 互換のため受け付ける（v0.4.3から全規則を既定で検査する）
     #[arg(long)]
     experimental: bool,
     #[arg(long, value_enum)]
@@ -367,6 +297,7 @@ fn changes(
 }
 
 pub(super) fn compare(args: CompareArgs) -> Result<ExitCode, Error> {
+    super::note_experimental_flag(args.experimental);
     let cwd = std::env::current_dir().map_err(|e| invalid(e.to_string()))?;
     let root_output = utf8(git(&cwd, &["rev-parse", "--show-toplevel"])?)?;
     let root = PathBuf::from(root_output.strip_suffix('\n').unwrap_or(&root_output));
@@ -496,14 +427,14 @@ pub(super) fn compare(args: CompareArgs) -> Result<ExitCode, Error> {
             &before_text,
             &morphology,
             genre,
-            args.experimental,
+            super::ALL_RULES,
             config.as_ref(),
         )?;
         let after = configured_lint(
             &after_text,
             &morphology,
             genre,
-            args.experimental,
+            super::ALL_RULES,
             config.as_ref(),
         )?;
         let mut before_reading = lint::analyze_reading_load(&before_text, &morphology, genre)?;
@@ -567,7 +498,7 @@ pub(super) fn compare(args: CompareArgs) -> Result<ExitCode, Error> {
         println!(
             "{}",
             serde_json::to_string_pretty(
-                &json!({"schema_version": 1, "suiko_version": env!("CARGO_PKG_VERSION"), "revision": rev, "genre": genre, "experimental": args.experimental, "files": files, "total": total, "categories": categories.iter().map(|(category, lanes)| json!({"category": category, "natural": lanes.natural, "reading_load": lanes.reading_load})).collect::<Vec<_>>()})
+                &json!({"schema_version": 1, "suiko_version": env!("CARGO_PKG_VERSION"), "revision": rev, "genre": genre, "experimental": super::ALL_RULES, "files": files, "total": total, "categories": categories.iter().map(|(category, lanes)| json!({"category": category, "natural": lanes.natural, "reading_load": lanes.reading_load})).collect::<Vec<_>>()})
             )?
         );
     } else {

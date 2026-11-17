@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -6,15 +5,29 @@ use std::process::ExitCode;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
 
-use crate::lint::{Finding, LintStats};
 use crate::morphology::Morphology;
-use crate::{Error, academic, diff, lexical, lint, outline, read_source, terms};
+use crate::{Error, academic, diff, lexical, outline, read_source, terms};
 
 mod batch;
 mod check;
+mod config;
 mod fix;
+mod lint_command;
 mod meaning;
 mod style;
+
+use lint_command::LintArgs;
+
+/// v0.4.3から、評価中の規則（`lint::is_experimental_rule`）も含めて全規則を既定で表示する。
+/// `--experimental`は互換のため受け付けるだけで、規則の確度は`first_fixes`の`confidence`で示す。
+const ALL_RULES: bool = true;
+
+/// `--experimental`を指定されたら、不要になったことを標準エラーへ1行で伝える。
+fn note_experimental_flag(given: bool) {
+    if given {
+        eprintln!("注意: --experimental は不要になりました。v0.4.3から全規則を既定で表示します。");
+    }
+}
 
 #[derive(Debug, Parser)]
 #[command(
@@ -152,53 +165,6 @@ struct DiffArgs {
     fail_on: Option<FailOn>,
 }
 
-#[derive(Debug, Args)]
-struct LintArgs {
-    /// lint 対象の Markdown/テキストファイル。複数指定可。- で標準入力
-    #[arg(required = true)]
-    files: Vec<String>,
-    /// 機械可読な JSON で出力する
-    #[arg(long)]
-    json: bool,
-    /// ファイル別・規則別の件数を集計する
-    #[arg(long, value_enum, conflicts_with_all = ["json", "format", "baseline"])]
-    summary: Option<batch::SummaryFormat>,
-    /// ジャンル別の校正済み閾値を適用する
-    #[arg(long, value_enum)]
-    genre: Option<Genre>,
-    /// 文書全体の反復・比率などの実験的な指標を追加する。表現の修正候補は既定で表示。一部の構造検査は --genre essay が必要
-    #[arg(long)]
-    experimental: bool,
-    /// 前回の JSON と比較して解消・新規・継続を分類する
-    #[arg(long, value_name = "PREV.json")]
-    baseline: Option<PathBuf>,
-    /// 読解負荷レーンを出力する（既定で有効。v0.3.9以前との互換のため残す）
-    #[arg(long, conflicts_with = "no_reading_load")]
-    reading_load: bool,
-    /// 読解負荷レーンを出力しない
-    #[arg(long)]
-    no_reading_load: bool,
-    /// 指定 severity 以上の finding があれば終了コード2を返す
-    #[arg(long, value_enum)]
-    fail_on: Option<FailOn>,
-    /// 出力形式を指定する（github: GitHub Actionsのworkflowコマンド注釈、
-    /// sarif: エディタやコードスキャンが読めるSARIF 2.1.0）
-    #[arg(long, value_enum, conflicts_with = "json")]
-    format: Option<OutputFormat>,
-    /// 指定した設定ファイルを使用する（自動検出より優先）
-    #[arg(long, value_name = "PATH", conflicts_with = "no_config")]
-    config: Option<PathBuf>,
-    /// カレントディレクトリの .suiko.toml を読み込まない
-    #[arg(long, conflicts_with = "config")]
-    no_config: bool,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
-enum OutputFormat {
-    Github,
-    Sarif,
-}
-
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq, ValueEnum)]
 #[serde(rename_all = "lowercase")]
 enum FailOn {
@@ -221,212 +187,6 @@ impl FailOn {
         };
         rank >= threshold
     }
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Config {
-    version: u32,
-    genre: Option<Genre>,
-    fail_on: Option<FailOn>,
-    #[serde(default)]
-    disabled_rules: Vec<String>,
-    #[serde(default)]
-    allow: Vec<Allowance>,
-    #[serde(default)]
-    word_rules: Vec<lint::WordRule>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Allowance {
-    category: String,
-    rule_id: Option<String>,
-    text: String,
-    reason: String,
-}
-
-impl Config {
-    fn validate(&self, path: &Path) -> Result<(), Error> {
-        if self.version != 1 {
-            return Err(config_error(
-                path,
-                format!(
-                    "version = {} は未対応です。version = 1 を指定してください",
-                    self.version
-                ),
-            ));
-        }
-        for rule in &self.disabled_rules {
-            if !lint::is_known_rule(rule) {
-                return Err(config_error(path, format!("未知のルールです: {rule}")));
-            }
-        }
-        for allowance in &self.allow {
-            if !lint::is_known_rule(&allowance.category) {
-                return Err(config_error(
-                    path,
-                    format!("未知のルールです: {}", allowance.category),
-                ));
-            }
-            if allowance.text.trim().is_empty() {
-                return Err(config_error(path, "allow.text は空にできません"));
-            }
-            if allowance.reason.trim().is_empty() {
-                return Err(config_error(path, "allow.reason は空にできません"));
-            }
-            if let Some(rule_id) = &allowance.rule_id
-                && (allowance.category != "custom_wording"
-                    || !self.word_rules.iter().any(|rule| rule.id == *rule_id))
-            {
-                return Err(config_error(
-                    path,
-                    format!(
-                        "allow.rule_id は custom_wording の登録済みIDを指定してください: {rule_id}"
-                    ),
-                ));
-            }
-        }
-        lint::validate_word_rules(&self.word_rules)
-            .map_err(|message| config_error(path, message))?;
-        Ok(())
-    }
-
-    fn suppresses(&self, finding: &Finding) -> bool {
-        let (category, rule_id) = finding
-            .category
-            .strip_prefix("custom_wording/")
-            .map_or((finding.category.as_str(), None), |id| {
-                ("custom_wording", Some(id))
-            });
-        self.disabled_rules.iter().any(|rule| rule == category)
-            || self.allow.iter().any(|allowance| {
-                allowance.category == category
-                    && allowance
-                        .rule_id
-                        .as_deref()
-                        .is_none_or(|id| rule_id == Some(id))
-                    && finding.excerpt.contains(&allowance.text)
-            })
-    }
-}
-
-fn config_error(path: &Path, message: impl Into<String>) -> Error {
-    Error::Config {
-        path: path.display().to_string(),
-        message: message.into(),
-    }
-}
-
-fn load_config(explicit: Option<&Path>, no_config: bool) -> Result<Option<Config>, Error> {
-    let Some(path) = config_path(explicit, no_config)? else {
-        return Ok(None);
-    };
-    if explicit.is_none()
-        && !path
-            .try_exists()
-            .map_err(|e| config_error(&path, e.to_string()))?
-    {
-        return Ok(None);
-    }
-    let source = read_source(&path)?;
-    parse_config(&path, &source).map(Some)
-}
-
-fn config_path(explicit: Option<&Path>, no_config: bool) -> Result<Option<PathBuf>, Error> {
-    if no_config {
-        return Ok(None);
-    }
-    explicit.map(Path::to_path_buf).map_or_else(
-        || {
-            std::env::current_dir()
-                .map(|dir| Some(dir.join(".suiko.toml")))
-                .map_err(|source| config_error(Path::new(".suiko.toml"), source.to_string()))
-        },
-        |path| Ok(Some(path)),
-    )
-}
-
-fn parse_config(path: &Path, source: &str) -> Result<Config, Error> {
-    let config = toml::from_str::<Config>(source)
-        .map_err(|source| config_error(path, source.to_string()))?;
-    config.validate(path)?;
-    Ok(config)
-}
-
-fn configured_lint(
-    text: &str,
-    morphology: &Morphology,
-    genre: Option<&str>,
-    experimental: bool,
-    config: Option<&Config>,
-) -> Result<lint::LintReport, Error> {
-    let mut report = lint::analyze(text, morphology, genre, experimental)?;
-    if let Some(config) = config {
-        report.findings.extend(lint::word_rule_findings(
-            text,
-            morphology,
-            &config.word_rules,
-        )?);
-        report.findings.sort_by_key(|finding| finding.line);
-    }
-    apply_config(&mut report, config);
-    Ok(report)
-}
-
-fn category_counts(findings: &[Finding]) -> BTreeMap<String, usize> {
-    let mut counts = BTreeMap::new();
-    for finding in findings {
-        *counts.entry(finding.category.clone()).or_default() += 1;
-    }
-    counts
-}
-
-/// 設定による除外を適用し、残ったfindingの総数とカテゴリ別内訳を返す。
-fn retain_allowed(
-    findings: &mut Vec<Finding>,
-    config: &Config,
-) -> (usize, BTreeMap<String, usize>) {
-    findings.retain(|finding| !config.suppresses(finding));
-    (findings.len(), category_counts(findings))
-}
-
-fn apply_config(report: &mut lint::LintReport, config: Option<&Config>) {
-    if let Some(config) = config {
-        let (total, by_category) = retain_allowed(&mut report.findings, config);
-        report.stats.total_findings = total;
-        report.stats.by_category = by_category;
-    }
-}
-
-fn apply_reading_load_config(report: &mut lint::ReadingLoadReport, config: Option<&Config>) {
-    if let Some(config) = config {
-        let (total, by_category) = retain_allowed(&mut report.findings, config);
-        report.stats.total = total;
-        report.stats.by_category = by_category;
-    }
-}
-
-#[derive(Serialize)]
-struct LintOutput<'a> {
-    file: &'a str,
-    suiko_version: &'static str,
-    stats: &'a LintStats,
-    /// まず直す候補。重大度と規則の確度で並べた上位数件。
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    first_fixes: Vec<lint::FirstFix>,
-    findings: &'a [Finding],
-    #[serde(skip_serializing_if = "Option::is_none")]
-    baseline: Option<&'a lint::BaselineReport>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    reading_load: Option<&'a lint::ReadingLoadReport>,
-}
-
-struct LintRun {
-    file: String,
-    report: lint::LintReport,
-    baseline: Option<lint::BaselineReport>,
-    reading_load: Option<lint::ReadingLoadReport>,
 }
 
 #[derive(Serialize)]
@@ -510,63 +270,6 @@ fn print_lexical_audit_human(report: &lexical::LexicalAuditReport) {
     }
 }
 
-/// --baseline のJSONを、単一record(object)または複数record(array)として展開する。
-fn baseline_records(data: &serde_json::Value) -> Result<Vec<&serde_json::Value>, String> {
-    match data {
-        serde_json::Value::Object(_) => Ok(vec![data]),
-        serde_json::Value::Array(items) => {
-            if items.iter().all(serde_json::Value::is_object) {
-                Ok(items.iter().collect())
-            } else {
-                Err("--baseline の配列にオブジェクト以外の要素があります。baseline比較を無視して通常のlintを実行します。".to_owned())
-            }
-        }
-        _ => Err(
-            "--baseline の内容が JSON オブジェクトでも配列でもありません。baseline比較を無視して通常のlintを実行します。"
-                .to_owned(),
-        ),
-    }
-}
-
-/// baseline recordと今回の実行条件が一致しないときは明示的に失敗させる。
-fn ensure_baseline_compatible(
-    record: &serde_json::Value,
-    file: &str,
-    genre: Option<&str>,
-    experimental: bool,
-) -> Result<(), Error> {
-    if let Some(version) = record
-        .get("suiko_version")
-        .and_then(serde_json::Value::as_str)
-        && version != env!("CARGO_PKG_VERSION")
-    {
-        return Err(Error::InvalidArguments(format!(
-            "--baseline のSuikoバージョンが現在と一致しません: {file} (baseline={version}, current={})。同じバージョンで作り直してください",
-            env!("CARGO_PKG_VERSION")
-        )));
-    }
-    let baseline_genre = record
-        .pointer("/stats/genre")
-        .and_then(serde_json::Value::as_str);
-    if baseline_genre != genre {
-        return Err(Error::InvalidArguments(format!(
-            "--baseline のgenreが現在と一致しません: {file} (baseline={}, current={})",
-            baseline_genre.unwrap_or("なし"),
-            genre.unwrap_or("なし")
-        )));
-    }
-    let baseline_experimental = record
-        .pointer("/stats/experimental")
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false);
-    if baseline_experimental != experimental {
-        return Err(Error::InvalidArguments(format!(
-            "--baseline のexperimental設定が現在と一致しません: {file} (baseline={baseline_experimental}, current={experimental})"
-        )));
-    }
-    Ok(())
-}
-
 fn read_input(file: &str) -> Result<String, Error> {
     if file == "-" {
         let mut input = String::new();
@@ -579,131 +282,6 @@ fn read_input(file: &str) -> Result<String, Error> {
         Ok(input)
     } else {
         read_source(Path::new(file))
-    }
-}
-
-/// workflowコマンドのメッセージ用エスケープ。
-fn github_escape_data(value: &str) -> String {
-    value
-        .replace('%', "%25")
-        .replace('\r', "%0D")
-        .replace('\n', "%0A")
-}
-
-/// workflowコマンドのプロパティ値用エスケープ。
-fn github_escape_property(value: &str) -> String {
-    github_escape_data(value)
-        .replace(',', "%2C")
-        .replace(':', "%3A")
-}
-
-fn output_level(severity: &str, fallback_level: &'static str) -> &'static str {
-    match severity {
-        "critical" => "error",
-        "warn" => "warning",
-        _ => fallback_level,
-    }
-}
-
-fn lint_findings(run: &LintRun) -> impl Iterator<Item = (&Finding, Option<&'static str>)> {
-    run.report
-        .findings
-        .iter()
-        .map(|finding| (finding, None))
-        // 読解負荷レーンは自然度と分離して、常にinfo相当で出力する。
-        .chain(run.reading_load.iter().flat_map(|report| {
-            report
-                .findings
-                .iter()
-                .map(|finding| (finding, Some("info")))
-        }))
-}
-
-fn github_annotation(file: &str, finding: &Finding, severity_override: Option<&str>) -> String {
-    let command = output_level(
-        severity_override.unwrap_or(finding.severity.as_str()),
-        "notice",
-    );
-    let mut properties = format!("file={}", github_escape_property(file));
-    if let Some(span) = &finding.span {
-        properties.push_str(&format!(
-            ",line={},endLine={},col={},endColumn={}",
-            span.start_line, span.end_line, span.start_column, span.end_column
-        ));
-    } else {
-        properties.push_str(&format!(",line={}", finding.line));
-    }
-    properties.push_str(&format!(
-        ",title={}",
-        github_escape_property(&format!("suiko {}", finding.category))
-    ));
-    format!(
-        "::{command} {properties}::{}",
-        github_escape_data(&finding.detail)
-    )
-}
-
-/// SARIF 2.1.0の最小構成。columnKind=unicodeCodePointsを宣言することで、
-/// spanのUnicode scalar数え・1始まりの列をそのまま使える。
-fn sarif_result(file: &str, finding: &Finding, level_override: Option<&str>) -> serde_json::Value {
-    let level = output_level(level_override.unwrap_or(finding.severity.as_str()), "note");
-    let region = if let Some(span) = &finding.span {
-        serde_json::json!({
-            "startLine": span.start_line,
-            "startColumn": span.start_column,
-            "endLine": span.end_line,
-            "endColumn": span.end_column,
-        })
-    } else {
-        serde_json::json!({"startLine": finding.line})
-    };
-    serde_json::json!({
-        "ruleId": finding.category,
-        "level": level,
-        "message": {"text": finding.detail},
-        "locations": [{
-            "physicalLocation": {
-                "artifactLocation": {"uri": file},
-                "region": region,
-            }
-        }],
-    })
-}
-
-fn sarif_output(runs: &[LintRun]) -> serde_json::Value {
-    let mut results = Vec::new();
-    let mut rule_ids = std::collections::BTreeSet::new();
-    for run in runs {
-        for (finding, level_override) in lint_findings(run) {
-            rule_ids.insert(finding.category.clone());
-            results.push(sarif_result(&run.file, finding, level_override));
-        }
-    }
-    serde_json::json!({
-        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
-        "version": "2.1.0",
-        "runs": [{
-            "tool": {"driver": {
-                "name": "suiko",
-                "version": env!("CARGO_PKG_VERSION"),
-                "informationUri": "https://github.com/nwiizo/suiko",
-                "rules": rule_ids
-                    .iter()
-                    .map(|id| serde_json::json!({"id": id}))
-                    .collect::<Vec<_>>(),
-            }},
-            "columnKind": "unicodeCodePoints",
-            "results": results,
-        }],
-    })
-}
-
-fn print_lint_github(run: &LintRun) {
-    for (finding, severity_override) in lint_findings(run) {
-        println!(
-            "{}",
-            github_annotation(&run.file, finding, severity_override)
-        );
     }
 }
 
@@ -753,95 +331,6 @@ fn print_diff_human(before: &str, after: &str, report: &diff::DiffReport) {
         println!("    変更前: {}", finding.before_excerpt);
         println!("    変更後: {}", finding.after_excerpt);
         println!("    詳細  : {}\n", finding.detail);
-    }
-}
-
-fn print_lint_human(run: &LintRun) {
-    let file = &run.file;
-    let report = &run.report;
-    println!("=== lint: {file} ===");
-    println!("検出件数: {}", report.stats.total_findings);
-    if !report.stats.by_category.is_empty() {
-        println!("カテゴリ別内訳:");
-        let mut categories = report.stats.by_category.iter().collect::<Vec<_>>();
-        categories.sort_by_key(|(_, count)| std::cmp::Reverse(**count));
-        for (category, count) in categories {
-            println!("  - {category}: {count}");
-        }
-    }
-    if let Some(baseline) = &run.baseline {
-        println!(
-            "ベースライン比較: 解消: {}件 / 新規: {}件 / 継続: {}件",
-            baseline.summary.resolved, baseline.summary.new, baseline.summary.persisting
-        );
-        if baseline.file_status == "added" {
-            println!("(baselineに対応recordがないファイルのため、全findingを新規として扱う)");
-        }
-    }
-    let first_fixes = lint::first_fixes(&report.findings, lint::FIRST_FIX_LIMIT);
-    if !first_fixes.is_empty() {
-        println!(
-            "まず直す候補（重大度と規則の確度で上位{}件）:",
-            first_fixes.len()
-        );
-        for fix in &first_fixes {
-            let confidence = match fix.confidence {
-                lint::Confidence::High => "確度高",
-                lint::Confidence::Medium => "確度中",
-                lint::Confidence::Low => "確度低",
-            };
-            println!(
-                "  {}. L{} ({}・{confidence}) {}",
-                fix.rank, fix.line, fix.category, fix.excerpt
-            );
-        }
-    }
-    println!();
-    if report.findings.is_empty() {
-        println!("検出なし。");
-    } else {
-        for finding in &report.findings {
-            let label = match finding.severity.as_str() {
-                "info" => "情報",
-                "warn" => "警告",
-                "critical" => "重大",
-                other => other,
-            };
-            let status = match finding.status.as_deref() {
-                Some("new") => "[新規] ",
-                Some("persisting") => "[継続] ",
-                _ => "",
-            };
-            println!("{status}[{label}] L{} ({})", finding.line, finding.category);
-            println!("    該当箇所: {}", finding.excerpt);
-            if !finding.detail.is_empty() {
-                println!("    詳細    : {}", finding.detail);
-            }
-            if let Some(suggestion) = &finding.suggestion {
-                let replacement = if suggestion.replacement.is_empty() {
-                    "(削除)".to_owned()
-                } else {
-                    format!("「{}」", suggestion.replacement)
-                };
-                println!(
-                    "    修正候補: L{} C{} -「{}」 +{replacement}（preimage一致時のみ適用可。Suikoは書き換えない）",
-                    suggestion.span.start_line, suggestion.span.start_column, suggestion.preimage
-                );
-            }
-            println!();
-        }
-    }
-    if let Some(reading_load) = &run.reading_load {
-        println!("=== 読解負荷（推敲用の指さし・自然度スコアには含まない） ===");
-        println!(
-            "指摘件数: {}（本文 {} 文）\n",
-            reading_load.stats.total, reading_load.stats.sentences
-        );
-        for finding in &reading_load.findings {
-            println!("[指さし] L{} ({})", finding.line, finding.category);
-            println!("    該当箇所: {}", finding.excerpt);
-            println!("    詳細    : {}\n", finding.detail);
-        }
     }
 }
 
@@ -933,159 +422,7 @@ fn execute(cli: Cli) -> Result<ExitCode, Error> {
         Command::Check(args) => return check::execute_check(args),
         Command::Verify(args) => return check::execute_verify(args),
         Command::Meaning(args) => return meaning::execute(args),
-        Command::Lint(args) => {
-            validate_inputs(&args.files)?;
-            let config = load_config(args.config.as_deref(), args.no_config)?;
-            let morphology = Morphology::new()?;
-            let genre = args
-                .genre
-                .or_else(|| config.as_ref().and_then(|config| config.genre))
-                .map(Genre::as_str);
-            let fail_on = args
-                .fail_on
-                .or_else(|| config.as_ref().and_then(|config| config.fail_on));
-            let baseline_data = if let Some(path) = &args.baseline {
-                Some((
-                    path.display().to_string(),
-                    serde_json::from_str::<serde_json::Value>(&read_source(path)?)?,
-                ))
-            } else {
-                None
-            };
-            let baseline_map = if let Some((_, data)) = &baseline_data {
-                match baseline_records(data) {
-                    Ok(records) => Some(
-                        records
-                            .into_iter()
-                            .map(|record| {
-                                (
-                                    record
-                                        .get("file")
-                                        .and_then(serde_json::Value::as_str)
-                                        .unwrap_or_default()
-                                        .to_owned(),
-                                    record,
-                                )
-                            })
-                            .collect::<BTreeMap<_, _>>(),
-                    ),
-                    Err(warning) => {
-                        eprintln!("警告: {warning}");
-                        None
-                    }
-                }
-            } else {
-                None
-            };
-            let mut runs = Vec::new();
-            for file in &args.files {
-                let text = read_input(file)?;
-                let mut report = configured_lint(
-                    &text,
-                    &morphology,
-                    genre,
-                    args.experimental,
-                    config.as_ref(),
-                )?;
-                let baseline = match (&baseline_data, &baseline_map) {
-                    (Some((baseline_file, _)), Some(records)) => {
-                        if let Some(record) = records.get(file.as_str()) {
-                            ensure_baseline_compatible(record, file, genre, args.experimental)?;
-                            match lint::apply_baseline(
-                                &mut report.findings,
-                                record,
-                                baseline_file.clone(),
-                            ) {
-                                Ok(report) => Some(report),
-                                Err(warning) => {
-                                    eprintln!("警告: {warning}");
-                                    None
-                                }
-                            }
-                        } else {
-                            eprintln!(
-                                "警告: --baseline に {file} のrecordがないため、全findingを新規として扱います。"
-                            );
-                            Some(lint::baseline_added(
-                                &mut report.findings,
-                                baseline_file.clone(),
-                            ))
-                        }
-                    }
-                    _ => None,
-                };
-                let reading_load = if !args.no_reading_load {
-                    let mut report = lint::analyze_reading_load(&text, &morphology, genre)?;
-                    apply_reading_load_config(&mut report, config.as_ref());
-                    Some(report)
-                } else {
-                    None
-                };
-                runs.push(LintRun {
-                    file: file.clone(),
-                    report,
-                    baseline,
-                    reading_load,
-                });
-            }
-            if let Some(records) = &baseline_map {
-                let removed = records
-                    .keys()
-                    .filter(|file| !args.files.iter().any(|input| input == *file))
-                    .cloned()
-                    .collect::<Vec<_>>();
-                if !removed.is_empty() {
-                    eprintln!(
-                        "警告: --baseline にあって今回の対象にないファイル: {}",
-                        removed.join(", ")
-                    );
-                }
-            }
-            if let Some(format) = args.summary {
-                batch::print_summary(&runs, format)?;
-            } else if args.json {
-                let output = runs
-                    .iter()
-                    .map(|run| LintOutput {
-                        file: &run.file,
-                        suiko_version: env!("CARGO_PKG_VERSION"),
-                        stats: &run.report.stats,
-                        first_fixes: lint::first_fixes(&run.report.findings, lint::FIRST_FIX_LIMIT),
-                        findings: &run.report.findings,
-                        baseline: run.baseline.as_ref(),
-                        reading_load: run.reading_load.as_ref(),
-                    })
-                    .collect::<Vec<_>>();
-                if output.len() == 1 {
-                    println!("{}", serde_json::to_string_pretty(&output[0])?);
-                } else {
-                    println!("{}", serde_json::to_string_pretty(&output)?);
-                }
-            } else if args.format == Some(OutputFormat::Github) {
-                for run in &runs {
-                    print_lint_github(run);
-                }
-            } else if args.format == Some(OutputFormat::Sarif) {
-                println!("{}", serde_json::to_string_pretty(&sarif_output(&runs))?);
-            } else {
-                for run in &runs {
-                    print_lint_human(run);
-                }
-            }
-            let failed = fail_on.is_some_and(|threshold| {
-                runs.iter().any(|run| {
-                    run.report
-                        .findings
-                        .iter()
-                        .any(|finding| threshold.matches(&finding.severity))
-                })
-            });
-            return Ok(if failed {
-                ExitCode::from(2)
-            } else {
-                ExitCode::SUCCESS
-            });
-        }
+        Command::Lint(args) => return lint_command::execute(args),
         Command::Diff(args) => {
             if args.before == "-" && args.after == "-" {
                 return Err(Error::InvalidArguments(

@@ -175,7 +175,6 @@ fn editorial_cli_supports_gate_config_and_baseline() {
         .args([
             "lint",
             "-",
-            "--experimental",
             "--no-reading-load",
             "--fail-on",
             "info",
@@ -199,13 +198,7 @@ fn editorial_cli_supports_gate_config_and_baseline() {
     std::fs::write(&baseline, output.stdout).unwrap();
     let output = cargo_bin_cmd!("suiko")
         .current_dir(temp.path())
-        .args([
-            "lint",
-            "-",
-            "--experimental",
-            "--no-reading-load",
-            "--baseline",
-        ])
+        .args(["lint", "-", "--no-reading-load", "--baseline"])
         .arg(&baseline)
         .args(["--json"])
         .write_stdin("このAPIを使います。このAPIを調べます。")
@@ -228,7 +221,6 @@ fn editorial_cli_supports_gate_config_and_baseline() {
         .args([
             "lint",
             "-",
-            "--experimental",
             "--no-reading-load",
             "--fail-on",
             "info",
