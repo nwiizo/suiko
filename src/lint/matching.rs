@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use serde::Serialize;
 
 /// 文書全体の統計で、抜粋が行に結び付かないカテゴリ。種類だけで対応づける。
-const DOCUMENT_LEVEL: &[&str] = &[
+pub(super) const DOCUMENT_LEVEL: &[&str] = &[
     "antithesis_repetition",
     "repeated_distinction",
     "repeated_em_dash",

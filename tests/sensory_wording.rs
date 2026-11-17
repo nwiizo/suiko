@@ -80,7 +80,7 @@ fn sensory_terms_support_disable_and_fail_on() {
     let temp = tempfile::tempdir().unwrap();
     cargo_bin_cmd!("suiko")
         .current_dir(temp.path())
-        .args(["lint", "-", "--experimental", "--fail-on", "info", "--json"])
+        .args(["lint", "-", "--fail-on", "info", "--json"])
         .write_stdin(body)
         .assert()
         .code(2);
@@ -91,7 +91,7 @@ fn sensory_terms_support_disable_and_fail_on() {
     .unwrap();
     let output = cargo_bin_cmd!("suiko")
         .current_dir(temp.path())
-        .args(["lint", "-", "--experimental", "--json"])
+        .args(["lint", "-", "--json"])
         .write_stdin(body)
         .output()
         .unwrap();

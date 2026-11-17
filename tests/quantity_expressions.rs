@@ -167,14 +167,7 @@ fn quantity_checks_support_genres_config_and_cli_exit_status() {
     let dir = tempfile::tempdir().unwrap();
     cargo_bin_cmd!("suiko")
         .current_dir(dir.path())
-        .args([
-            "lint",
-            "-",
-            "--no-config",
-            "--experimental",
-            "--fail-on",
-            "info",
-        ])
+        .args(["lint", "-", "--no-config", "--fail-on", "info"])
         .write_stdin(body)
         .assert()
         .code(2);
@@ -185,7 +178,7 @@ fn quantity_checks_support_genres_config_and_cli_exit_status() {
     .unwrap();
     let output = cargo_bin_cmd!("suiko")
         .current_dir(dir.path())
-        .args(["lint", "-", "--experimental", "--fail-on", "info", "--json"])
+        .args(["lint", "-", "--fail-on", "info", "--json"])
         .write_stdin(body)
         .assert()
         .success()

@@ -3,62 +3,14 @@
 //! 確度は suiko-eval の品質表（eval/calibration.md「規則ごとの品質表と関門（2026-11-03）」と
 //! 「評価専用の標本の追加（2026-11-04）」）による。
 //! high: 人間文書でほぼ付かず、ラベル付き標本の条件を満たした規則と、表記・記法の機械的な誤り。
-//! low: 人間文書の多くに付く規則（降格候補）、実験規則、文書全体の統計。
+//! low: 人間文書の多くに付く規則（品質表のdemotion_candidate。人間文書に付く割合のWilson上限が
+//! 0.15を超える）、評価中の規則、文書全体の統計（直す箇所を一つに指せない）。
 //! medium: それ以外。標本が足りず判定できていない規則を含む。
+//! 規則ごとの値は登録表（registry.rs）が持つ。
 
 use serde::Serialize;
 
-use super::{Finding, is_experimental_rule};
-
-const HIGH_CONFIDENCE: &[&str] = &[
-    // 品質表で keep（人間95文書で0〜3件、標本の条件を満たす）。
-    "abstract_metaphor",
-    "cleft_list_ending",
-    "compressed_relation",
-    "copy_fragment",
-    "decision_direction_metaphor",
-    "declared_item_count_mismatch",
-    "heading_colon",
-    "redundant_heading_bracket",
-    "repeated_explanation_preview",
-    // sensory_role_mismatch は品質表では keep だが、suiko-eval の生成文評価（2026-11-06）で
-    // 注釈者が自然とした擬人化（光が待つ、冷たさが這い上がる）に当たり、注釈とは重ならなかった。
-    // 作例と人間文書の条件だけでは確度を上げない（medium）。
-    "short_concession",
-    "te_nominal_stop",
-    "technical_jargon_metaphor",
-    "thin_evaluation",
-    "vague_sensory_term",
-    // 表記・記法・設定の機械的な誤り。
-    "bold_not_rendered",
-    "custom_wording",
-    "duplicate_comma",
-    "instruction_residue",
-    "invalid_ignore_directive",
-    "invisible_character",
-    "quoted_character_count_mismatch",
-    "word_usage",
-];
-
-const LOW_CONFIDENCE: &[&str] = &[
-    // 品質表で demotion_candidate（人間文書に付く割合のWilson上限が0.15を超える）。
-    "antithesis_repetition",
-    "forbidden_phrase",
-    "inanimate_subject_morph",
-    "low_burstiness",
-    "redundant_light_verb",
-    "respectively_scope",
-    "short_topic_comma",
-    "translationese",
-    "translationese_morph",
-    // 文書全体の統計。直す箇所を一つに指せない。
-    "high_length_autocorrelation",
-    "low_sentence_variance",
-    "nominal_ending",
-    "repeated_distinction",
-    "repeated_em_dash",
-    "uniform_paragraph_structure",
-];
+use super::{Finding, registry};
 
 /// 同じ規則から選ぶ上限。一つの規則で一覧が埋まらないようにする。
 const PER_CATEGORY: usize = 2;
@@ -73,14 +25,9 @@ pub enum Confidence {
     High,
 }
 
+/// 規則の確度。登録表（registry.rs）の値で、登録のないカテゴリはmediumとする。
 pub fn confidence(category: &str) -> Confidence {
-    if HIGH_CONFIDENCE.contains(&category) {
-        Confidence::High
-    } else if LOW_CONFIDENCE.contains(&category) || is_experimental_rule(category) {
-        Confidence::Low
-    } else {
-        Confidence::Medium
-    }
+    registry::exact(category).map_or(Confidence::Medium, |rule| rule.confidence)
 }
 
 fn severity_rank(severity: &str) -> u8 {

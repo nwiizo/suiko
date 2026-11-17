@@ -36,6 +36,14 @@ Some editorial examples and revision guidance adapt material by nanaism,
 distributed under the following license. The skill bundle retains the same
 notice in `licenses/nanaism-MIT.txt`. No external checking program is bundled.
 
+The v0.4.3 rules `repeated_sentence_ending` and `negated_contrast`, and the
+widened `short_topic_comma`/`short_object_comma`/`short_subject_comma`, adapt
+conditions from yomiyasu 3.0.0 `scripts/yomiyasu_lint.py` by nanaism: the
+counted sentence-ending forms, skipping sentences shorter than four characters
+and endings inside closing brackets, the 「AではなくB、Cでもある」 exception, and
+the 「〜的には」 connective. The detection is Suiko's own morphological
+implementation; no code is copied.
+
 ```text
 MIT License
 

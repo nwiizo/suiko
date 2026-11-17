@@ -132,7 +132,7 @@ fn sensory_roles_support_genres_config_and_exit_status() {
     let dir = tempfile::tempdir().unwrap();
     cargo_bin_cmd!("suiko")
         .current_dir(dir.path())
-        .args(["lint", "-", "--experimental", "--fail-on", "info", "--json"])
+        .args(["lint", "-", "--fail-on", "info", "--json"])
         .write_stdin(body)
         .assert()
         .code(2);
@@ -143,7 +143,7 @@ fn sensory_roles_support_genres_config_and_exit_status() {
     .unwrap();
     let output = cargo_bin_cmd!("suiko")
         .current_dir(dir.path())
-        .args(["lint", "-", "--experimental", "--fail-on", "info", "--json"])
+        .args(["lint", "-", "--fail-on", "info", "--json"])
         .write_stdin(body)
         .assert()
         .success()

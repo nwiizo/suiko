@@ -451,7 +451,8 @@ pub(super) fn antithesis_findings(
     } else {
         ""
     };
-    let (line, byte_start, byte_end, excerpt) = hits[0].clone();
+    // 箇所ごとの指摘はnegated_contrastが持つ。ここは文書全体の密度の要約で、範囲を持たない。
+    let (line, _, _, excerpt) = hits[0].clone();
     let mut finding = Finding::new(
         line,
         "antithesis_repetition",
@@ -464,7 +465,6 @@ pub(super) fn antithesis_findings(
             ratio * 100.0
         ),
     );
-    finding.span = make_span(&raw_lines, line, byte_start, line, byte_end);
     finding.related_lines = Some(related.into_iter().collect());
     vec![finding]
 }

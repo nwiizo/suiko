@@ -236,7 +236,10 @@ fn short_topic_comma_is_a_default_review_hint() {
             "前提を確認した。😀は、表示例です。要点は、後で述べます。",
             1,
         ),
-        ("条件は、前述のとおりです。結果は、未確定です。", 2),
+        ("条件は、前述のとおりです。期限は、未確定です。", 2),
+        // v0.4.3から15字以内の名詞句と、格助詞に続く「では」も見る。
+        ("入力ファイルは、JSONです。", 1),
+        ("雨では、実行できません。", 1),
         ("前提を確認した\n要点は、後で述べます。", 1),
     ] {
         let report = lint::analyze(body, &morphology, Some("tech"), true).unwrap();
@@ -277,11 +280,11 @@ fn short_topic_comma_is_a_default_review_hint() {
 fn short_topic_comma_preserves_other_boundaries_and_markdown() {
     let morphology = Morphology::new().unwrap();
     for body in [
-        "入力ファイルは、JSONです。",
         "読むのは、明日にします。",
+        // 副詞にもなる名詞（結果・今回）の主題は、文のつながりを示す。
+        "結果は、未確定です。",
         "こんにちは、皆さん。",
         "そこで、条件を変えた。",
-        "雨では、実行できません。",
         "要点は既に説明しました。",
         "「要点は、三つです」と話した。",
         "`要点`は、三つです。",
@@ -297,7 +300,7 @@ fn short_topic_comma_preserves_other_boundaries_and_markdown() {
             "{body}"
         );
     }
-    let structured = "# 要点は、三つです。\n> 条件は、二つです。\n- 結果は、未確定です。\n";
+    let structured = "# 要点は、三つです。\n> 条件は、二つです。\n- 期限は、未確定です。\n";
     for genre in [None, Some("essay")] {
         assert!(
             lint::analyze(structured, &morphology, genre, true)
@@ -444,14 +447,7 @@ fn short_topic_comma_obeys_allow_disable_and_baseline() {
     fs::write(dir.path().join("draft.md"), "要点は、三つです。\n").unwrap();
     let before = cargo_bin_cmd!("suiko")
         .current_dir(dir.path())
-        .args([
-            "lint",
-            "draft.md",
-            "--experimental",
-            "--json",
-            "--fail-on",
-            "info",
-        ])
+        .args(["lint", "draft.md", "--json", "--fail-on", "info"])
         .assert()
         .code(2)
         .get_output()
@@ -472,7 +468,6 @@ fn short_topic_comma_obeys_allow_disable_and_baseline() {
             .args([
                 "lint",
                 "draft.md",
-                "--experimental",
                 "--json",
                 "--fail-on",
                 "info",

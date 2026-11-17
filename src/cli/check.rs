@@ -12,9 +12,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
-use super::{
-    Config, FailOn, Genre, apply_reading_load_config, config_path, configured_lint, parse_config,
+use super::config::{
+    Config, apply_reading_load_config, config_path, configured_lint, parse_config,
 };
+use super::{FailOn, Genre};
 use crate::{Error, diff, fact_gaps, lint, materials, morphology::Morphology, read_source};
 
 pub(super) const RECORD_FORMAT: &str = "suiko-check";
@@ -35,6 +36,7 @@ pub(super) struct CheckArgs {
     record: Option<PathBuf>,
     #[arg(long, value_enum)]
     genre: Option<Genre>,
+    /// 互換のため受け付ける（v0.4.3から全規則を既定で検査する）
     #[arg(long)]
     experimental: bool,
     /// 比喩・効果・程度の語だけで中身や値が見えない文を、書き手に確かめる候補として示す。--fail-onには数えない
@@ -545,6 +547,7 @@ fn changed_inputs(record: &Record) -> Vec<Change> {
 }
 
 pub(super) fn execute_check(args: CheckArgs) -> Result<ExitCode, Error> {
+    super::note_experimental_flag(args.experimental);
     let final_file = load_file(&args.file)?;
     let before = args.before.as_deref().map(load_file).transpose()?;
     // 同じ資料を重ねて指定しても、照合と記録は1回にする（./a.md と a.md、リンク先も同じとみなす）。
@@ -569,7 +572,7 @@ pub(super) fn execute_check(args: CheckArgs) -> Result<ExitCode, Error> {
     let (configuration, config) = load_configuration(&args)?;
     let options = Options {
         genre: args.genre.or_else(|| config.as_ref().and_then(|c| c.genre)),
-        experimental: args.experimental,
+        experimental: super::ALL_RULES,
         fail_on: args
             .fail_on
             .or_else(|| config.as_ref().and_then(|c| c.fail_on)),

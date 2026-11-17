@@ -8,9 +8,8 @@ use crate::Error;
 use crate::morphology::Morphology;
 use crate::text::{mask_markdown_structure, reading_length, sentences_with_raw};
 
-use super::morph::{
-    buried_list, buried_question_list, long_attributive_span, punctuation_between, tokenize,
-};
+use super::clauses::{buried_list, buried_question_list, long_attributive_span};
+use super::morph::{punctuation_between, tokenize};
 use super::{Finding, ReadingLoadReport, ReadingLoadStats, ReadingLoadThresholds};
 
 // Issue #34 で著者が読みづらいと判断した文は句点を除いて49〜70字（2節・55字を含む）。

@@ -4,6 +4,25 @@ Suikoの公開リリースを記録する。日付はJSTで、各項目は実測
 
 ## [Unreleased]
 
+### 全規則の既定表示と規則の族（ADR-0003）
+
+- `lint`・`check`・`compare`と文書群の集計が、評価中の規則も含めて全規則を既定で検査するようにした。`--experimental`は互換のため受け付け、指定されると不要になったことを標準エラーへ1行で伝える。ライブラリの`lint::analyze(.., experimental)`は変えていない。旧版のbaselineは`stats.experimental`の不一致で止まり、作り直しを案内する。`check`の記録は記録された設定で再検査する。
+- 規則の属性を登録表（`src/lint/registry.rs`）にまとめた。規則名・族（`meaning`・`pattern`・`wording`・`punctuation`・`reading_load`・`profile`・`consistency`）・確度・範囲（`span`・`document`）・評価中かどうかを1行で持つ。`capabilities --json`の各規則に`family`・`confidence`・`scope`を、`lint --json`の各指摘（読解負荷を含む）に`family`・`confidence`を足した（追加だけ）。ライブラリの`Finding`のJSONは変えていない。族の定義は[規則の族](docs/rule-families.md)。
+- 新規則`repeated_sentence_ending`（型、確度low）: 同じ段落で同じ文末の形（です・ます・でした・ました・である・だ・だろう・でしょう・ですね）が3文以上続く箇所を、3文目の文末を範囲に1件で示す。過去の「た」、「ません」、「のだ」、台詞の中の文末、4字未満の文は数えない。同じ形の`repeated_sentence_mode`は出さない。
+- 新規則`negated_contrast`（型、確度low）: 「AではなくB」「Aではない。Bだ。」を箇所ごとに示す。状態の変化・譲歩（ではなくても）・付け足し（だけではなく、Bでもある）・二重否定（不可能ではない）・部分否定（必ずしも）は除く。`antithesis_repetition`は文書全体の要約にし、範囲を持たず対応行だけを返す。
+- 読点の規則を広げた。文の中のすべての読点を見て、15字以内の名詞句（名詞をつなぐ「の」を含む）＋「は／も」（には・では等）を`short_topic_comma`、「が」を新規則`short_subject_comma`、「を」を`short_object_comma`で示す。並べた名詞の最後、同じ助詞の句の並び、副詞にもなる名詞、指示語・人称だけの句、接続の句、括弧の中は除く。後ろの連体修飾の確認は、次の読点まで括弧を飛ばして見て、活用する接尾辞（嫌がる）も含める。
+- `abstract_metaphor`の「土台」「羅針盤」、`vague_sensory_term`の「体温」「熱量」、`technical_jargon_metaphor`の抽象的な主語＋「効く」と処理の始まりを表す「入口」「窓口」の条件を広げた。「土台作り」、建物・機械・航海の実物、度・カロリーの文脈、薬・冷暖房の「効く」、建物・駅・問い合わせ窓口は除く。
+- 測定（suiko-evalの生成180文書・人間95文書、yomiyasu 3.0.0との照合）: `repeated_sentence_ending`はyomiyasuの`sentence_end_repetition`37件の37件と同じ箇所を指し、人間文書で1000字あたり0.09件。`negated_contrast`は生成文書と人間文書の1000字あたりの比が3倍以上。読点の3規則は生成文書で357件（従来の`short_topic_comma`109件の3.3倍）。値と評価用の文書での結果は[実行比較](https://github.com/nwiizo/suiko-eval/blob/main/eval/competitive-review-2026-11-15.md)に記録した。
+- 内部の構成: 大きなモジュールを役割ごとに分けた。検出の動作と公開APIは変えていない。
+  - `src/lint/morph.rs`（約3,100行）は、文単位のtoken列と共有の補助（`morph`）だけを残し、規則を`commas`（読点）、`clauses`（文の構造）、`abstract_metaphor`・`technical_jargon`・`sensory_terms`（たとえ・感覚の語）、`repetition`（同じ型の反復）、`phrasing`（そのほかの言い回し）へ移した。否定対比は`patterns`から`contrast`へ、文末の規則は`metrics`から`sentence_endings`へ移した。
+  - `src/cli.rs`は、設定の読み込みを`cli/config`、`lint`コマンドを`cli/lint_command`へ分けた。
+  - `src/academic.rs`は、原稿の読み取り（`source`）、引用と注（`citations`）、DOCX（`docx`）、成果物との同期（`sync`）、テスト（`tests`）へ分けた。
+  - `src/diff.rs`（約3,300行）は、比較の入口と領域ごとの照合だけを残し、単位の切り出し（`units`）、対応づけ（`align`）、値（`values`）、否定（`negation`）、確度・頻度・条件（`modality`）、主語・目的語と内容語（`arguments`）、文末の働き（`endings`）、構造・対比・因果・選択（`relations`）、文体と宛名（`tone`）、コードブロックと表（`protected`）へ分けた。
+  - 同じ箇所の指摘を一つにする範囲の重なりの判定は`Span::overlaps`にまとめた。
+  - `lint --help`の「一部の構造検査は --genre essay が必要」を`--genre`の説明へ移した。テストでは、動作を変えなくなった`--experimental`の指定を外した。
+
+互換性: JSONは追加だけ。既定の出力に評価中の規則と新規則が加わるため、件数と`--fail-on info`の終了結果は変わる。旧版のbaselineは作り直す。不要な規則は`.suiko.toml`の`disabled_rules`か理由付きの`allow`で外せる。
+
 ## [0.4.2] - 2026-11-16
 
 0.4.0と0.4.1は公開していない。この版で、0.3.11以降の変更（以下の各節）をまとめて公開する。公開時の説明は[リリースノート](docs/releases/v0.4.2.md)にまとめた。

@@ -2,9 +2,13 @@
 //! 検出器の実装はpatterns(表層)、morph(品詞列)、metrics(統計)、
 //! reading_load(読解負荷レーン)、baseline(前回比較)へ分割している。
 
+mod abstract_metaphor;
 mod agency;
 mod baseline;
+mod clauses;
+mod commas;
 mod context;
+mod contrast;
 mod exceptions;
 mod genre;
 mod hollow;
@@ -13,14 +17,20 @@ pub mod matching;
 mod metrics;
 mod morph;
 mod patterns;
+mod phrasing;
 mod priority;
 mod quantities;
 mod reading_load;
+mod registry;
 mod relations;
+mod repetition;
 mod revision;
 mod revision_lexicon;
 mod sensory_roles;
+mod sensory_terms;
+mod sentence_endings;
 mod similes;
+mod technical_jargon;
 mod word_rules;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -33,163 +43,27 @@ use crate::morphology::Morphology;
 use crate::text::{mask_html_comments, mask_markdown_structure_with_stats, sentences_with_raw};
 
 pub use baseline::{BaselineReport, BaselineSummary, apply_baseline, baseline_added};
-pub(crate) use morph::FORMAL_NOUNS;
+pub(crate) use clauses::FORMAL_NOUNS;
 pub use patterns::{forbidden_phrase_list, hype_expression_list};
 pub use priority::{Confidence, FIRST_FIX_LIMIT, FirstFix, confidence, first_fixes};
 pub use reading_load::{analyze_reading_load, analyze_reading_load_with_thresholds};
+pub use registry::{Family, Rule, Scope, rule_of};
 pub(crate) use word_rules::{WordRule, validate_word_rules, word_rule_findings};
 
-const EXPERIMENTAL_CATEGORIES: &[&str] = &[
-    // 語の出現だけで判定するため、人間の行政文書・技術記事にも多く一致する（suiko-eval/eval/calibration.md）。
-    "vague_loanword",
-    // 直喩の形だけで判定するため、人間の随筆・小説にも多く一致する（suiko-eval/eval/calibration.md）。
-    "elaborate_simile",
-    "topic_predicate_mismatch",
-    "repeated_predicate_phrase",
-    "paragraph_register_mixture",
-    "consecutive_nominal_endings",
-    "high_length_autocorrelation",
-    "paragraph_lead_conjunction",
-    "repeated_syntax_template",
-    "english_syntax_cleft_because",
-    "high_bold_density",
-    "high_bullet_ratio",
-    "boilerplate_heading",
-    "numbered_phase_structure",
-    "high_emoji_symbol_density",
-    "mixed_latin_spacing",
-    "repeated_sentence_mode",
-    "uniform_bullet_structure",
-    // 2026-08-19の実測(現代人間dev 75文書)で既定ONを支えられず降格した3件。
-    // TTRは文書長への構造的依存(50k語の白書でTTR=0.094)、文頭反復は絶対回数
-    // 閾値の長さ交絡(fpr 0.613)、MTLDは全候補閾値でAI検出0。suiko-eval/eval/calibration.md
-    "low_lexical_diversity_ttr",
-    "low_lexical_diversity_mtld",
-    "repeated_sentence_lead",
-];
-
-const RULE_CATEGORIES: &[&str] = &[
-    "vague_loanword",
-    "thin_evaluation",
-    "calque_phrase",
-    "short_concession",
-    "persona_ending",
-    "te_nominal_stop",
-    "cleft_list_ending",
-    "evaluation_fragment_run",
-    "heading_colon",
-    "redundant_heading_bracket",
-    "metaphor_label",
-    "dialogue_period",
-    "essay_report_density",
-    "topic_predicate_mismatch",
-    "repeated_predicate_phrase",
-    "paragraph_register_mixture",
-    "word_usage",
-    "evaluative_ability_past",
-    "heading_emoji",
-    "invisible_character",
-    "invalid_ignore_directive",
-    "auxiliary_kana",
-    "explanatory_metaphor",
-    "renyo_noun",
-    "revision_expression",
-    "operation_condition",
-    "bold_not_rendered",
-    "duplicate_comma",
-    "instruction_residue",
-    "abstract_metaphor",
-    "antithesis_repetition",
-    "boilerplate_closing",
-    "boilerplate_heading",
-    "bullet_bold_label",
-    "bullet_emoji",
-    "buried_list",
-    "buried_question_list",
-    "consecutive_nominal_endings",
-    "copy_fragment",
-    "compressed_relation",
-    "custom_wording",
-    "decision_direction_metaphor",
-    "declared_item_count_mismatch",
-    "demonstrative_reference",
-    "double_negative",
-    "elaborate_simile",
-    "english_syntax_cleft_because",
-    "english_syntax_inanimate_subject",
-    "forbidden_phrase",
-    "high_bold_density",
-    "high_bullet_ratio",
-    "high_emoji_symbol_density",
-    "high_length_autocorrelation",
-    "hype_expression",
-    "inanimate_subject_morph",
-    "kanji_run",
-    "long_attributive_span",
-    "low_burstiness",
-    "low_lexical_diversity_mtld",
-    "low_lexical_diversity_ttr",
-    "low_sentence_variance",
-    "low_specificity",
-    "mixed_latin_spacing",
-    "negative_listing",
-    "no_chain",
-    "no_comma_sentence",
-    "nominal_ending",
-    "numbered_phase_structure",
-    "paragraph_lead_conjunction",
-    "predicate_colon_lead",
-    "quantity_predicate_mismatch",
-    "quoted_character_count_mismatch",
-    "redundant_light_verb",
-    "repeated_distinction",
-    "repeated_em_dash",
-    "repeated_explanation_preview",
-    "repeated_sentence_lead",
-    "repeated_sentence_mode",
-    "repeated_syntax_template",
-    "respectively_scope",
-    "self_labeling_repetition",
-    "sentence_in_paren",
-    "sensory_role_mismatch",
-    "sentence_too_long",
-    "short_object_comma",
-    "short_topic_comma",
-    "technical_jargon_metaphor",
-    "translationese",
-    "translationese_morph",
-    "universal_exception_conflict",
-    "uniform_bullet_structure",
-    "uniform_paragraph_structure",
-    "vague_sensory_term",
-];
-
-const READING_LOAD_CATEGORIES: &[&str] = &[
-    "buried_list",
-    "buried_question_list",
-    "double_negative",
-    "kanji_run",
-    "long_attributive_span",
-    "no_chain",
-    "no_comma_sentence",
-    "sentence_in_paren",
-    "sentence_too_long",
-];
-
 pub fn is_known_rule(category: &str) -> bool {
-    RULE_CATEGORIES.contains(&category)
+    registry::exact(category).is_some()
 }
 
 pub fn rule_categories() -> &'static [&'static str] {
-    RULE_CATEGORIES
+    registry::categories()
 }
 
 pub fn is_experimental_rule(category: &str) -> bool {
-    EXPERIMENTAL_CATEGORIES.contains(&category)
+    registry::exact(category).is_some_and(|rule| rule.evaluating)
 }
 
 pub fn reading_load_categories() -> &'static [&'static str] {
-    READING_LOAD_CATEGORIES
+    registry::reading_load()
 }
 
 /// findingが指す本文範囲。行は1始まり、columnはUnicode scalar数え・1始まりで
@@ -202,6 +76,31 @@ pub struct Span {
     pub end_column: usize,
     pub start_byte: usize,
     pub end_byte: usize,
+}
+
+impl Span {
+    /// 同じ行で始まり、行内のbyte範囲が重なるか。
+    fn overlaps(self, other: Span) -> bool {
+        self.start_line == other.start_line
+            && self.start_byte < other.end_byte
+            && other.start_byte < self.end_byte
+    }
+}
+
+/// `category`の指摘が指す範囲。
+fn spans_of(findings: &[Finding], category: &str) -> Vec<Span> {
+    findings
+        .iter()
+        .filter(|finding| finding.category == category)
+        .filter_map(|finding| finding.span)
+        .collect()
+}
+
+/// 指摘の範囲が`spans`のどれかと重なるか。一つの箇所に一つの指摘を残すために使う。
+fn overlaps_any(finding: &Finding, spans: &[Span]) -> bool {
+    finding
+        .span
+        .is_some_and(|span| spans.iter().any(|other| span.overlaps(*other)))
 }
 
 /// 機械的に安全と確認した置換候補。`span`の範囲が`preimage`と一致する場合に
@@ -408,7 +307,9 @@ pub fn analyze_with_thresholds(
 
     let (structural_findings, structural_stats) =
         patterns::structural_analysis(&mask_html_comments(raw));
-    let (rhythm_findings, rhythm_stats) = metrics::rhythm_analysis(&tokenized);
+    let (ending_findings, ending_stats) = sentence_endings::analysis(&tokenized, &raw_lines);
+    let (rhythm_findings, rhythm_stats) =
+        metrics::rhythm_analysis(&tokenized, ending_findings, ending_stats);
     let (ngram_findings, ngram_stats) = metrics::ngram_analysis(
         &tokenized,
         &raw_lines,
@@ -462,32 +363,30 @@ pub fn analyze_with_thresholds(
         split.len(),
         critical_above,
     ));
+    findings.extend(contrast::negated_contrast_findings(&tokenized, &raw_lines));
     findings.extend(patterns::english_syntax_findings(&masked, raw, &split));
-    findings.extend(morph::translationese_morph_findings(&tokenized, &raw_lines));
-    let experiential = findings
-        .iter()
-        .filter(|f| f.category == "evaluative_ability_past")
-        .filter_map(|f| f.span)
-        .collect::<Vec<_>>();
-    findings.retain(|finding| {
-        !(finding.category == "evaluative_ability_past" && genre == Some("essay")
-            || finding.category == "translationese"
-                && finding.span.is_some_and(|span| {
-                    experiential.iter().any(|other| {
-                        span.start_line == other.start_line
-                            && span.start_byte < other.end_byte
-                            && other.start_byte < span.end_byte
-                    })
-                }))
-    });
-    findings.extend(morph::self_labeling_repetition_findings(
+    findings.extend(phrasing::translationese_morph_findings(
         &tokenized, &raw_lines,
     ));
-    findings.extend(morph::negative_listing_findings(&tokenized, &raw_lines));
-    findings.extend(morph::short_phrase_comma_findings(&tokenized, &raw_lines));
-    findings.extend(morph::decision_direction_findings(&tokenized, &raw_lines));
-    findings.extend(morph::vague_sensory_findings(&tokenized, &raw_lines));
-    findings.extend(morph::copy_fragment_findings(&tokenized, &raw_lines));
+    let experiential = spans_of(&findings, "evaluative_ability_past");
+    findings.retain(|finding| {
+        !(finding.category == "evaluative_ability_past" && genre == Some("essay")
+            || finding.category == "translationese" && overlaps_any(finding, &experiential))
+    });
+    findings.extend(repetition::self_labeling_repetition_findings(
+        &tokenized, &raw_lines,
+    ));
+    findings.extend(repetition::negative_listing_findings(
+        &tokenized, &raw_lines,
+    ));
+    findings.extend(commas::short_phrase_comma_findings(&tokenized, &raw_lines));
+    findings.extend(phrasing::decision_direction_findings(
+        &tokenized, &raw_lines,
+    ));
+    findings.extend(sensory_terms::vague_sensory_findings(
+        &tokenized, &raw_lines,
+    ));
+    findings.extend(phrasing::copy_fragment_findings(&tokenized, &raw_lines));
     findings.extend(sensory_roles::findings(&tokenized, &raw_lines));
     findings.extend(exceptions::findings(&tokenized, &raw_lines));
     findings.extend(agency::findings(&tokenized, &raw_lines));
@@ -501,23 +400,25 @@ pub fn analyze_with_thresholds(
         &tokenized, &raw_lines,
     ));
     if genre == Some("tech") {
-        findings.extend(morph::technical_repetition_findings(
+        findings.extend(repetition::technical_repetition_findings(
             &tokenized, &raw_lines, raw,
         ));
     }
-    findings.extend(morph::explanation_preview_findings(&tokenized, raw));
-    findings.extend(morph::technical_ambiguity_findings(&tokenized, &raw_lines));
-    findings.extend(morph::technical_jargon_metaphor_findings(
+    findings.extend(repetition::explanation_preview_findings(&tokenized, raw));
+    findings.extend(phrasing::technical_ambiguity_findings(
         &tokenized, &raw_lines,
     ));
-    findings.extend(morph::abstract_predicate_metaphor_findings(
+    findings.extend(technical_jargon::technical_jargon_metaphor_findings(
         &tokenized, &raw_lines,
     ));
-    findings.extend(morph::inanimate_morph_findings(&tokenized, &raw_lines));
+    findings.extend(abstract_metaphor::abstract_predicate_metaphor_findings(
+        &tokenized, &raw_lines,
+    ));
+    findings.extend(phrasing::inanimate_morph_findings(&tokenized, &raw_lines));
     let mut revision_findings = if genre == Some("tech") {
         let units = crate::text::revision_sentences(raw);
         let technical = morph::tokenize(&units, morphology)?;
-        for candidate in morph::short_phrase_comma_findings(&technical, &raw_lines) {
+        for candidate in commas::short_phrase_comma_findings(&technical, &raw_lines) {
             if !findings.iter().any(|existing| {
                 existing.category == candidate.category
                     && existing
@@ -536,25 +437,23 @@ pub fn analyze_with_thresholds(
         revision::findings(&tokenized, &raw_lines, false)
     };
     // 既存の形態素検査が同じ比喩を指す場合は、より限定された従来のカテゴリを保つ。
+    let technical_metaphors = spans_of(&findings, "technical_jargon_metaphor");
     revision_findings.retain(|candidate| {
         candidate.category != "explanatory_metaphor"
-            || !findings.iter().any(|existing| {
-                existing.category == "technical_jargon_metaphor"
-                    && existing
-                        .span
-                        .zip(candidate.span)
-                        .is_some_and(|(left, right)| {
-                            left.start_line == right.start_line
-                                && left.start_byte < right.end_byte
-                                && right.start_byte < left.end_byte
-                        })
-            })
+            || !overlaps_any(candidate, &technical_metaphors)
     });
     findings.extend(revision_findings);
-    findings.extend(morph::abstract_metaphor_findings(
+    findings.extend(abstract_metaphor::abstract_metaphor_findings(
         &tokenized, &raw_lines, true,
     ));
-    findings.extend(morph::redundant_light_verb_findings(&tokenized, &raw_lines));
+    // 「入口」を技術の言い回しとして指した箇所は、そちらだけを残す（一つの箇所に一つの指摘）。
+    let technical_metaphors = spans_of(&findings, "technical_jargon_metaphor");
+    findings.retain(|finding| {
+        finding.category != "abstract_metaphor" || !overlaps_any(finding, &technical_metaphors)
+    });
+    findings.extend(phrasing::redundant_light_verb_findings(
+        &tokenized, &raw_lines,
+    ));
     findings.extend(rhythm_findings);
     findings.extend(ngram_findings);
     let preview_starts = findings
@@ -602,7 +501,7 @@ pub fn analyze_with_thresholds(
         ));
     }
     if !experimental {
-        findings.retain(|finding| !EXPERIMENTAL_CATEGORIES.contains(&finding.category.as_str()));
+        findings.retain(|finding| !is_experimental_rule(&finding.category));
     }
     if genre == Some("business") {
         findings.retain(|finding| {

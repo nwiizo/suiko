@@ -192,7 +192,8 @@ fn default_cli_supports_json_gate_configuration_and_baseline_for_new_rules() {
         .unwrap();
     assert_eq!(output.status.code(), Some(2));
     let report: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(report["stats"]["experimental"], false);
+    // v0.4.3からCLIは全規則を既定で検査する。
+    assert_eq!(report["stats"]["experimental"], true);
     assert_eq!(report["stats"]["by_category"]["auxiliary_kana"], 1);
     assert_eq!(report["stats"]["by_category"]["explanatory_metaphor"], 1);
     assert_eq!(

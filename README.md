@@ -81,7 +81,7 @@ printf '重要なのは、結論です。\n' | suiko lint - --json
 
 `--genre`には`essay`、`tech`、`business`を指定でき、ジャンル別の閾値を使います。一部のルールはジャンルを明示した場合だけ有効です。各指摘（finding）にはカテゴリ、対象行、抜粋、理由、重要度が付きます。必要な比較や意図した反復は、そのまま残せます。
 
-指摘があると、lintは最初に「まず直す候補」を5件まで示します（JSONでは`first_fixes`）。重大度の高い順に、同じ重大度では規則の確度（high・medium・low）の高い順に並べ、一つの規則からは2件までにします。確度は[suiko-eval](https://github.com/nwiizo/suiko-eval)の品質表で決めています。人間の文書にほとんど付かず、ラベル付き標本の条件を満たした規則はhighです。人間の文書の多くに付く規則、実験規則、文書全体の統計はlowです。生成文の評価で注釈と重ならなかった`sensory_role_mismatch`は、条件を満たしていてもmediumにしています。確度は規則の傾向で、個々の指摘が正しいかは本文で確かめてください。
+指摘があると、lintは最初に「まず直す候補」を5件まで示します（JSONでは`first_fixes`）。重大度の高い順に、同じ重大度では規則の確度（high・medium・low）の高い順に並べ、一つの規則からは2件までにします。確度は[suiko-eval](https://github.com/nwiizo/suiko-eval)の品質表で決めています。人間の文書にほとんど付かず、ラベル付き標本の条件を満たした規則はhighです。人間の文書の多くに付く規則、評価中の規則、文書全体の統計はlowです。JSONの各指摘も、規則の族（`family`）と確度（`confidence`）を返します。生成文の評価で注釈と重ならなかった`sensory_role_mismatch`は、条件を満たしていてもmediumにしています。確度は規則の傾向で、個々の指摘が正しいかは本文で確かめてください。
 
 `compare`・`lint --baseline`・`check --before`は、同じ方法で前後の指摘を対応づけます。本文がある`compare`と`check`は、両方に一度だけ現れる行を目印に行を対応づけ、変更した行は文字の近さで組みます。そのうえで、同じ文に同じ抜粋が残った（`same_sentence`）、書き換えた文に同じ規則の指摘が残った（`edited_sentence`）、同じ抜粋が別の位置へ移った（`moved`）、文書全体の統計が残った（`document`）の順に継続と判定します。根拠のない組は継続にせず、解消と新規に分けます。本文のないbaselineは、抜粋の一致と行の近さだけで照合します。`compare --json --findings new|resolved|persisting|all`は、個別の指摘を前後の行・抜粋・根拠付きで返します。
 
@@ -91,7 +91,7 @@ printf '重要なのは、結論です。\n' | suiko lint - --json
 
 他者の文章などは、独立した行の`<!-- suiko:ignore-start -->`と`<!-- suiko:ignore-end -->`でlint・読解負荷の対象から外せます。不正な対応は警告し、コード内の例示コメントは指示として実行しません。はてな記法の書籍・画像・目次・埋め込みも除外し、`stats.masking`に除外量を返します。改稿時のコード・引用保護は除外しません。
 
-技術文書では`word_usage`、見出し先頭の`heading_emoji`も確認できます。主述関係・述語句の反復・段落の文体混在は、`--genre tech --experimental`で評価中の候補として返します。体験を述べる過去の可能表現は`evaluative_ability_past`へ分け、essayでは抑制します。可能動詞への言い換えは、局所置換の`suggestion`とは別の`review_suggestion`に返します。文脈を読まずに自動適用しないでください。
+技術文書では`word_usage`、見出し先頭の`heading_emoji`も確認できます。主述関係・述語句の反復・段落の文体混在は、`--genre tech`で評価中の候補（確度low）として返します。体験を述べる過去の可能表現は`evaluative_ability_past`へ分け、essayでは抑制します。可能動詞への言い換えは、局所置換の`suggestion`とは別の`review_suggestion`に返します。文脈を読まずに自動適用しないでください。
 
 `bold_not_rendered`は、`**「用語」**の`や`**注意:**この`のように、太字の内側が括弧・記号・空白で、外側が文字に接している箇所を全ジャンルの通常検出として`warn`で返します。CommonMarkの区切り規則（左接合・右接合）に当たらないため、GitHubやmarkdown-it系の表示では`**`がそのまま出ます。`***…***`も同じ規則で見ます。`__…__`は語の途中（`__重要__です`）では強調にならないため、日本語の文字に接する形も返します。括弧を太字の外へ出すか、文字に接する側へ半角空白を置いてください。コードブロックとインラインコードの中は見ません。`disabled_rules`で無効にできます。
 
@@ -183,11 +183,22 @@ suiko lint draft.md --json
 
 この2つはどちらも`info`の確認候補で、自動修正は付けません。箇条書き・見出し・コード等は、ほかの散文ルールと同じく対象外です。
 
-### 実験的な追加観測
+### 全規則の表示と規則の族
 
-`--experimental`は、語彙多様性、文頭・文型の反復、文末の揃い方、装飾・箇条書きの比率などを追加します。「閉じきれなかった箱のように」のように、たとえる側に動詞の連体節が付いた直喩を示す`elaborate_simile`もこの指定で表示します。人間の随筆・小説にも多く一致するため、比喩の対応を読み直す候補として使ってください。`uniform_bullet_structure`は`--genre essay`も必要です。`mixed_latin_spacing`もこの指定で表示し、媒体の方針を決めずに空白の混在を確認できます。通常の表現の修正に、このオプションは不要です。
+v0.4.3から、`lint`・`check`・`compare`は評価中の規則も含めて全規則を既定で表示します。`--experimental`は互換のため受け付けますが、出力は変わらず、不要になったことを標準エラーへ1行で伝えます。評価中の規則は、語彙多様性、文頭・文型の反復、装飾・箇条書きの比率、`elaborate_simile`（たとえる側に動詞の連体節が付いた直喩）、`mixed_latin_spacing`などで、確度はlowです。`uniform_bullet_structure`は`--genre essay`を指定した場合だけ出ます。
 
-Suikoを更新したら、前回比較に使うbaselineを作り直してください。版が上がると、JSONの構造と`stats.experimental`の意味は同じでも、候補の件数と`--fail-on info`の終了結果が変わることがあります。不要なルールは`.suiko.toml`の`disabled_rules`や理由付きの個別許可で調整できます。
+規則は、直すときに書き手が決めることで7つの族に分けています。意味（`meaning`）、型（`pattern`）、語（`wording`）、区切り（`punctuation`）、読解負荷（`reading_load`）、文書の傾向（`profile`）、照合（`consistency`）です。`capabilities --json`の各規則と`lint --json`の各指摘が`family`と`confidence`を返し、規則一覧は範囲（`scope`: 箇所か文書全体か）も返します。族の定義は[規則の族](docs/rule-families.md)にあります。
+
+全部の指摘を、直すか、理由を付けて残すかに分けてください。確度highとmediumは、残す条件に当たらなければ直します。確度lowと文書の傾向は、該当箇所を読んで判断します。v0.4.3で次の規則を足し、広げました。
+
+- `repeated_sentence_ending`: 同じ段落で、同じ文末（です・ます・でした・ました・である・だ・だろう・でしょう・ですね）が3文以上続く箇所を、3文目の文末で1件にまとめて示します。過去の「た」、「ません」、「のだ」は数えません。
+- `negated_contrast`: 「AではなくB」「Aではない。Bだ。」を箇所ごとに示します。`antithesis_repetition`は文書全体の要約になり、範囲を持たず対応行だけを返します。
+- `short_topic_comma`・`short_object_comma`・`short_subject_comma`（新設）: 文の中のすべての読点を見て、15字以内の名詞句＋「は／も（には・では等）」「を」「が」の直後の読点を示します。並べた名詞の最後、同じ助詞の句の並び、「今回は」のような副詞にもなる名詞、指示語・人称だけの句、接続の句は除きます。
+- `abstract_metaphor`（抽象的なものの「土台」「羅針盤」）、`vague_sensory_term`（言葉や組織の「体温」「熱量」）、`technical_jargon_metaphor`（仕組みやルールが「効いた」、処理の始まりを「入口」「窓口」で表す形）の条件を広げました。
+
+規則ごとの件数は、生成文と人間の文書の1000字あたりで[suiko-evalの実行比較](https://github.com/nwiizo/suiko-eval/blob/main/eval/competitive-review-2026-11-15.md)に記録しています。
+
+既定の検出範囲が広がったため、v0.4.2以前のbaselineは作り直してください。古いbaselineは`stats.experimental`の不一致で止まり、作り直しを案内します。JSONの構造は追加だけですが、候補の件数と`--fail-on info`の終了結果が変わることがあります。不要なルールは`.suiko.toml`の`disabled_rules`や理由付きの個別許可で調整できます。
 
 ### 読解負荷を確認する
 
@@ -258,7 +269,7 @@ suiko lint docs/*.md --genre tech --baseline /tmp/suiko-before.json --json
 
 前回のJSONを渡すと、指摘を`resolved`（解消）、`new`（新規）、`persisting`（継続）へ分類します。`file`文字列の完全一致で対応づけるため、ファイルの指定方法をそろえてください。改名は推測しません。前回になかったファイルは`baseline.file_status = "added"`となり、今回の対象から外れたファイルはstderrへ警告します。
 
-ジャンル、`--experimental`、Suikoのバージョンが一致しない比較は実行エラーになります。設定による除外も比較に影響するため、同じ設定で実行してください。文書単位の反復は、抜粋が変わっても同じ反復状態が続けば継続扱いします。`--fail-on`は新規分だけでなく、今回の`findings`全体を判定します。
+ジャンル、Suikoのバージョン、記録された`stats.experimental`（v0.4.3から常に`true`）が一致しない比較は実行エラーになります。設定による除外も比較に影響するため、同じ設定で実行してください。文書単位の反復は、抜粋が変わっても同じ反復状態が続けば継続扱いします。`--fail-on`は新規分だけでなく、今回の`findings`全体を判定します。
 
 ## 改稿前後の意味の変化を確かめる
 
