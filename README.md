@@ -43,12 +43,12 @@ suiko --version
 Rustを入れずに使う場合は、[GitHub Releases](https://github.com/nwiizo/suiko/releases)から取得できます。対応する環境はmacOS（Apple Silicon / Intel）、Linux（x86_64 / aarch64）、Windows（x86_64）です。各アーカイブにSHA-256ファイルが付きます。
 
 ```sh
-# v0.4.2 / macOS（Apple Silicon）
-curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.4.2/suiko-v0.4.2-aarch64-apple-darwin.tar.gz
-curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.4.2/suiko-v0.4.2-aarch64-apple-darwin.tar.gz.sha256
-shasum -a 256 -c suiko-v0.4.2-aarch64-apple-darwin.tar.gz.sha256
-tar xzf suiko-v0.4.2-aarch64-apple-darwin.tar.gz
-./suiko-v0.4.2-aarch64-apple-darwin/suiko --version
+# v0.4.3 / macOS（Apple Silicon）
+curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.4.3/suiko-v0.4.3-aarch64-apple-darwin.tar.gz
+curl -fLO https://github.com/nwiizo/suiko/releases/download/v0.4.3/suiko-v0.4.3-aarch64-apple-darwin.tar.gz.sha256
+shasum -a 256 -c suiko-v0.4.3-aarch64-apple-darwin.tar.gz.sha256
+tar xzf suiko-v0.4.3-aarch64-apple-darwin.tar.gz
+./suiko-v0.4.3-aarch64-apple-darwin/suiko --version
 ```
 
 以降の例で`suiko`として実行するには、展開した実行ファイルをPATHの通ったディレクトリへ配置してください。

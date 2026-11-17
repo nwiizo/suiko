@@ -35,11 +35,11 @@ jobs:
       matrix:
         include:
           - target: aarch64-apple-darwin
-            runner: macos-14
+            runner: macos-15
           # Intel macOSはランナー(macos-13)が枯渇しているため、
           # arm64ランナーからクロスコンパイルする。
           - target: x86_64-apple-darwin
-            runner: macos-14
+            runner: macos-15
           - target: x86_64-unknown-linux-gnu
             runner: ubuntu-latest
           - target: aarch64-unknown-linux-gnu
